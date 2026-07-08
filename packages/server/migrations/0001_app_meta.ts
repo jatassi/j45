@@ -1,5 +1,5 @@
-import { SqlClient } from "@effect/sql"
-import * as Effect from "effect/Effect"
+import { SqlClient } from '@effect/sql'
+import * as Effect from 'effect/Effect'
 
 /**
  * The first migration, trivial by design — proves the SqlClient +

@@ -1,4 +1,4 @@
-import { ServerInfoCard } from "@/components/server-info-card"
+import { ServerInfoCard } from '@/components/server-info-card'
 
 export function App() {
   return (

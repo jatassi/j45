@@ -1,13 +1,7 @@
-import { Result, useAtomValue } from "@effect-atom/atom-react"
+import { Result, useAtomValue } from '@effect-atom/atom-react'
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { ServerRpcClient } from "@/lib/rpc-client"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ServerRpcClient } from '@/lib/rpc-client'
 
 /**
  * Proves rpc -> atom -> React end-to-end: `useAtomValue` reads the
@@ -15,7 +9,7 @@ import { ServerRpcClient } from "@/lib/rpc-client"
  * and `serverTime` inside a shadcn/ui `Card`.
  */
 export function ServerInfoCard() {
-  const serverInfo = useAtomValue(ServerRpcClient.query("ServerInfo", undefined))
+  const serverInfo = useAtomValue(ServerRpcClient.query('ServerInfo', undefined))
 
   return (
     <Card className="w-full max-w-sm" data-testid="server-info-card">
@@ -25,9 +19,7 @@ export function ServerInfoCard() {
       </CardHeader>
       <CardContent>
         {Result.match(serverInfo, {
-          onInitial: () => (
-            <p className="text-sm text-muted-foreground">Connecting…</p>
-          ),
+          onInitial: () => <p className="text-sm text-muted-foreground">Connecting…</p>,
           onFailure: (failure) => (
             <p className="text-sm text-destructive">
               Failed to reach server: {String(failure.cause)}

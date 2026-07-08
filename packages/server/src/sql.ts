@@ -1,31 +1,31 @@
-import type { PlatformError } from "@effect/platform/Error"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as Path from "@effect/platform/Path"
-import * as Migrator from "@effect/sql/Migrator"
-import * as MigratorFileSystem from "@effect/sql/Migrator/FileSystem"
-import type { MigrationError } from "@effect/sql/Migrator"
-import * as SqlClient from "@effect/sql/SqlClient"
-import type { SqlError } from "@effect/sql/SqlError"
-import * as Config from "effect/Config"
-import type { ConfigError } from "effect/ConfigError"
-import * as Effect from "effect/Effect"
-import * as Layer from "effect/Layer"
-import { fileURLToPath } from "node:url"
+import type { PlatformError } from '@effect/platform/Error'
+import * as FileSystem from '@effect/platform/FileSystem'
+import * as Path from '@effect/platform/Path'
+import type { MigrationError } from '@effect/sql/Migrator'
+import * as Migrator from '@effect/sql/Migrator'
+import * as MigratorFileSystem from '@effect/sql/Migrator/FileSystem'
+import type * as SqlClient from '@effect/sql/SqlClient'
+import type { SqlError } from '@effect/sql/SqlError'
+import * as Config from 'effect/Config'
+import type { ConfigError } from 'effect/ConfigError'
+import * as Effect from 'effect/Effect'
+import * as Layer from 'effect/Layer'
+import { fileURLToPath } from 'node:url'
 
 /**
  * Where the SQLite database file lives. Defaults to `data/j45.dev.sqlite`
  * (relative to the process's working directory); the deploy hook overrides
  * it via systemd `EnvironmentFile` (`DB_PATH=/opt/j45/data/j45.sqlite`).
  */
-export const DbPathConfig: Config.Config<string> = Config.string("DB_PATH").pipe(
-  Config.withDefault("data/j45.dev.sqlite")
+export const DbPathConfig: Config.Config<string> = Config.string('DB_PATH').pipe(
+  Config.withDefault('data/j45.dev.sqlite'),
 )
 
 /**
  * `packages/server/migrations/` — resolved from this module's location so
  * it works regardless of the process's working directory.
  */
-const migrationsDir = fileURLToPath(new URL("../migrations", import.meta.url))
+const migrationsDir = fileURLToPath(new URL('../migrations', import.meta.url))
 
 /**
  * Runs every `NNNN_name.ts` migration in `packages/server/migrations/`
@@ -41,8 +41,8 @@ export const MigratorLive: Layer.Layer<
   SqlClient.SqlClient | FileSystem.FileSystem
 > = Layer.effectDiscard(
   Migrator.make({})({
-    loader: MigratorFileSystem.fromFileSystem(migrationsDir)
-  })
+    loader: MigratorFileSystem.fromFileSystem(migrationsDir),
+  }),
 )
 
 /**
@@ -65,9 +65,9 @@ export const SqliteClientLive: Layer.Layer<
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
     yield* fs.makeDirectory(path.dirname(filename), { recursive: true })
-    const { SqliteClient } = yield* Effect.promise(() => import("@effect/sql-sqlite-bun"))
+    const { SqliteClient } = yield* Effect.promise(() => import('@effect/sql-sqlite-bun'))
     return SqliteClient.layer({ filename })
-  })
+  }),
 )
 
 /**

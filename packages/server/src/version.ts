@@ -1,12 +1,12 @@
-import { readFileSync } from "node:fs"
-import { fileURLToPath } from "node:url"
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
-interface PackageJson {
+type PackageJson = {
   readonly version: string
 }
 
-const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url))
-const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as PackageJson
+const packageJsonPath = fileURLToPath(new URL('../package.json', import.meta.url))
+const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as PackageJson
 
 /**
  * The `@j45/server` package version, reported by `/healthz` and the
