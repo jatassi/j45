@@ -8,7 +8,7 @@ it may build.
 ## Feature graph
 
 ```yaml
-design_version: 2
+design_version: 3
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
@@ -24,8 +24,15 @@ features:
       - deploy/README.md documents the one-time VPS bootstrap (j45.atassi.org grey-cloud DNS record, Caddy site block, /opt/j45 layout, bare repo + hook install, systemd user unit with linger) and no step after bootstrap requires sudo.
   - id: workout-domain
     title: Shared-schema workout domain model, segment compiler, and timer math (pure, TestClock-tested)
-    status: proposed
+    status: designed
     depends_on: [walking-skeleton]
+    acceptance:
+      - Given the four vendored legacy fixtures (Athletica, Docklands, Medusa, Apex), when each is compiled, the segment sequence matches its golden expectation exactly — segment types, per-segment durations, and work ordering (pod-major for laps, station-major for sets), with one leading 5s ready segment, no rest after the final work, and total durations 1605s, 1710s, 2180s, and 2135s respectively — asserted by vitest tests that pass in `bun run test`.
+      - Given a flow whose rounds include ladder (non-uniform) rests, when compiled, every rest segment's duration equals the completed work's round rest — asserted explicitly for the lap→lap and pod→pod bridges on Docklands and the set→next-station bridge on Medusa.
+      - Given a flow containing a round with restSeconds 0, when compiled, no rest segment appears after that round's works (adjacent work segments).
+      - Every model type (Workout, Pod, Station, Flow, Round, Segment union, CompiledWorkout, TimerState union) round-trips through Schema encode/decode, and decoding rejects empty pods, empty stations, empty rounds, workSeconds <= 0, and restSeconds < 0.
+      - "Timer transitions verified under TestClock in `bun run test`: advanceIfDue crosses segment boundaries exactly at their chained deadlines (including multi-segment catch-up after a long adjust); pause freezes remainingMillis across TestClock.adjust; resume re-anchors endsAt; skip and prev enter the target segment at full duration; prev on segment 0 is a no-op; prev from done enters the last segment; skip on the last segment yields done."
+      - packages/domain/package.json dependencies remain exactly effect and @effect/rpc, the existing ServerInfo rpc contract is unchanged, and `bun run check` and `bun run test` exit 0 at the repo root.
   - id: auth-accounts
     title: Invite-gated accounts — passkey-first with username+PIN fallback, long-lived sessions
     status: proposed
