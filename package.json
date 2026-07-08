@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"packages/*/{src,test,migrations}/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\"",
-    "format:check": "prettier --check \"packages/*/{src,test,migrations}/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\""
+    "format:check": "prettier --check \"packages/*/{src,test,migrations}/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\"",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "@effect/vitest": "0.29.0",

@@ -1,0 +1,28 @@
+#!/bin/sh
+# Pre-commit gate: typecheck, lint, format. Activated by the package.json
+# "prepare" script (`git config core.hooksPath .githooks`), which bun runs
+# on every `bun install`.
+set -e
+
+# Typecheck is whole-project (cross-file types); lint and format-check are
+# scoped to staged files to keep commits fast.
+echo 'pre-commit: bun run check'
+bun run check
+
+staged() {
+  git diff --cached --name-only --diff-filter=ACMR -z -- "$@"
+}
+
+if [ -n "$(staged '*.ts' '*.tsx')" ]; then
+  echo 'pre-commit: eslint (staged files)'
+  staged '*.ts' '*.tsx' | xargs -0 bunx eslint --no-warn-ignored
+fi
+
+if [ -n "$(staged '*.ts' '*.tsx' '*.css')" ]; then
+  echo 'pre-commit: prettier --check (staged files)'
+  if ! staged '*.ts' '*.tsx' '*.css' | xargs -0 bunx prettier --check --ignore-unknown; then
+    echo ''
+    echo "pre-commit: formatting is off — run 'bun run format' and re-stage."
+    exit 1
+  fi
+fi
