@@ -8,7 +8,7 @@ it may build.
 ## Feature graph
 
 ```yaml
-design_version: 2
+design_version: 3
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
@@ -64,8 +64,16 @@ features:
     depends_on: [workout-domain]
   - id: liquid-glass-ui
     title: Liquid-glass visual layer — WebGL refraction port over shadcn, iOS-Safari-proof, CSS fallback
-    status: proposed
+    status: designed
     depends_on: [walking-skeleton]
+    acceptance:
+      - Given `bun run dev`, when GET /glass loads in the chromium and webkit e2e projects, the demo page renders at least three glass surfaces and each reaches `data-glass-tier="refract"` within 5 seconds.
+      - Given a surface with refraction active whose demo text mutates every 250ms, when the e2e test observes it for 2 seconds with no layout change, its `data-glass-renders` count does not increase; when the viewport is then resized, the count increases.
+      - Given an e2e init script that makes `getContext("webgl2")` return null, when /glass loads, every surface reports `data-glass-tier="css"`, has a computed backdrop-filter containing blur, contains no refraction canvas, and the page logs no console errors.
+      - Given /glass with all demo surfaces active, an e2e instrument wrapping `HTMLCanvasElement.prototype.getContext` counts exactly one "webgl2" context acquisition for the whole page.
+      - The client is dark-only — the dark palette is `:root` in packages/client/src/index.css, theme-provider.tsx is deleted, and no light token block remains; the walking-skeleton e2e suite still passes unchanged.
+      - Vitest unit tests cover the backdrop slice mapping (card rect ⨯ scroll ⨯ dpr → texture offset/scale) and geometry-key stability, passing as part of `bun run test`.
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: exercise-animations
     title: Per-exercise animations during workouts (dropped at intake — revive via licensed source, e.g. Gymvisual ~$0.90/GIF)
     status: proposed
