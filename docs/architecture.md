@@ -1,0 +1,162 @@
+# J45 — Architecture
+
+J45 (formerly diet-f45) is a self-hosted, F45-style workout app: per-user workout
+libraries, server-authoritative live sessions synced across phones in real time,
+structural control over workout flow, and rule-based procedural workout
+generation. It replaces a paid gym membership for its owner and is shared with an
+invited circle of friends and family. The rewrite is also deliberately a maximal
+Effect-TS project: Effect idioms are used everywhere they apply, as a learning
+vehicle, on Effect v3 stable (see ADR-0001).
+
+The brief is `docs/briefs/j45.md`; decisions there are settled. This document is
+the system narrative every per-feature design session inherits.
+
+This repository is fresh; the legacy app lives on in `~/Git/diet-f45` (and runs
+on the VPS at `/opt/diet-f45`) until cutover. Seed content sources for later
+features: `public/workouts.json` in the legacy repo, merged with
+`overrides.json` on the VPS. Nothing in this repo depends on legacy code.
+
+## Stack
+
+- **Runtime & tooling:** Bun (VPS runtime, package manager, workspaces).
+- **Language:** TypeScript, Effect v3 (`effect` 3.21.x line), all `@effect/*`
+  packages pinned in lockstep at exact versions.
+- **Server:** `@effect/platform-bun` (`BunHttpServer`) serving the built client
+  and the rpc endpoint.
+- **API:** one shared `@effect/rpc` `RpcGroup` over WebSocket
+  (`RpcServer.layerProtocolWebsocket`, ndjson serialization). Typed unary calls
+  and typed `Stream`s from the same contract. The protocol is a pluggable layer;
+  falling back to HTTP/ndjson is a one-layer swap if WebSocket-through-Caddy
+  ever misbehaves.
+- **Persistence:** SQLite via `@effect/sql-sqlite-bun` (`SqliteClient.layer`),
+  forward-only migrations via `@effect/sql` Migrator (TypeScript migration files
+  in-repo, run at server startup). Tests provide `@effect/sql-sqlite-node`
+  (in-memory) against the same `SqlClient` tag.
+- **Client:** React + Vite, shadcn/ui (initialized from the owner's preset:
+  `bunx --bun shadcn@latest init --preset b7BYO1Ags --template vite`), Effect
+  state via `@effect-atom/atom-react` with `AtomRpc` deriving atoms from the
+  shared `RpcGroup`. Liquid-glass visual layer per the brief (WebGL refraction
+  over a static background texture, rendered on layout change only; CSS
+  frost+rim fallback; must work on iOS Safari).
+- **Testing:** `@effect/vitest` running under Node vitest (not `bun test` — it
+  is incompatible with @effect/vitest), `TestClock` for all timer logic;
+  Playwright for the browser e2e suite.
+
+## Monorepo layout
+
+Bun workspaces, three packages:
+
+```
+packages/
+  domain/   # shared: Effect Schema types, branded IDs, the RpcGroup contract,
+            # tagged errors, pure domain logic (segment compiler, reflow,
+            # generator rules). Zero platform deps: only `effect` + `@effect/rpc`.
+  server/   # Bun: rpc handlers, services (Effect.Service), SqlClient + Migrator
+            # layers, live-session engine, BunHttpServer wiring.
+  client/   # Vite + React: AtomRpc client, atoms, shadcn UI, glass layer.
+```
+
+`domain` is imported by both sides as TypeScript source (workspace protocol,
+`exports` pointing at `./src`); no build step for the shared package.
+
+## Boundaries and cross-feature contracts
+
+These contracts are the spine; per-feature designs quote and refine them but do
+not contradict them.
+
+- **All client↔server traffic is the one `RpcGroup`** defined in `domain`.
+  No side-channel fetches. Every payload, success, and error shape is Effect
+  Schema; parsing failures at the boundary are defects, not silent coercions.
+  Recorded exception: `GET /healthz` is plain HTTP (ops surface for deploy
+  hooks and uptime checks, not client traffic).
+- **The server is the clock of record.** Live-session state carries absolute
+  server timestamps (`endsAt`, `serverNow`); clients interpolate with
+  `requestAnimationFrame` for smooth countdowns but never advance state
+  themselves. All server time flows through Effect `Clock` so TestClock can
+  drive it.
+- **Live sessions are in-memory actors:** a `LiveSessions` `Effect.Service`
+  holding one handle per active session — a `SubscriptionRef<SessionState>`
+  mutated only through serialized updates, plus a ticker fiber
+  (`Effect.forkScoped`) owned by the session's `Scope`. Subscribers consume
+  `subscriptionRef.changes`: current snapshot first, then every change — that
+  stream is wired directly into a streaming rpc. Session end closes the scope,
+  killing the fiber and completing subscriber streams. Sessions are not
+  persisted mid-flight; a server restart drops live sessions (acceptable — a
+  workout is minutes long) but never durable data.
+- **Persistence goes through `SqlClient`** (the tag, never a concrete driver)
+  so the node/bun layer swap works. Durable truth lives in SQLite; in-memory
+  session state is derived and disposable.
+- **Auth:** invite-gated registration (owner mints codes), passkey-first
+  (WebAuthn) with username+PIN fallback (ADR-0002). Long-lived httpOnly session
+  cookies; the WebSocket upgrade authenticates via the same cookie. Identity
+  reaches rpc handlers through rpc middleware providing a `CurrentUser` service;
+  handlers never parse credentials.
+- **Domain purity:** segment compilation, flow/reflow transforms, timer math,
+  and generation rules are pure functions in `domain`, unit-tested exhaustively.
+  Server features orchestrate them; they do not reimplement them.
+- **Errors:** expected failures are `Schema.TaggedError` types in the rpc
+  contract, rendered by the client from typed `Result` failures. Unexpected
+  errors are defects: crash the fiber, log loudly, never swallow. No stringly
+  error codes.
+
+## Non-goals
+
+- Public/open registration or any multi-tenancy beyond the invited circle.
+- Offline/serverless operation (the old single-file player is retired).
+- Per-exercise performance tracking (reps/weights).
+- LLM-backed generation; any external SaaS/API dependency for core function.
+- Exercise animations (dropped: no source cleared the quality/licensing bar
+  free; Gymvisual ~$0.90/GIF is the recorded route if ever revived — see the
+  `exercise-animations` proposed record).
+- Native mobile apps. Phone browsers (esp. iOS Safari) are the client.
+
+## Error posture
+
+Fail loudly and early. Boundary data is schema-validated or rejected; internal
+invariant breaks are defects that crash the affected fiber and surface in logs;
+the client renders typed failures as human-readable states, never blank screens.
+The live-session stream must degrade gracefully on disconnect: client shows
+"reconnecting", `Stream.retry` with backoff, and a fresh snapshot heals all
+drift on resubscribe.
+
+## Validation runbook
+
+These commands are the binding contract the `walking-skeleton` feature
+establishes; every later feature inherits them.
+
+- **Bring-up:** `bun install`, then `bun run dev` at the repo root — server on
+  :3000, Vite client dev server on :5173 (proxies `/rpc` ws + `/healthz` to
+  :3000).
+- **Exercise:** `bun run check` (typecheck all packages), `bun run test`
+  (vitest unit/integration suites), `bun run test:e2e` (Playwright, chromium +
+  webkit, against a server it manages itself), `bun run deploy:sim` (local
+  simulated deploy: push → hook → health check → rollback).
+- **Teardown:** Ctrl-C the dev process; delete the local SQLite file to reset
+  state (`rm -f data/j45.dev.sqlite`).
+
+## Release runbook
+
+Deploy target: the owner's VPS (`ssh vps`), behind existing Caddy at
+`j45.atassi.org` (Cloudflare grey-cloud A record), Bun preinstalled. J45 runs
+as a **systemd user service** (`systemctl --user`, lingering enabled) on
+internal port **4517** with its SQLite file at `/opt/j45/data/j45.sqlite` —
+after one-time bootstrap, no deploy step requires sudo. The `walking-skeleton`
+feature builds this pipeline; `deploy/README.md` holds the bootstrap steps.
+
+- **Ready checks:** `bun run check && bun run test && bun run test:e2e` green
+  locally; working tree clean on the release branch.
+- **Deploy:** `git push deploy main` (remote `deploy` = `vps:/opt/j45/repo.git`);
+  the post-receive hook checks out to `/opt/j45/app`, runs
+  `bun install --frozen-lockfile`, builds the client, writes
+  `/opt/j45/release.env` (RELEASE_SHA, PORT, DB_PATH), restarts the `j45` user
+  unit (migrations run at server startup), then polls the health endpoint and
+  fails the push loudly if the served SHA ≠ pushed SHA. Target: under a minute
+  end to end.
+- **Health check:** `curl -fsS https://j45.atassi.org/healthz` returns 200 with
+  the deployed git SHA.
+- **Rollback:** `git push -f deploy <last-good-sha>:main` (hook redeploys that
+  ref). Migrations are forward-only, so schema-breaking releases must ship the
+  compatibility window in the migration itself.
+- **Cutover (one-time, at parity):** point the old app's Caddy route at J45,
+  verify seed workouts run timing-identical, stop and disable the old
+  `diet-f45` service.
