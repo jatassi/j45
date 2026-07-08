@@ -1,1 +1,4 @@
 export * from './rpc.js'
+export * from './segments.js'
+export * from './timer.js'
+export * from './workout.js'
