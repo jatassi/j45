@@ -67,8 +67,10 @@ not contradict them.
 - **All client↔server traffic is the one `RpcGroup`** defined in `domain`.
   No side-channel fetches. Every payload, success, and error shape is Effect
   Schema; parsing failures at the boundary are defects, not silent coercions.
-  Recorded exception: `GET /healthz` is plain HTTP (ops surface for deploy
-  hooks and uptime checks, not client traffic).
+  Two recorded exceptions: `GET /healthz` (ops surface for deploy hooks and
+  uptime checks, not client traffic) and the `/auth/*` routes (cookie
+  lifecycle — an rpc riding a WebSocket cannot set or clear cookies; bodies
+  and responses are still Effect Schema).
 - **The server is the clock of record.** Live-session state carries absolute
   server timestamps (`endsAt`, `serverNow`); clients interpolate with
   `requestAnimationFrame` for smooth countdowns but never advance state
@@ -87,10 +89,14 @@ not contradict them.
   so the node/bun layer swap works. Durable truth lives in SQLite; in-memory
   session state is derived and disposable.
 - **Auth:** invite-gated registration (owner mints codes), passkey-first
-  (WebAuthn) with username+PIN fallback (ADR-0002). Long-lived httpOnly session
-  cookies; the WebSocket upgrade authenticates via the same cookie. Identity
-  reaches rpc handlers through rpc middleware providing a `CurrentUser` service;
-  handlers never parse credentials.
+  (WebAuthn via `@simplewebauthn`) with username+PIN fallback (ADR-0002).
+  Long-lived httpOnly session cookies, set/cleared only by the plain-HTTP
+  `/auth/*` routes. The cookie rides the `/rpc` WebSocket upgrade, whose
+  headers `@effect/rpc` folds into every rpc request on that connection, so
+  the `AuthMiddleware` rpc middleware re-validates the session per call and
+  provides a `CurrentUser` service; handlers never parse credentials, and
+  revocation takes effect mid-connection. Details:
+  `docs/designs/auth-accounts/design.md`.
 - **Domain purity:** segment compilation, flow/reflow transforms, timer math,
   and generation rules are pure functions in `domain`, unit-tested exhaustively.
   Server features orchestrate them; they do not reimplement them.

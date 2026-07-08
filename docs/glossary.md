@@ -21,6 +21,7 @@ unrecorded wherever they fit.
   Applicable permanently (edit-time) or as a one-off overlay (launch-time).
 - **Session** — one live run of a workout: server-owned state (current segment,
   clock, participants), synced to all joined phones. Ephemeral; only its
-  completion record persists.
+  completion record persists. (Login state is never called a "session" bare —
+  code and schema say `AuthSession` / `auth_sessions`.)
 - **Program** — an ordered collection of workouts (e.g. the seeded 3-week × 4-day
   F45-style plan).

@@ -8,7 +8,7 @@ it may build.
 ## Feature graph
 
 ```yaml
-design_version: 2
+design_version: 3
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
@@ -28,8 +28,18 @@ features:
     depends_on: [walking-skeleton]
   - id: auth-accounts
     title: Invite-gated accounts — passkey-first with username+PIN fallback, long-lived sessions
-    status: proposed
+    status: designed
     depends_on: [walking-skeleton]
+    acceptance:
+      - Given a fresh database with FIRST_RUN_INVITE unset, server startup logs a single-use first-run invite code; given FIRST_RUN_INVITE set, that exact code is redeemable; either way the first account registered gets role owner and later accounts get role member (integration-tested).
+      - "e2e (chromium + webkit): opening /register?invite=<valid code> and submitting username, display name, and PIN lands the visitor authenticated with their display name visible; a page reload stays authenticated; logout returns to the login screen and a reload stays logged out; context.cookies() shows the j45_session cookie with httpOnly true and sameSite Lax."
+      - "e2e: redeeming a spent or unknown invite code shows a typed error and creates no account — registering twice with the same code fails the second time."
+      - "e2e (chromium, CDP virtual authenticator): an authenticated user enrolls a passkey; after logout, the sign-in-with-passkey button alone — no username or PIN typed — authenticates them."
+      - "e2e (chromium + webkit): PIN login succeeds with the correct PIN and shows an InvalidCredentials error with a wrong one. Unit (TestClock): 5 consecutive PIN failures for a username make PIN login fail with RateLimited (even with the correct PIN) until the 15-minute window elapses."
+      - "Integration: an rpc guarded by AuthMiddleware fails with Unauthorized when the request headers carry no valid session cookie, and succeeds with CurrentUser provided when they do — the Me rpc returns the logged-in user over the WebSocket."
+      - "e2e: the owner mints an invite in the UI and a second browser context registers with it; a member account calling an owner-only rpc gets Forbidden and sees no admin UI."
+      - "e2e or integration: the owner issues a reset code for a member; redeeming it with a new PIN signs the member in, the old PIN no longer works, and the member's prior session is revoked — its next authenticated call fails Unauthorized."
+      - "Unit: users.pin_hash stores a Bun.password hash (never the PIN) and auth_sessions stores only a SHA-256 token hash that differs from the cookie value."
   - id: plan-library
     title: Per-user workout libraries with the 3-week program migrated in as seed plans
     status: proposed
