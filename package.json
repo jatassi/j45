@@ -1,0 +1,23 @@
+{
+  "name": "j45",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "bun run --filter '*' check",
+    "test": "bunx vitest run",
+    "test:e2e": "playwright test",
+    "dev": "bun run --filter '*' dev",
+    "build": "bun run --filter '@j45/client' build",
+    "deploy:sim": "bash scripts/deploy-sim.sh"
+  },
+  "devDependencies": {
+    "@effect/vitest": "0.29.0",
+    "@playwright/test": "1.61.1",
+    "@types/node": "26.1.0",
+    "typescript": "6.0.3",
+    "vitest": "3.2.7"
+  }
+}

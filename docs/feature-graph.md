@@ -12,7 +12,7 @@ design_version: 2
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
-    status: designed
+    status: validated
     depends_on: []
     acceptance:
       - Given a fresh clone on a machine with Bun installed, `bun install`, `bun run check`, and `bun run test` all exit 0.
