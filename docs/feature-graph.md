@@ -8,7 +8,7 @@ it may build.
 ## Feature graph
 
 ```yaml
-design_version: 3
+design_version: 4
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
@@ -49,8 +49,16 @@ features:
       - "Unit: users.pin_hash stores a Bun.password hash (never the PIN) and auth_sessions stores only a SHA-256 token hash that differs from the cookie value."
   - id: plan-library
     title: Per-user workout libraries with the 3-week program migrated in as seed plans
-    status: proposed
+    status: designed
     depends_on: [workout-domain, auth-accounts]
+    acceptance:
+      - "Integration: given a fresh database, registering an account creates exactly 12 workouts in that account's library — named exactly Athletica, Romans, Miami Nights, Panthers, Docklands, Red Diamond, Crossfire, Hammer, Pipeline, Medusa, SoCal, Apex — in the same transaction as the user row (a failed registration creates neither); a second account gets its own 12 copies with distinct ids, and deleting a workout from one library leaves the other untouched."
+      - "Unit: each of the 12 frozen seed bodies decodes as a valid Workout, and compiling them yields (works, total seconds) of exactly Athletica (27,1605), Romans (24,2120), Miami Nights (24,1425), Panthers (27,1470), Docklands (36,1710), Red Diamond (36,2135), Crossfire (40,2235), Hammer (18,1110), Pipeline (36,2145), Medusa (27,2180), SoCal (36,2155), Apex (8,2135)."
+      - "Integration: given a database migrated through 0002 with an existing user, when migration 0003 runs, that user's library contains the 12 seed workouts."
+      - "Integration: ListWorkouts returns only the caller's workouts, and GetWorkout/DuplicateWorkout/RenameWorkout/DeleteWorkout against another user's workout id fail with WorkoutNotFound."
+      - "e2e (chromium + webkit): after PIN login, `/` lists the 12 seed workouts; opening `Athletica` shows 3 pods, 9 stations, and total duration 26:45; Duplicate creates `Athletica (copy)` in the list; renaming the copy persists across a page reload; Delete removes it."
+      - "e2e: a logged-out visit to `/workouts/<seed id>` shows the login screen, and completing PIN login renders that workout's detail without further navigation; `/account` renders the account screen via a nav link from the library home."
+      - "The pre-existing auth and glass e2e suites pass unchanged (`/glass` still renders unauthenticated), and `bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: live-session
     title: Server-authoritative live sessions — streaming sync, multi-phone controls, beeps/wake-lock, one-tap join
     status: proposed

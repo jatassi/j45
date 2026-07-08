@@ -35,7 +35,9 @@ features: `public/workouts.json` in the legacy repo, merged with
 - **Client:** React + Vite, shadcn/ui (initialized from the owner's preset:
   `bunx --bun shadcn@latest init --preset b7BYO1Ags --template vite`), Effect
   state via `@effect-atom/atom-react` with `AtomRpc` deriving atoms from the
-  shared `RpcGroup`. The UI is **dark-only** (single palette, no theme
+  shared `RpcGroup`. Routing via `@tanstack/react-router` (code-based route
+  tree, introduced by plan-library); the auth screens are `AuthGate` states
+  outside the router, and `/glass` stays a pre-gate pathname switch. The UI is **dark-only** (single palette, no theme
   switching). Liquid-glass visual layer per the brief (WebGL refraction over a
   static document-anchored backdrop, one shared GL context, rendered on layout
   change only — never per frame; CSS frost+rim fallback; must work on iOS
@@ -99,6 +101,13 @@ not contradict them.
   provides a `CurrentUser` service; handlers never parse credentials, and
   revocation takes effect mid-connection. Details:
   `docs/designs/auth-accounts/design.md`.
+- **Durable user content has exactly one owner.** There is no shared or
+  global content: seed workouts are copied into each account's library at
+  registration (existing accounts were backfilled by migration), and copies
+  evolve independently. Library rpcs are scoped to `CurrentUser`; a foreign
+  id is indistinguishable from an absent one (`WorkoutNotFound`, never a
+  leak). Cross-user experiences (joining a live session, later sharing)
+  stream or copy content — they never grant access to another user's rows.
 - **Domain purity:** segment compilation, flow/reflow transforms, timer math,
   and generation rules are pure functions in `domain`, unit-tested exhaustively.
   Server features orchestrate them; they do not reimplement them.
