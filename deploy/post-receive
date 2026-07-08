@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+#
+# J45 git-push deploy hook. Installed into the bare repo's hooks/ directory
+# (alongside a config.sh). The SAME script runs on the production VPS and in
+# scripts/deploy-sim.sh — only the sourced config.sh differs.
+#
+# Flow: checkout pushed ref -> bun install --frozen-lockfile -> bun run build
+# -> write release.env -> $RESTART_CMD -> poll $HEALTH_URL and fail loudly if
+# the served SHA differs from the pushed SHA.
+set -euo pipefail
+
+# bun is NOT on PATH in the VPS's non-interactive push shell; without this the
+# first real push dies with "bun: not found". (Verified on the VPS 2026-07-07.)
+export PATH="$HOME/.bun/bin:$PATH"
+
+ZERO="0000000000000000000000000000000000000000"
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$HOOK_DIR/config.sh"
+
+# git feeds "<old> <new> <ref>" on stdin, one line per updated ref. Deploy the
+# newest branch update; ignore tag pushes and branch deletions.
+RELEASE_SHA=""
+while read -r _oldrev newrev refname; do
+  case "$refname" in
+    refs/heads/*)
+      if [ "$newrev" != "$ZERO" ]; then
+        RELEASE_SHA="$newrev"
+      fi
+      ;;
+  esac
+done
+
+if [ -z "$RELEASE_SHA" ]; then
+  echo "post-receive: no branch update to deploy" >&2
+  exit 0
+fi
+
+echo "post-receive: deploying $RELEASE_SHA"
+
+# 1. checkout the pushed ref into the app directory.
+mkdir -p "$APP_DIR"
+git --work-tree="$APP_DIR" checkout -f "$RELEASE_SHA"
+
+cd "$APP_DIR"
+
+# 2. install dependencies — frozen so a deploy can never mutate the lockfile.
+bun install --frozen-lockfile
+
+# 3. build the client (server runs its TS directly under Bun, no build).
+bun run build
+
+# 4. write release.env for the server (systemd EnvironmentFile in prod).
+mkdir -p "$(dirname "$RELEASE_ENV")"
+mkdir -p "$(dirname "$DB_PATH")"
+cat > "$RELEASE_ENV" <<EOF
+RELEASE_SHA=$RELEASE_SHA
+PORT=$PORT
+DB_PATH=$DB_PATH
+EOF
+
+# 5. restart the server (prod: systemctl --user restart j45; sim: bg process).
+eval "$RESTART_CMD"
+
+# 6. poll health for ~20s; fail loudly unless the served SHA matches the push.
+deadline=$((SECONDS + 20))
+served_sha=""
+while [ "$SECONDS" -lt "$deadline" ]; do
+  body="$(curl -fsS "$HEALTH_URL" 2>/dev/null || true)"
+  served_sha="$(printf '%s' "$body" | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p')"
+  if [ "$served_sha" = "$RELEASE_SHA" ]; then
+    echo "post-receive: $HEALTH_URL is serving $RELEASE_SHA"
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "post-receive: DEPLOY FAILED — $HEALTH_URL served '${served_sha:-<none>}', expected '$RELEASE_SHA'" >&2
+exit 1

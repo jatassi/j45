@@ -1,0 +1,16 @@
+{
+  "name": "@j45/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/rpc": "0.75.1",
+    "effect": "3.21.4"
+  }
+}

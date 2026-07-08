@@ -1,0 +1,20 @@
+[Unit]
+Description=J45 app server
+After=network.target
+
+[Service]
+Type=simple
+# Server runs its TypeScript entrypoint directly under Bun. WorkingDirectory
+# is the server package so ../../client/dist (the built client) resolves.
+WorkingDirectory=/opt/j45/app/packages/server
+# RELEASE_SHA, PORT (=4517) and DB_PATH are written here by the post-receive
+# hook on every deploy; the server reads them from the process environment.
+EnvironmentFile=/opt/j45/release.env
+# Non-interactive systemd shells don't have bun on PATH — use the absolute
+# path (%h = the user's home).
+ExecStart=%h/.bun/bin/bun run src/main.ts
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

@@ -11,6 +11,9 @@ unrecorded wherever they fit.
 - **Flow** — the execution shape of a workout's pods: `laps` (cycle through a
   pod's stations, repeating the cycle N times) or `sets` (repeat one station N
   times before moving on), with per-round work/rest intervals.
+- **Round** — one pass of a flow (a lap or a set) carrying its work/rest
+  interval. A flow is a nonempty list of rounds; the round count is the
+  lap/set count.
 - **Ladder** — a flow whose work/rest intervals differ per round (e.g.
   descending rest), as opposed to uniform intervals.
 - **Segment** — one timed unit of a running session (`ready`, `work`, or
