@@ -1,0 +1,127 @@
+/*
+ * Liquid-glass surface — the CSS tier stack (ported from the personal-site
+ * `.card-glass` layer stack, colours re-cut from the J45 dark tokens).
+ *
+ * Three tiers, one class:
+ *   1. Baseline (`.glass-surface`) — always on: a `backdrop-filter` frost, a
+ *      milky tint + top sheen (`::before`, screen-blended), and a specular rim
+ *      traced by a masked gradient border (`::after`). This is the whole look
+ *      with no WebGL, no JS, or before the first bitmap lands.
+ *   2. Refract tier (`[data-glass-tier="refract"]`) — once `useLiquidGlass`
+ *      paints a bitmap into the `.glass-layer` canvas, the opaque copy owns the
+ *      interior: `backdrop-filter` is dropped and `blur`/`saturate` move onto
+ *      the layer canvas as a CSS `filter` (per-surface, from the custom
+ *      properties the hook sets).
+ *   3. `prefers-reduced-transparency` — surfaces render opaque with the rim
+ *      only: no frost, no refraction.
+ */
+
+.glass-surface {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Translucent so the frost reads the page behind it — overrides shadcn's
+     opaque `bg-card`; both cut from the J45 dark card/foreground tokens. */
+  background-color: color-mix(in oklab, var(--card) 55%, transparent);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 24px 70px -28px rgb(0 0 0 / 0.8),
+    0 0 30px -6px color-mix(in oklab, var(--foreground) 8%, transparent);
+  -webkit-backdrop-filter: blur(6px) saturate(1.4);
+  backdrop-filter: blur(6px) saturate(1.4);
+}
+
+/* Frost tint + top sheen: a milky wash plus a low, top-biased glare so the
+   surface reads as lit volume rather than a flat pane. Screen-blends over the
+   refracted copy and the content below. */
+.glass-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--foreground) 6%, transparent),
+      color-mix(in oklab, var(--foreground) 1.5%, transparent)
+    ),
+    radial-gradient(
+      90% 70% at 50% -12%,
+      color-mix(in oklab, var(--foreground) 8%, transparent) 0%,
+      transparent 55%
+    );
+  mix-blend-mode: screen;
+}
+
+/* Specular rim: a bright top-left edge fading around the corner with a fainter
+   opposite glint, drawn as a gradient-filled border via a mask so it traces the
+   rounded corners exactly. */
+.glass-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--foreground) 50%, transparent) 0%,
+    color-mix(in oklab, var(--foreground) 9%, transparent) 18%,
+    transparent 40%,
+    transparent 60%,
+    color-mix(in oklab, var(--foreground) 4.5%, transparent) 82%,
+    color-mix(in oklab, var(--foreground) 16%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* Card content rides above the refraction copy, frost, and rim layers. */
+.glass-surface > :not(.glass-layer) {
+  position: relative;
+  z-index: 3;
+}
+
+/* The refraction layer the hook paints. Hidden until the refract tier owns the
+   interior, so a stale bitmap never shows on the CSS tier (e.g. after context
+   loss drops the surface back). */
+.glass-surface > .glass-layer {
+  display: none;
+}
+
+.glass-surface[data-glass-tier='refract'] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.glass-surface[data-glass-tier='refract'] > .glass-layer {
+  display: block;
+  filter: blur(var(--glass-blur, 1.5px)) saturate(var(--glass-saturate, 1.5));
+}
+
+/* Reduced transparency: opaque cards, rim only. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-surface {
+    background-color: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .glass-surface::before {
+    display: none;
+  }
+
+  .glass-surface > .glass-layer,
+  .glass-surface[data-glass-tier='refract'] > .glass-layer {
+    display: none;
+  }
+}

@@ -3,8 +3,6 @@ import { createRoot } from 'react-dom/client'
 
 import { RegistryProvider } from '@effect-atom/atom-react'
 
-import { ThemeProvider } from '@/components/theme-provider.tsx'
-
 import App from './app.tsx'
 
 import './index.css'
@@ -17,9 +15,7 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <RegistryProvider>
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>
+      <App />
     </RegistryProvider>
   </StrictMode>,
 )

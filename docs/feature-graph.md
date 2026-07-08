@@ -81,7 +81,7 @@ features:
     depends_on: [workout-domain]
   - id: liquid-glass-ui
     title: Liquid-glass visual layer — WebGL refraction port over shadcn, iOS-Safari-proof, CSS fallback
-    status: designed
+    status: validated
     depends_on: [walking-skeleton]
     acceptance:
       - Given `bun run dev`, when GET /glass loads in the chromium and webkit e2e projects, the demo page renders at least three glass surfaces and each reaches `data-glass-tier="refract"` within 5 seconds.
