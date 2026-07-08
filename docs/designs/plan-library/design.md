@@ -173,6 +173,12 @@ routes/params/links match the Schema-everywhere ethos. Routes:
 | `/` | LibraryScreen (home) |
 | `/workouts/$workoutId` | WorkoutDetailScreen |
 | `/account` | the existing AccountScreen, now routed |
+| anything unmatched | redirect to `/` |
+
+The catch-all is load-bearing, not cosmetic: after registration the visitor
+is authenticated while still on `/register?invite=…`, a path the route tree
+has no screen for — without the redirect they land on a blank unmatched
+page. No blank/unmatched page is reachable while authenticated.
 
 **Gate/router composition:** `AuthGate` stays *outside* the router —
 login/register are gate states, not routes, exactly as built; the
@@ -212,7 +218,15 @@ the list atom on success.
   the library home listing the 12 seeds; Athletica detail shows 3 pods /
   9 stations / 26:45; duplicate → rename → reload persists → delete;
   deep-link to a workout URL renders it after PIN login; `/account`
-  reachable via nav; the existing auth and glass suites pass unchanged.
+  reachable via nav; registration lands on the library home (the catch-all
+  redirect, exercised via `/register?invite=…`).
+- **Pre-existing suites:** the glass suite passes unchanged. The five
+  auth-era spec files (`auth-login`, `auth-passkey`, `auth-admin`,
+  `auth-register`, `server-info`) hard-coded the pre-router home —
+  AccountScreen testids asserted at `/` immediately after login — and are
+  updated **minimally** for the routed home: navigate to `/account` before
+  AccountScreen-scoped assertions, expect the library as the post-auth
+  landing. No assertion about auth behavior itself is weakened or removed.
 
 ## Out of scope (later features)
 

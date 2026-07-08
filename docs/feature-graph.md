@@ -8,7 +8,7 @@ it may build.
 ## Feature graph
 
 ```yaml
-design_version: 4
+design_version: 5
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
@@ -58,7 +58,8 @@ features:
       - "Integration: ListWorkouts returns only the caller's workouts, and GetWorkout/DuplicateWorkout/RenameWorkout/DeleteWorkout against another user's workout id fail with WorkoutNotFound."
       - "e2e (chromium + webkit): after PIN login, `/` lists the 12 seed workouts; opening `Athletica` shows 3 pods, 9 stations, and total duration 26:45; Duplicate creates `Athletica (copy)` in the list; renaming the copy persists across a page reload; Delete removes it."
       - "e2e: a logged-out visit to `/workouts/<seed id>` shows the login screen, and completing PIN login renders that workout's detail without further navigation; `/account` renders the account screen via a nav link from the library home."
-      - "The pre-existing auth and glass e2e suites pass unchanged (`/glass` still renders unauthenticated), and `bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+      - "e2e: completing registration via `/register?invite=<code>` lands the new user on the library home — never a blank page — and any authenticated visit to a path the route tree doesn't match redirects to `/`."
+      - "The glass e2e suite passes unchanged (`/glass` still renders unauthenticated); the pre-existing auth e2e suites pass with edits limited to navigation for the routed home (AccountScreen assertions via `/account`, post-auth landing is the library) — no auth assertion weakened or removed; and `bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: live-session
     title: Server-authoritative live sessions — streaming sync, multi-phone controls, beeps/wake-lock, one-tap join
     status: proposed
