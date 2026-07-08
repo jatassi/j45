@@ -35,7 +35,7 @@ features:
       - packages/domain/package.json dependencies remain exactly effect and @effect/rpc, the existing ServerInfo rpc contract is unchanged, and `bun run check` and `bun run test` exit 0 at the repo root.
   - id: auth-accounts
     title: Invite-gated accounts — passkey-first with username+PIN fallback, long-lived sessions
-    status: designed
+    status: validated
     depends_on: [walking-skeleton]
     acceptance:
       - Given a fresh database with FIRST_RUN_INVITE unset, server startup logs a single-use first-run invite code; given FIRST_RUN_INVITE set, that exact code is redeemable; either way the first account registered gets role owner and later accounts get role member (integration-tested).

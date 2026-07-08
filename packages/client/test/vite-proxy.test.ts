@@ -22,10 +22,11 @@ const rawDataToString = (data: RawData): string => {
 
 /**
  * Stands in for `packages/server` (not yet built when this task lands): a
- * plain HTTP server on :3000 answering `/healthz`, plus a WebSocket server
- * echoing whatever it receives on `/rpc` — enough to prove the Vite dev
- * server's proxy config (packages/client/vite.config.ts) actually forwards
- * both routes to the backend, not just that the config object looks right.
+ * plain HTTP server on :3000 answering `/healthz` and `/auth/*`, plus a
+ * WebSocket server echoing whatever it receives on `/rpc` — enough to prove
+ * the Vite dev server's proxy config (packages/client/vite.config.ts)
+ * actually forwards every route to the backend, not just that the config
+ * object looks right.
  */
 function startFakeBackend(): Promise<{
   http: http.Server
@@ -36,6 +37,11 @@ function startFakeBackend(): Promise<{
     if (req.url === '/healthz') {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ sha: 'fake-backend-sha', version: '0.0.1' }))
+      return
+    }
+    if (req.url?.startsWith('/auth/')) {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ route: req.url }))
       return
     }
     res.writeHead(404)
@@ -71,7 +77,7 @@ describe('vite dev server proxy (packages/client/vite.config.ts)', () => {
     backend = undefined
   })
 
-  it('proxies /healthz (http) and /rpc (ws) to the backend on :3000', async () => {
+  it('proxies /healthz (http), /auth (http), and /rpc (ws) to the backend on :3000', async () => {
     backend = await startFakeBackend()
 
     // Same proxy rules as the real dev server (loaded from vite.config.ts);
@@ -90,6 +96,10 @@ describe('vite dev server proxy (packages/client/vite.config.ts)', () => {
       sha: 'fake-backend-sha',
       version: '0.0.1',
     })
+
+    const authResponse = await fetch('http://localhost:5199/auth/me')
+    expect(authResponse.status).toBe(200)
+    await expect(authResponse.json()).resolves.toEqual({ route: '/auth/me' })
 
     const echoed = await new Promise<string>((resolve, reject) => {
       const socket = new WebSocket('ws://localhost:5199/rpc')

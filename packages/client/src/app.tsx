@@ -1,5 +1,17 @@
-import { ServerInfoCard } from '@/components/server-info-card'
+import { AccountScreen } from '@/components/account-screen'
+import { AuthGate } from '@/components/auth-gate'
 import { GlassDemo } from '@/glass-demo'
+
+/**
+ * `AuthGate`'s `meAtom` session probe is private to `auth-gate.tsx` — the
+ * only way to flip it (and therefore the gate) back to its anonymous state
+ * after logout is to reload the page, which redoes the whole atom registry
+ * (and, with it, that probe) from scratch against the now-cleared session
+ * cookie.
+ */
+const handleLoggedOut = (): void => {
+  globalThis.location.reload()
+}
 
 /**
  * Switches on `location.pathname` with no router dependency: `/glass`
@@ -14,9 +26,7 @@ export function App() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-6">
-      <ServerInfoCard />
-    </div>
+    <AuthGate>{(user) => <AccountScreen user={user} onLoggedOut={handleLoggedOut} />}</AuthGate>
   )
 }
 

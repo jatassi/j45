@@ -27,6 +27,11 @@ PORT=4517
 # The env file the hook writes and j45.service reads via EnvironmentFile.
 RELEASE_ENV="/opt/j45/release.env"
 
+# The origin the client is served from — written into release.env as
+# APP_ORIGIN (auth-accounts: CSRF Origin check, cookie Secure attribute,
+# WebAuthn rpID/expected-origin).
+APP_ORIGIN="https://j45.atassi.org"
+
 # How the hook restarts the server after a successful build. The systemd user
 # service means this never needs sudo.
 RESTART_CMD="systemctl --user restart j45"

@@ -24,9 +24,11 @@ describe('ServerInfo', () => {
 })
 
 describe('J45Rpcs', () => {
-  it('defines the ServerInfo rpc exactly once', () => {
+  it('merges PublicRpcs, AccountRpcs, and OwnerRpcs', () => {
     const rpcs = J45Rpcs.requests
-    expect(rpcs.size).toBe(1)
+    expect(rpcs.size).toBe(10)
     expect(rpcs.has('ServerInfo')).toBe(true)
+    expect(rpcs.has('Me')).toBe(true)
+    expect(rpcs.has('ListUsers')).toBe(true)
   })
 })

@@ -58,6 +58,7 @@ cat > "$RELEASE_ENV" <<EOF
 RELEASE_SHA=$RELEASE_SHA
 PORT=$PORT
 DB_PATH=$DB_PATH
+APP_ORIGIN=$APP_ORIGIN
 EOF
 
 # 5. restart the server (prod: systemctl --user restart j45; sim: bg process).

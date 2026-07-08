@@ -28,7 +28,7 @@ fail() {
 # --- 1. shipped-artifact sanity checks -------------------------------------
 
 # criterion 1: the prod config supplies every knob the hook needs.
-for var in APP_DIR DATA_DIR DB_PATH PORT RELEASE_ENV RESTART_CMD HEALTH_URL; do
+for var in APP_DIR DATA_DIR DB_PATH PORT RELEASE_ENV RESTART_CMD HEALTH_URL APP_ORIGIN; do
   grep -Eq "^${var}=" "$DEPLOY_DIR/config.sh" \
     || fail "deploy/config.sh is missing $var"
 done
@@ -84,6 +84,7 @@ DB_PATH="$DATA_DIR/j45.sqlite"
 PORT=$PORT
 RELEASE_ENV="$RELEASE_ENV"
 HEALTH_URL="$HEALTH_URL"
+APP_ORIGIN="http://127.0.0.1:$PORT"
 RESTART_CMD="sim_restart"
 
 SIM_PIDFILE="$PIDFILE"
@@ -148,6 +149,7 @@ assert_serves "$NEW_SHA"
 grep -q "^RELEASE_SHA=$NEW_SHA$" "$RELEASE_ENV" || fail "release.env missing RELEASE_SHA=$NEW_SHA"
 grep -q "^PORT=$PORT$" "$RELEASE_ENV" || fail "release.env missing PORT=$PORT"
 grep -q "^DB_PATH=$DATA_DIR/j45.sqlite$" "$RELEASE_ENV" || fail "release.env missing DB_PATH"
+grep -q "^APP_ORIGIN=http://127.0.0.1:$PORT$" "$RELEASE_ENV" || fail "release.env missing APP_ORIGIN"
 
 echo "deploy:sim — rolling back (force-push prior) $PRIOR_SHA"
 git -C "$SRC" push -qf "$BARE" "$PRIOR_SHA:refs/heads/main"
