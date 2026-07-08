@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 const cssPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/index.css')

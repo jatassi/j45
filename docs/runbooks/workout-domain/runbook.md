@@ -21,7 +21,7 @@ http://localhost:5173/` → 200.
 bun run check      # tsc --noEmit in domain, server, client — all exit 0
 bun run test       # vitest: 10 files, 34 tests, all pass
 bun run test:e2e   # Playwright chromium + webkit — 2 passed
-bun run lint       # eslint — clean
+bun run lint       # oxlint (type-aware) — clean
 bun run format:check
 ```
 

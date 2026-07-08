@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
 // Strip CSS comments so a token mentioned in prose (this file's doc comment

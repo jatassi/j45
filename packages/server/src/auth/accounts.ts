@@ -1,17 +1,18 @@
+import { randomUUID } from 'node:crypto'
+
 import { SqlClient } from '@effect/sql'
 import {
+  User,
+  UsernameTaken,
   type InviteCode,
   type Pin,
-  User,
   type UserId,
   type Username,
-  UsernameTaken,
 } from '@j45/domain'
 import type * as Context from 'effect/Context'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Option from 'effect/Option'
-import { randomUUID } from 'node:crypto'
 
 import { AuthSessions } from './auth-sessions.js'
 import { PinHashing } from './hashing.js'

@@ -1,8 +1,9 @@
+import { fileURLToPath } from 'node:url'
+
 import * as Config from 'effect/Config'
 import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
-import { fileURLToPath } from 'node:url'
 
 /**
  * Where the static route reads the built client from. A `Context.Tag` (not

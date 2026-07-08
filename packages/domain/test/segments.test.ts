@@ -8,20 +8,20 @@ import {
   CompiledWorkout,
   READY_SECONDS,
   ReadySegment,
-  type RestSegment,
   Segment,
+  type RestSegment,
   type WorkContext,
   type WorkSegment,
 } from '../src/segments.js'
 import { Flow, Pod, Round, Station, Workout } from '../src/workout.js'
-import { apex, athletica, docklands, medusa } from './fixtures/legacy.js'
 import {
   apexExpected,
   athleticaExpected,
   docklandsExpected,
-  type ExpectedSegment,
   medusaExpected,
+  type ExpectedSegment,
 } from './fixtures/legacy-goldens.js'
+import { apex, athletica, docklands, medusa } from './fixtures/legacy.js'
 
 const asWork = (segment: Segment): WorkSegment => {
   if (segment._tag !== 'work') {

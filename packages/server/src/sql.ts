@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 import type { PlatformError } from '@effect/platform/Error'
 import * as FileSystem from '@effect/platform/FileSystem'
 import * as Path from '@effect/platform/Path'
@@ -10,7 +12,6 @@ import * as Config from 'effect/Config'
 import type { ConfigError } from 'effect/ConfigError'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
-import { fileURLToPath } from 'node:url'
 
 /**
  * Where the SQLite database file lives. Defaults to `data/j45.dev.sqlite`

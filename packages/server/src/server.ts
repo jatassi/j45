@@ -1,5 +1,5 @@
-import * as HttpRouter from '@effect/platform/HttpRouter'
 import { BunHttpServer } from '@effect/platform-bun'
+import * as HttpRouter from '@effect/platform/HttpRouter'
 import { RpcSerialization, RpcServer } from '@effect/rpc'
 import { J45Rpcs } from '@j45/domain'
 import * as Effect from 'effect/Effect'

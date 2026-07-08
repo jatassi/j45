@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import fragmentSource from '@/glass/glass.frag.glsl?raw'
 import {
-  type ContextEvent,
   createRefractionRenderer,
+  type ContextEvent,
   type GradientSource,
   type RefractionParams,
 } from '@/glass/renderer'

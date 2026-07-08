@@ -4,8 +4,8 @@
 # on every `bun install`.
 set -e
 
-# Typecheck is whole-project (cross-file types); lint and format-check are
-# scoped to staged files to keep commits fast.
+# Typecheck and lint are whole-project (cross-file types; oxlint is
+# sub-second); format-check is scoped to staged files to keep commits fast.
 echo 'pre-commit: bun run check'
 bun run check
 
@@ -14,8 +14,8 @@ staged() {
 }
 
 if [ -n "$(staged '*.ts' '*.tsx')" ]; then
-  echo 'pre-commit: eslint (staged files)'
-  staged '*.ts' '*.tsx' | xargs -0 bunx eslint --no-warn-ignored
+  echo 'pre-commit: oxlint --type-aware'
+  bunx oxlint --type-aware
 fi
 
 if [ -n "$(staged '*.ts' '*.tsx' '*.css')" ]; then

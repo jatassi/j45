@@ -1,4 +1,3 @@
-import { chromium, expect } from '@playwright/test'
 import { execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -6,6 +5,8 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { chromium, expect } from '@playwright/test'
 
 import type { E2eProjectName, E2eState } from './state.js'
 import { stateFilePath } from './state.js'

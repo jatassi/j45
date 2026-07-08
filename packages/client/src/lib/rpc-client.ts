@@ -1,7 +1,7 @@
+import { AtomRpc } from '@effect-atom/atom-react'
 import * as Socket from '@effect/platform/Socket'
 import * as RpcClient from '@effect/rpc/RpcClient'
 import * as RpcSerialization from '@effect/rpc/RpcSerialization'
-import { AtomRpc } from '@effect-atom/atom-react'
 import { J45Rpcs } from '@j45/domain'
 import * as Layer from 'effect/Layer'
 

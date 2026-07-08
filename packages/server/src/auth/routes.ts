@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import * as Headers from '@effect/platform/Headers'
 import * as HttpRouter from '@effect/platform/HttpRouter'
 import type { RequestError } from '@effect/platform/HttpServerError'
@@ -8,14 +10,14 @@ import type { SqlError } from '@effect/sql/SqlError'
 import {
   Forbidden,
   InvalidCredentials,
-  type InvalidInvite,
   InviteCode,
   Pin,
-  type RateLimited,
   Unauthorized,
   User,
-  type UserId,
   Username,
+  type InvalidInvite,
+  type RateLimited,
+  type UserId,
   type UsernameTaken,
 } from '@j45/domain'
 import type * as Context from 'effect/Context'
@@ -27,7 +29,6 @@ import type * as Layer from 'effect/Layer'
 import * as Option from 'effect/Option'
 import type { ParseError } from 'effect/ParseResult'
 import * as Schema from 'effect/Schema'
-import { createHash } from 'node:crypto'
 
 import { AppOriginConfig } from '../config.js'
 import { Accounts } from './accounts.js'

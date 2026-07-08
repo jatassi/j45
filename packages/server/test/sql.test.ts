@@ -1,6 +1,6 @@
 import { NodeContext } from '@effect/platform-node'
-import * as SqlClient from '@effect/sql/SqlClient'
 import { SqliteClient } from '@effect/sql-sqlite-node'
+import * as SqlClient from '@effect/sql/SqlClient'
 import { describe, it } from '@effect/vitest'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'

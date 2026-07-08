@@ -1,12 +1,13 @@
-import * as Command from '@effect/platform/Command'
-import { NodeContext } from '@effect/platform-node'
-import { describe, it } from '@effect/vitest'
-import * as Effect from 'effect/Effect'
-import * as Schedule from 'effect/Schedule'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { NodeContext } from '@effect/platform-node'
+import * as Command from '@effect/platform/Command'
+import { describe, it } from '@effect/vitest'
+import * as Effect from 'effect/Effect'
+import * as Schedule from 'effect/Schedule'
 import { expect } from 'vitest'
 
 const serverDir = fileURLToPath(new URL('../..', import.meta.url))

@@ -1,6 +1,6 @@
+import { NodeContext } from '@effect/platform-node'
 import * as HttpApp from '@effect/platform/HttpApp'
 import * as HttpRouter from '@effect/platform/HttpRouter'
-import { NodeContext } from '@effect/platform-node'
 import { SqlClient } from '@effect/sql'
 import { SqliteClient } from '@effect/sql-sqlite-node'
 import { describe, it } from '@effect/vitest'
