@@ -35,9 +35,11 @@ features: `public/workouts.json` in the legacy repo, merged with
 - **Client:** React + Vite, shadcn/ui (initialized from the owner's preset:
   `bunx --bun shadcn@latest init --preset b7BYO1Ags --template vite`), Effect
   state via `@effect-atom/atom-react` with `AtomRpc` deriving atoms from the
-  shared `RpcGroup`. Liquid-glass visual layer per the brief (WebGL refraction
-  over a static background texture, rendered on layout change only; CSS
-  frost+rim fallback; must work on iOS Safari).
+  shared `RpcGroup`. The UI is **dark-only** (single palette, no theme
+  switching). Liquid-glass visual layer per the brief (WebGL refraction over a
+  static document-anchored backdrop, one shared GL context, rendered on layout
+  change only — never per frame; CSS frost+rim fallback; must work on iOS
+  Safari; see `docs/designs/liquid-glass-ui/design.md`).
 - **Testing:** `@effect/vitest` running under Node vitest (not `bun test` — it
   is incompatible with @effect/vitest), `TestClock` for all timer logic;
   Playwright for the browser e2e suite.
