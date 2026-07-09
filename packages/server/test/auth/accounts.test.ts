@@ -11,6 +11,7 @@ import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { PinHashing } from '../../src/auth/hashing.js'
 import { Invites } from '../../src/auth/invites.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { MigratorLive } from '../../src/sql.js'
 
 /**
@@ -39,18 +40,23 @@ const TestPinHashing = Layer.succeed(PinHashing, {
 })
 
 /**
- * `Invites`/`UserRepo`/`AuthSessions` each depend only on `SqlClient` — this
- * merges the three against one shared in-memory database, mirroring
- * `AuthTestLive` in `schema-sessions.test.ts`.
+ * `Invites`/`UserRepo`/`AuthSessions`/`WorkoutsRepo` each depend only on
+ * `SqlClient` — this merges the four against one shared in-memory database,
+ * mirroring `AuthTestLive` in `schema-sessions.test.ts`. `WorkoutsRepo` is
+ * here because `Accounts.register` now seeds the new user's workout
+ * library inside its own transaction (`registration-seeding.test.ts`
+ * covers that library's actual contents; these tests just need it wired so
+ * `register` resolves at all).
  */
 const SharedServicesLive = Layer.mergeAll(
   Invites.Default,
   UserRepo.Default,
   AuthSessions.Default,
+  WorkoutsRepo.Default,
 ).pipe(Layer.provideMerge(SqlTestLive))
 
 /**
- * `Accounts` depends on all three services above plus `PinHashing`;
+ * `Accounts` depends on all four services above plus `PinHashing`;
  * `provideMerge` (not a plain `mergeAll`) is what actually wires those
  * dependencies into `Accounts.Default` rather than merely running the
  * layers in parallel — the tests below also `yield*` `Invites`,

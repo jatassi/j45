@@ -1,4 +1,5 @@
 export * from './auth.js'
+export * from './library.js'
 export * from './rpc.js'
 export * from './segments.js'
 export * from './timer.js'

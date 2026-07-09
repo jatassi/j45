@@ -97,6 +97,12 @@ test.describe('owner invites + owner-only rpc access (chromium + webkit)', () =>
       await page.locator('#login-username').fill(env.owner.username)
       await page.locator('#login-pin').fill(env.owner.pin)
       await page.getByRole('button', { name: 'Sign in with PIN' }).click()
+
+      // Authenticated now lands on the routed library home, not
+      // `AccountScreen` directly — reach `PeopleInvites` the way a user
+      // does, via `/account`.
+      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await page.goto(`${env.baseUrl}/account`)
       await expect(page.getByTestId('people-invites')).toBeVisible()
 
       await expect(page.getByTestId('minted-invite-code')).toHaveCount(0)
@@ -125,6 +131,12 @@ test.describe('owner invites + owner-only rpc access (chromium + webkit)', () =>
         await memberPage.getByRole('button', { name: 'Create account' }).click()
         await expect(memberPage.getByTestId('enroll-passkey-prompt')).toBeVisible()
         await memberPage.getByTestId('enroll-passkey-skip').click()
+
+        // Registering now lands the new member on the routed library home
+        // (the catch-all's redirect target), not `AccountScreen` directly —
+        // reach it via `/account`, same as the owner above.
+        await expect(memberPage.getByTestId('library-screen')).toBeVisible()
+        await memberPage.goto(`${env.baseUrl}/account`)
         await expect(memberPage.getByTestId('account-screen')).toBeVisible()
         await expect(memberPage.getByTestId('account-display-name')).toHaveText(displayName)
 

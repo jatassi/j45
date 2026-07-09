@@ -56,6 +56,12 @@ test.describe('registration (chromium + webkit)', () => {
       await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
       await page.getByTestId('enroll-passkey-skip').click()
 
+      // The catch-all (`router.tsx`) redirects the post-registration landing
+      // (`/register?invite=…`, with no route of its own) to the library
+      // home — never a blank page. `AccountScreen`-scoped assertions below
+      // reach it via `/account`, the way a user does from there.
+      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await page.goto(`${env.baseUrl}/account`)
       await expect(page.getByTestId('account-screen')).toBeVisible()
       await expect(page.getByTestId('account-display-name')).toHaveText(displayName)
 
@@ -68,12 +74,6 @@ test.describe('registration (chromium + webkit)', () => {
       await page.reload()
       await expect(page.getByTestId('account-screen')).toBeVisible()
       await expect(page.getByTestId('account-display-name')).toHaveText(displayName)
-
-      // `AuthGate` only renders `RegisterScreen` for an anonymous visitor on
-      // `/register`; move off that path (while still authenticated) so
-      // logging out below lands on `LoginScreen`, not back on the form.
-      await page.goto(env.baseUrl)
-      await expect(page.getByTestId('account-screen')).toBeVisible()
 
       await page.getByTestId('logout-button').click()
       await expect(page.getByTestId('login-screen')).toBeVisible()
@@ -129,9 +129,13 @@ test.describe('registration (chromium + webkit)', () => {
     })
     await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
     await page.getByTestId('enroll-passkey-skip').click()
+
+    // The catch-all redirects the post-registration landing to the library
+    // home — reach `AccountScreen`'s `logout-button` via `/account`.
+    await expect(page.getByTestId('library-screen')).toBeVisible()
+    await page.goto(`${env.baseUrl}/account`)
     await expect(page.getByTestId('account-screen')).toBeVisible()
 
-    await page.goto(env.baseUrl)
     await page.getByTestId('logout-button').click()
     await expect(page.getByTestId('login-screen')).toBeVisible()
 

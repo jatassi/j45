@@ -11,6 +11,7 @@ import {
   User,
   UserId,
 } from './auth.js'
+import { LibraryWorkout, WorkoutId, WorkoutNotFound } from './library.js'
 
 /**
  * Snapshot of the running server, returned by the `ServerInfo` rpc.
@@ -72,8 +73,32 @@ export class OwnerRpcs extends RpcGroup.make(
 ).middleware(AuthMiddleware) {}
 
 /**
+ * Rpcs for the workout library. Every member requires a valid session
+ * (`AuthMiddleware` provides `CurrentUser`, fails `Unauthorized`).
+ */
+export class LibraryRpcs extends RpcGroup.make(
+  Rpc.make('ListWorkouts', { success: Schema.Array(LibraryWorkout) }),
+  Rpc.make('GetWorkout', {
+    payload: { id: WorkoutId },
+    success: LibraryWorkout,
+    error: WorkoutNotFound,
+  }),
+  Rpc.make('DuplicateWorkout', {
+    payload: { id: WorkoutId },
+    success: LibraryWorkout,
+    error: WorkoutNotFound,
+  }),
+  Rpc.make('RenameWorkout', {
+    payload: { id: WorkoutId, name: Schema.NonEmptyTrimmedString },
+    success: LibraryWorkout,
+    error: WorkoutNotFound,
+  }),
+  Rpc.make('DeleteWorkout', { payload: { id: WorkoutId }, error: WorkoutNotFound }),
+).middleware(AuthMiddleware) {}
+
+/**
  * The single rpc contract shared by every J45 client and server. Defined
  * exactly once, here — both `packages/server` and `packages/client` import
  * it from `@j45/domain` rather than redeclaring it.
  */
-export class J45Rpcs extends PublicRpcs.merge(AccountRpcs, OwnerRpcs) {}
+export class J45Rpcs extends PublicRpcs.merge(AccountRpcs, OwnerRpcs, LibraryRpcs) {}

@@ -23,6 +23,10 @@ test('PIN login succeeds with the correct PIN and shows InvalidCredentials with 
   await page.locator('#login-pin').fill(env.owner.pin)
   await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 
+  // Authenticated now lands on the routed library home, not `AccountScreen`
+  // directly — reach the account screen the way a user does, via `/account`.
+  await expect(page.getByTestId('library-screen')).toBeVisible()
+  await page.goto(`${env.baseUrl}/account`)
   await expect(page.getByTestId('account-screen')).toBeVisible()
   await expect(page.getByTestId('account-display-name')).toHaveText(env.owner.displayName)
 

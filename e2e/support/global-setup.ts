@@ -32,6 +32,9 @@ const PROJECT_NAMES: readonly E2eProjectName[] = ['chromium', 'webkit']
 /** How many fresh registration invites `auth-register.spec.ts` needs per project (one per test that redeems a still-valid code). */
 const REGISTER_INVITES_PER_PROJECT = 2
 
+/** How many fresh registration invites `library.spec.ts` needs per project (one per test that registers its own per-project account). */
+const LIBRARY_INVITES_PER_PROJECT = 2
+
 /**
  * Reserves a free TCP port by briefly binding to port 0, then releasing it
  * before the real server (a separate process) binds it. Mirrors
@@ -71,20 +74,32 @@ const waitForHealthz = async (port: number, timeoutMs: number): Promise<void> =>
 /**
  * Registers the owner (redeeming `FIRST_RUN_INVITE`, the single-use code
  * `first-run.ts` minted at server startup) through the real `/register`
- * form, then mints `REGISTER_INVITES_PER_PROJECT` fresh registration
- * invites per Playwright project via the real "Mint invite" button
- * (`people-invites.tsx`'s owner-only `PeopleInvites` section) — the "owner
- * surface" both spec files' further registrations redeem through, so
- * neither ever touches `FIRST_RUN_INVITE` itself (already spent by the time
- * they run) or collides with the other project's codes. Runs once, in this
+ * form, then mints `REGISTER_INVITES_PER_PROJECT + LIBRARY_INVITES_PER_PROJECT`
+ * fresh registration invites per Playwright project via the real "Mint
+ * invite" button (`people-invites.tsx`'s owner-only `PeopleInvites`
+ * section, reached at `/account`) — the "owner surface" every spec file's
+ * further registrations redeem through, so none of them ever touches
+ * `FIRST_RUN_INVITE` itself (already spent by the time they run) or
+ * collides with another project's or spec file's codes. Runs once, in this
  * one `globalSetup` process, before Playwright forks any worker — the only
  * way to guarantee the single-use first-run code is redeemed exactly once
  * no matter how many projects/workers subsequently run specs against the
  * one shared server.
+ *
+ * `packages/client/src/router.tsx`'s route tree has no entry for
+ * `/register` itself (only `/`, `/workouts/$workoutId`, and `/account` are
+ * routed) — once the owner authenticates while still sitting on
+ * `/register?invite=...`, `RouterProvider` finds no matching route there.
+ * A direct `goto` to `/account` (a real, matched, authenticated route) is
+ * how this module reaches `AccountScreen` — and, with it, `PeopleInvites` —
+ * afterwards.
  */
 const registerOwnerAndMintInvites = async (
   baseUrl: string,
-): Promise<Record<E2eProjectName, readonly [string, string]>> => {
+): Promise<{
+  readonly registerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  readonly libraryInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+}> => {
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage()
@@ -97,6 +112,7 @@ const registerOwnerAndMintInvites = async (
     await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
     await page.getByTestId('enroll-passkey-skip').click()
 
+    await page.goto(`${baseUrl}/account`)
     await expect(page.getByTestId('account-screen')).toBeVisible()
 
     const mintedCodeLocator = page.getByTestId('minted-invite-code')
@@ -114,21 +130,30 @@ const registerOwnerAndMintInvites = async (
       return grouped.replaceAll('-', '')
     }
 
-    const invitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
-    for (const projectName of PROJECT_NAMES) {
+    const mintPair = async (count: number, label: string): Promise<readonly [string, string]> => {
       const codes: string[] = []
-      for (let i = 0; i < REGISTER_INVITES_PER_PROJECT; i++) {
+      for (let i = 0; i < count; i++) {
         codes.push(await mintOneInvite())
       }
       const first = codes[0]
       const second = codes[1]
       if (first === undefined || second === undefined) {
-        throw new Error(`expected ${REGISTER_INVITES_PER_PROJECT} invites for ${projectName}`)
+        throw new Error(`expected ${count} ${label} invites`)
       }
-      invitesByProject[projectName] = [first, second]
+      return [first, second]
     }
 
-    return invitesByProject
+    const registerInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
+    const libraryInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
+    for (const projectName of PROJECT_NAMES) {
+      registerInvitesByProject[projectName] = await mintPair(
+        REGISTER_INVITES_PER_PROJECT,
+        'register',
+      )
+      libraryInvitesByProject[projectName] = await mintPair(LIBRARY_INVITES_PER_PROJECT, 'library')
+    }
+
+    return { registerInvitesByProject, libraryInvitesByProject }
   } finally {
     await browser.close()
   }
@@ -181,7 +206,8 @@ export default async function globalSetup(): Promise<void> {
   await waitForHealthz(port, 20_000)
 
   const baseUrl = `http://localhost:${port}`
-  const registerInvitesByProject = await registerOwnerAndMintInvites(baseUrl)
+  const { registerInvitesByProject, libraryInvitesByProject } =
+    await registerOwnerAndMintInvites(baseUrl)
 
   const state: E2eState = {
     pid: server.pid,
@@ -192,6 +218,7 @@ export default async function globalSetup(): Promise<void> {
     firstRunInvite: FIRST_RUN_INVITE,
     owner: { username: OWNER_USERNAME, displayName: OWNER_DISPLAY_NAME, pin: OWNER_PIN },
     registerInvitesByProject,
+    libraryInvitesByProject,
   }
   writeFileSync(stateFilePath, JSON.stringify(state))
 
@@ -204,4 +231,6 @@ export default async function globalSetup(): Promise<void> {
   process.env.E2E_OWNER_PIN = OWNER_PIN
   process.env.E2E_REGISTER_INVITES_CHROMIUM = registerInvitesByProject.chromium.join(',')
   process.env.E2E_REGISTER_INVITES_WEBKIT = registerInvitesByProject.webkit.join(',')
+  process.env.E2E_LIBRARY_INVITES_CHROMIUM = libraryInvitesByProject.chromium.join(',')
+  process.env.E2E_LIBRARY_INVITES_WEBKIT = libraryInvitesByProject.webkit.join(',')
 }

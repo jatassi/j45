@@ -143,6 +143,7 @@ describe('App', () => {
     const fakeRuntime = makeFakeRuntime({
       ServerInfo: serverInfoHandler,
       ListPasskeys: () => Effect.succeed([]),
+      ListWorkouts: () => Effect.succeed([]),
     })
 
     function Harness({ reloadKey }: { readonly reloadKey: number }) {
@@ -158,7 +159,11 @@ describe('App', () => {
 
     const { rerender } = render(<Harness reloadKey={0} />)
 
-    // "An authenticated user can reach AccountScreen from the app."
+    // Authenticated now lands on the library home (`/`, routed by
+    // `router.tsx`) rather than `AccountScreen` directly — reach it the way
+    // a user does, via the header's nav link to `/account`.
+    await screen.findByTestId('library-screen')
+    fireEvent.click(screen.getByTestId('account-nav-link'))
     await screen.findByTestId('account-screen')
 
     // `App` wires `AccountScreen`'s `onLoggedOut` to `location.reload()` —

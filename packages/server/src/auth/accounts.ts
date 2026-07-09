@@ -14,6 +14,7 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Option from 'effect/Option'
 
+import { WorkoutsRepo } from '../library/workouts-repo.js'
 import { AuthSessions } from './auth-sessions.js'
 import { PinHashing } from './hashing.js'
 import { Invites } from './invites.js'
@@ -44,19 +45,24 @@ type AccountServices = {
   readonly userRepo: UserRepo
   readonly authSessions: AuthSessions
   readonly pinHashing: Context.Tag.Service<typeof PinHashing>
+  readonly workoutsRepo: WorkoutsRepo
 }
 
 /**
- * Redeems a registration invite and creates the account it grants, all in
- * one `sql.withTransaction`. The first user ever created (an empty `users`
- * table at the moment this transaction runs) becomes `owner`; every later
- * one `member`. Fails `InvalidInvite` (from `invites.redeemForRegistration`)
- * for a spent/unknown/expired/reset-only code, and `UsernameTaken` for a
- * name collision — either failure rolls back the whole transaction, so a
- * rejected attempt spends nothing and creates no user row.
+ * Redeems a registration invite and creates the account it grants — plus
+ * its seed workout library — all in one `sql.withTransaction`. The first
+ * user ever created (an empty `users` table at the moment this transaction
+ * runs) becomes `owner`; every later one `member`. Fails `InvalidInvite`
+ * (from `invites.redeemForRegistration`) for a spent/unknown/expired/
+ * reset-only code, and `UsernameTaken` for a name collision — either
+ * failure rolls back the whole transaction, so a rejected attempt spends
+ * nothing and creates no user row and no workouts. `workoutsRepo.seedForUser`
+ * is the same seed-insertion path migration `0003_library` uses to backfill
+ * pre-existing accounts (`workouts-repo.ts`'s module doc) — so there is
+ * exactly one seed-insertion code path in the whole codebase.
  */
 const register = (services: AccountServices, input: RegisterInput) => {
-  const { sql, invites, userRepo, authSessions, pinHashing } = services
+  const { sql, invites, userRepo, authSessions, pinHashing, workoutsRepo } = services
   return sql.withTransaction(
     Effect.gen(function* () {
       yield* invites.redeemForRegistration(input.code)
@@ -81,6 +87,8 @@ const register = (services: AccountServices, input: RegisterInput) => {
         pinHash,
         createdAt: DateTime.formatIso(now),
       })
+
+      yield* workoutsRepo.seedForUser(userId)
 
       const token = yield* authSessions.create(userId)
 
@@ -142,10 +150,11 @@ const reset = (services: AccountServices, input: ResetInput) => {
 /**
  * The two transactional account operations the design pins to a single
  * `sql.withTransaction` boundary each: `register` (spend invite + insert
- * user + insert session) and `reset` (spend reset code + update pin_hash +
- * revoke every session + insert a fresh one). Composes `Invites`,
- * `UserRepo`, and `AuthSessions` — all through the generic
- * `SqlClient.SqlClient` tag — plus `PinHashing` for the plaintext PIN.
+ * user + seed the workout library + insert session) and `reset` (spend
+ * reset code + update pin_hash + revoke every session + insert a fresh
+ * one). Composes `Invites`, `UserRepo`, `AuthSessions`, and `WorkoutsRepo`
+ * — all through the generic `SqlClient.SqlClient` tag — plus `PinHashing`
+ * for the plaintext PIN.
  */
 export class Accounts extends Effect.Service<Accounts>()('Accounts', {
   effect: Effect.gen(function* () {
@@ -155,6 +164,7 @@ export class Accounts extends Effect.Service<Accounts>()('Accounts', {
       userRepo: yield* UserRepo,
       authSessions: yield* AuthSessions,
       pinHashing: yield* PinHashing,
+      workoutsRepo: yield* WorkoutsRepo,
     }
 
     return {

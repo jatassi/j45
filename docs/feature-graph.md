@@ -49,7 +49,7 @@ features:
       - "Unit: users.pin_hash stores a Bun.password hash (never the PIN) and auth_sessions stores only a SHA-256 token hash that differs from the cookie value."
   - id: plan-library
     title: Per-user workout libraries with the 3-week program migrated in as seed plans
-    status: designed
+    status: validated
     depends_on: [workout-domain, auth-accounts]
     acceptance:
       - "Integration: given a fresh database, registering an account creates exactly 12 workouts in that account's library — named exactly Athletica, Romans, Miami Nights, Panthers, Docklands, Red Diamond, Crossfire, Hammer, Pipeline, Medusa, SoCal, Apex — in the same transaction as the user row (a failed registration creates neither); a second account gets its own 12 copies with distinct ids, and deleting a workout from one library leaves the other untouched."

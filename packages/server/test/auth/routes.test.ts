@@ -22,6 +22,7 @@ import { Invites } from '../../src/auth/invites.js'
 import { RateLimiter } from '../../src/auth/rate-limiter.js'
 import { AuthRoutesLive } from '../../src/auth/routes.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { MigratorLive } from '../../src/sql.js'
 
 const TEST_APP_ORIGIN = 'https://app.example.test'
@@ -48,6 +49,7 @@ const SharedServicesLive = Layer.mergeAll(
   UserRepo.Default,
   AuthSessions.Default,
   RateLimiter.Default,
+  WorkoutsRepo.Default,
 ).pipe(Layer.provideMerge(SqlTestLive))
 
 const AuthServicesLive = Accounts.Default.pipe(

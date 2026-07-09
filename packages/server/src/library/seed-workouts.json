@@ -1,0 +1,735 @@
+{
+  "athletica": {
+    "name": "Athletica",
+    "focus": "cardio",
+    "note": "One rower/bike? Split stations 1 & 4 — one works the machine, the other does the next floor station; swap each lap.",
+    "pods": [
+      {
+        "name": "Pod 1",
+        "stations": [
+          {
+            "name": "Rower — strong, steady pulls"
+          },
+          {
+            "name": "Dumbbell squat + alternating shoulder press"
+          },
+          {
+            "name": "Burpee",
+            "detail": "(step back = no-jump)"
+          }
+        ]
+      },
+      {
+        "name": "Pod 2",
+        "stations": [
+          {
+            "name": "Bike or treadmill — sprint effort"
+          },
+          {
+            "name": "Kettlebell swing"
+          },
+          {
+            "name": "Mountain climbers — fast, hips low"
+          }
+        ]
+      },
+      {
+        "name": "Pod 3",
+        "stations": [
+          {
+            "name": "Dumbbell single-arm snatch — alternate arms"
+          },
+          {
+            "name": "Box / bench explosive step-ups"
+          },
+          {
+            "name": "Slam-ball over-shoulder throw",
+            "detail": "(sub: dumbbell thruster)"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        }
+      ]
+    }
+  },
+  "romans": {
+    "name": "Romans",
+    "focus": "strength",
+    "note": "Pair up and spot every lift. Alternate on the bench and pull-up bar so nobody's waiting.",
+    "pods": [
+      {
+        "name": "Circuit",
+        "stations": [
+          {
+            "name": "Barbell front squat"
+          },
+          {
+            "name": "Barbell bent-over row (overhand)"
+          },
+          {
+            "name": "Dumbbell flat bench press"
+          },
+          {
+            "name": "Pull-ups",
+            "detail": "(band-assist as needed)"
+          },
+          {
+            "name": "Barbell RDL"
+          },
+          {
+            "name": "Dumbbell standing shoulder press"
+          },
+          {
+            "name": "Dumbbell walking lunges"
+          },
+          {
+            "name": "Barbell biceps curl"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 45,
+          "restSeconds": 45
+        },
+        {
+          "workSeconds": 45,
+          "restSeconds": 45
+        },
+        {
+          "workSeconds": 45,
+          "restSeconds": 45
+        }
+      ]
+    }
+  },
+  "miamiNights": {
+    "name": "Miami Nights",
+    "focus": "hybrid",
+    "note": "12 stations splits perfectly — start 6 apart and chase each other around the room.",
+    "pods": [
+      {
+        "name": "Pod 1 · cardio-led",
+        "stations": [
+          {
+            "name": "Rower"
+          },
+          {
+            "name": "Barbell squat + upright row"
+          },
+          {
+            "name": "Bench jump-on / step-on + push-up"
+          },
+          {
+            "name": "Dumbbell single-arm alternating snatch"
+          }
+        ]
+      },
+      {
+        "name": "Pod 2 · resistance-led",
+        "stations": [
+          {
+            "name": "Cable or band biceps curl + wide row",
+            "detail": "(sub: dumbbell curl + bent-over row)"
+          },
+          {
+            "name": "Kettlebell alternating reverse lunges"
+          },
+          {
+            "name": "Dumbbell single-leg RDL"
+          },
+          {
+            "name": "Dumbbell Arnold press"
+          }
+        ]
+      },
+      {
+        "name": "Pod 3 · cardio-led",
+        "stations": [
+          {
+            "name": "Push-up pulse"
+          },
+          {
+            "name": "Squat-pulse combo ×4"
+          },
+          {
+            "name": "Ice skaters (lateral bounds)"
+          },
+          {
+            "name": "Side burpee"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        }
+      ]
+    }
+  },
+  "panthers": {
+    "name": "Panthers",
+    "focus": "strength",
+    "note": "One bench, two people — alternate sets on the Bulgarians and step-ups so the working partner always gets a fresh rest.",
+    "pods": [
+      {
+        "name": "Circuit · 3 sets per station",
+        "stations": [
+          {
+            "name": "Dumbbell heel-elevated goblet squat"
+          },
+          {
+            "name": "Barbell RDL + overhand-grip row"
+          },
+          {
+            "name": "Kettlebell sumo deadlift"
+          },
+          {
+            "name": "Dumbbell Bulgarian split squat (bench) — 3 each leg"
+          },
+          {
+            "name": "Barbell back-rack sumo squat"
+          },
+          {
+            "name": "Dumbbell single-leg staggered RDL — 5 each side"
+          },
+          {
+            "name": "Dumbbell box step-ups"
+          },
+          {
+            "name": "Barbell / dumbbell calf raises"
+          },
+          {
+            "name": "Hanging knee raises",
+            "detail": "(sub: lying leg raises)"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "sets",
+      "rounds": [
+        {
+          "workSeconds": 35,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 35,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 35,
+          "restSeconds": 20
+        }
+      ]
+    }
+  },
+  "docklands": {
+    "name": "Docklands",
+    "focus": "cardio",
+    "note": "The descending laps are brutal solo — count each other down the last two laps.",
+    "pods": [
+      {
+        "name": "Pod 1",
+        "stations": [
+          {
+            "name": "Box / bench jump (or step-up)"
+          },
+          {
+            "name": "Rower"
+          },
+          {
+            "name": "Yogi push-up (down-dog → push-up)"
+          }
+        ]
+      },
+      {
+        "name": "Pod 2",
+        "stations": [
+          {
+            "name": "Med ball shuffle + rotation"
+          },
+          {
+            "name": "Dumbbell punches — 4 high + 4 straight"
+          },
+          {
+            "name": "Plate / dumbbell snatch"
+          }
+        ]
+      },
+      {
+        "name": "Pod 3",
+        "stations": [
+          {
+            "name": "Mountain climbers"
+          },
+          {
+            "name": "Kettlebell swing"
+          },
+          {
+            "name": "Bike — climb (high resistance)"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 60,
+          "restSeconds": 30
+        },
+        {
+          "workSeconds": 30,
+          "restSeconds": 15
+        },
+        {
+          "workSeconds": 20,
+          "restSeconds": 10
+        },
+        {
+          "workSeconds": 20,
+          "restSeconds": 5
+        }
+      ]
+    }
+  },
+  "redDiamond": {
+    "name": "Red Diamond",
+    "focus": "strength",
+    "note": "Two-and-a-half minutes of work per station — perfect to alternate so one loads while the other lifts.",
+    "pods": [
+      {
+        "name": "Circuit · 4 sets per station",
+        "stations": [
+          {
+            "name": "Dumbbell renegade row"
+          },
+          {
+            "name": "Dumbbell RDL"
+          },
+          {
+            "name": "Barbell standing shoulder press"
+          },
+          {
+            "name": "Kettlebell / dumbbell double front squat"
+          },
+          {
+            "name": "Dumbbell incline bench press — 2s pause"
+          },
+          {
+            "name": "Barbell back-loaded reverse lunges"
+          },
+          {
+            "name": "Dumbbell biceps curl — one-and-a-half reps"
+          },
+          {
+            "name": "Dumbbell triceps kickbacks"
+          },
+          {
+            "name": "Hamstring curls — sliders/towel",
+            "detail": "(sub: ball or partner curls)"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "sets",
+      "rounds": [
+        {
+          "workSeconds": 45,
+          "restSeconds": 15
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 35,
+          "restSeconds": 25
+        },
+        {
+          "workSeconds": 30,
+          "restSeconds": 30
+        }
+      ]
+    }
+  },
+  "crossfire": {
+    "name": "Crossfire",
+    "focus": "hybrid",
+    "note": "Stagger by 5 so one of you is always on a cardio station and the other on resistance — no machine clashes.",
+    "pods": [
+      {
+        "name": "Circuit · alternating C / R",
+        "stations": [
+          {
+            "name": "Rower"
+          },
+          {
+            "name": "Band/cable hammer curl",
+            "detail": "(sub: dumbbell)"
+          },
+          {
+            "name": "Bike (standing)"
+          },
+          {
+            "name": "Bench / step push-ups"
+          },
+          {
+            "name": "Sprawl → forward jump → back-pedal"
+          },
+          {
+            "name": "Dumbbell double rack squat + press"
+          },
+          {
+            "name": "Kettlebell single-arm swing w/ rotation, alt"
+          },
+          {
+            "name": "Dumbbell heel-elevated goblet squat"
+          },
+          {
+            "name": "Plate / dumbbell snatch"
+          },
+          {
+            "name": "Plate or dumbbell lying triceps extension"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 45,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 35,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 25,
+          "restSeconds": 20
+        }
+      ]
+    }
+  },
+  "hammer": {
+    "name": "Hammer",
+    "focus": "strength",
+    "note": "Call the tempo out loud for each other — \"four… three… two… one… up.\" Keeps you both honest on the slow count.",
+    "pods": [
+      {
+        "name": "Circuit · tempo",
+        "stations": [
+          {
+            "name": "Barbell front squat"
+          },
+          {
+            "name": "Barbell RDL"
+          },
+          {
+            "name": "Dumbbell Bulgarian split squat (bench)"
+          },
+          {
+            "name": "Kettlebell lateral step-up (box/bench)"
+          },
+          {
+            "name": "Plate / dumbbell lateral lunges"
+          },
+          {
+            "name": "Dumbbell sumo deadlift"
+          },
+          {
+            "name": "Single-leg RDL — alternating"
+          },
+          {
+            "name": "Dumbbell / barbell calf raises"
+          },
+          {
+            "name": "Dumbbell floor press",
+            "detail": "(upper, to balance the day)"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 45,
+          "restSeconds": 15
+        },
+        {
+          "workSeconds": 45,
+          "restSeconds": 20
+        }
+      ]
+    }
+  },
+  "pipeline": {
+    "name": "Pipeline",
+    "focus": "cardio",
+    "note": "Set two clocks 4–5 stations apart and try to lap each other. Pure conditioning — keep the feet moving.",
+    "pods": [
+      {
+        "name": "The 9 waves",
+        "stations": [
+          {
+            "name": "Jump rope",
+            "detail": "(or dumbbell fast alternating front raises)"
+          },
+          {
+            "name": "Rower — explosive"
+          },
+          {
+            "name": "Plyo / split-stance jumping lunge"
+          },
+          {
+            "name": "Barbell squat → press (thruster)"
+          },
+          {
+            "name": "Reverse burpee",
+            "detail": "(roll back, rock up)"
+          },
+          {
+            "name": "Bench incline push-up + clap"
+          },
+          {
+            "name": "Dumbbell double ski-stance hang clean"
+          },
+          {
+            "name": "Dumbbell / plate landmine rotation",
+            "detail": "(sub: standing wood-chop)"
+          },
+          {
+            "name": "Shuttle / cone shuffle, grab a marker each end"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        }
+      ]
+    }
+  },
+  "medusa": {
+    "name": "Medusa",
+    "focus": "strength",
+    "note": "Spot every heavy set. Ascending rest gives you time to strip and add plates between each other's turns.",
+    "pods": [
+      {
+        "name": "Circuit · 3 sets per station",
+        "stations": [
+          {
+            "name": "Barbell RDL"
+          },
+          {
+            "name": "Kettlebell goblet sumo squat"
+          },
+          {
+            "name": "Dumbbell incline close-grip press"
+          },
+          {
+            "name": "Barbell pendlay row"
+          },
+          {
+            "name": "Dumbbell Bulgarian split squat — tempo 4-0-1"
+          },
+          {
+            "name": "Hip bridge / hamstring walk-outs"
+          },
+          {
+            "name": "Kettlebell single-arm bent row → explosive high pull"
+          },
+          {
+            "name": "Dumbbell alternating hammer curl + shoulder press"
+          },
+          {
+            "name": "Dumbbell flat chest fly"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "sets",
+      "rounds": [
+        {
+          "workSeconds": 60,
+          "restSeconds": 15
+        },
+        {
+          "workSeconds": 60,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 60,
+          "restSeconds": 30
+        }
+      ]
+    }
+  },
+  "soCal": {
+    "name": "SoCal",
+    "focus": "hybrid",
+    "note": "Start 6 stations apart. On Lap 3 (20/10) go all-out side by side, then finish the core reel together. Core reel to finish — 2 rounds, 30s each, no rest: predator jacks → forward lunge → half-burpee, then leg raise → straight-arm crunch → V-sit crunch.",
+    "pods": [
+      {
+        "name": "Pod 1",
+        "stations": [
+          {
+            "name": "Step / box crossover (dynamic)"
+          },
+          {
+            "name": "Kettlebell alternating floor row (neutral grip)"
+          },
+          {
+            "name": "Rower"
+          },
+          {
+            "name": "Lateral hops over a line / cones"
+          },
+          {
+            "name": "Bike (seated)"
+          },
+          {
+            "name": "Dumbbell front squats + pulse"
+          }
+        ]
+      },
+      {
+        "name": "Pod 2",
+        "stations": [
+          {
+            "name": "Burpee + half-burpee"
+          },
+          {
+            "name": "Dumbbell standing alternating shoulder press"
+          },
+          {
+            "name": "Shuttle run ×3"
+          },
+          {
+            "name": "Slam ball / dumbbell RDL"
+          },
+          {
+            "name": "Bench / step hop ×5 + 2 push-ups"
+          },
+          {
+            "name": "Dumbbell pendulum lunge"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 60,
+          "restSeconds": 30
+        },
+        {
+          "workSeconds": 40,
+          "restSeconds": 20
+        },
+        {
+          "workSeconds": 20,
+          "restSeconds": 10
+        }
+      ]
+    }
+  },
+  "apex": {
+    "name": "Apex",
+    "focus": "strength",
+    "note": "Pyramids are made for partners — one does move A while the other does B, swap when you both finish a tier. Race to the 6s.",
+    "pods": [
+      {
+        "name": "8 combo stations · A then B",
+        "stations": [
+          {
+            "name": "A: Dumbbell sprawl + lateral jump · B: Dumbbell single-arm side lunge"
+          },
+          {
+            "name": "A: Sandbag/dumbbell clean + forward lunge · B: Sandbag/dumbbell bear-hug squat (pause)"
+          },
+          {
+            "name": "A: Barbell hang clean · B: Slam ball / dumbbell over-shoulder throw"
+          },
+          {
+            "name": "A: Dumbbell speed sumo squat + curl · B: Push-up + spider lunge + row"
+          },
+          {
+            "name": "A: Bike sprint (30s) · B: Kettlebell deficit deadlift"
+          },
+          {
+            "name": "A: Slam ball throw-up squat & catch · B: Dumbbell bear-hug carry (20m)"
+          },
+          {
+            "name": "A: Kettlebell swing · B: Hand-release burpee"
+          },
+          {
+            "name": "A: Rower (30s) · B: Step incline push-up to T-reach"
+          }
+        ]
+      }
+    ],
+    "flow": {
+      "type": "laps",
+      "rounds": [
+        {
+          "workSeconds": 240,
+          "restSeconds": 30
+        }
+      ]
+    }
+  }
+}

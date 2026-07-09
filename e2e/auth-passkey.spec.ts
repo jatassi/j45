@@ -39,6 +39,11 @@ test.describe('passkey ceremony (chromium only — CDP virtual authenticator)', 
       await page.locator('#login-username').fill(env.owner.username)
       await page.locator('#login-pin').fill(env.owner.pin)
       await page.getByRole('button', { name: 'Sign in with PIN' }).click()
+
+      // Authenticated now lands on the routed library home, not
+      // `AccountScreen` directly — reach it the way a user does, via `/account`.
+      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await page.goto(`${env.baseUrl}/account`)
       await expect(page.getByTestId('account-screen')).toBeVisible()
 
       // Enroll — `PasskeyEnrollStart`/`Finish` round-trip through the
@@ -54,6 +59,10 @@ test.describe('passkey ceremony (chromium only — CDP virtual authenticator)', 
       await expect(page.locator('#login-username')).toHaveValue('')
       await expect(page.locator('#login-pin')).toHaveValue('')
 
+      // Logging out reloads the *current* page — still `/account` (a real,
+      // matched, authenticated route) — so passkey login here authenticates
+      // straight back into `AccountScreen` with no catch-all redirect
+      // involved, unlike the PIN login above (which starts from `/`).
       await page.getByTestId('passkey-login-button').click()
       await expect(page.getByTestId('account-screen')).toBeVisible()
       await expect(page.getByTestId('account-display-name')).toHaveText(env.owner.displayName)
