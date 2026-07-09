@@ -99,6 +99,13 @@ export function LibraryScreen() {
             Timer
           </Link>
           <Link
+            to="/exercises"
+            data-testid="exercises-nav-link"
+            className="text-sm text-primary underline-offset-4 hover:underline"
+          >
+            Exercises
+          </Link>
+          <Link
             to="/account"
             data-testid="account-nav-link"
             className="text-sm text-primary underline-offset-4 hover:underline"

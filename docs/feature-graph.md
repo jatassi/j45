@@ -95,7 +95,7 @@ features:
     depends_on: [live-session]
   - id: exercise-library
     title: First-class tagged exercise library seeded from program content
-    status: designed
+    status: validated
     depends_on: [plan-library]
     acceptance:
       - "Unit: every entry in seed-exercises.ts decodes as a valid Exercise; names are unique case-insensitively; the catalog has at least 80 entries; every MuscleGroup and every Equipment literal is used by at least one entry; entries named Rower (modality cardio, equipment includes rower), Barbell front squat (modality strength, equipment includes barbell), and Burpee (empty equipment) exist."

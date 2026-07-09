@@ -24,12 +24,13 @@ describe('ServerInfo', () => {
 })
 
 describe('J45Rpcs', () => {
-  it('merges PublicRpcs, AccountRpcs, OwnerRpcs, and LibraryRpcs', () => {
+  it('merges PublicRpcs, AccountRpcs, OwnerRpcs, LibraryRpcs, and ExerciseRpcs', () => {
     const rpcs = J45Rpcs.requests
-    expect(rpcs.size).toBe(17)
+    expect(rpcs.size).toBe(21)
     expect(rpcs.has('ServerInfo')).toBe(true)
     expect(rpcs.has('Me')).toBe(true)
     expect(rpcs.has('ListUsers')).toBe(true)
     expect(rpcs.has('ListWorkouts')).toBe(true)
+    expect(rpcs.has('ListExercises')).toBe(true)
   })
 })

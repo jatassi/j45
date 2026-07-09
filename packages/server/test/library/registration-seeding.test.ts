@@ -1,7 +1,7 @@
 import { NodeContext } from '@effect/platform-node'
 import { SqliteClient } from '@effect/sql-sqlite-node'
 import { describe, expect, it } from '@effect/vitest'
-import type { Pin, Username } from '@j45/domain'
+import type { InviteCode, Pin, Username } from '@j45/domain'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
 
@@ -10,15 +10,18 @@ import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { PinHashing } from '../../src/auth/hashing.js'
 import { Invites } from '../../src/auth/invites.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { ExercisesRepo } from '../../src/library/exercises-repo.js'
+import { seedExercises } from '../../src/library/seed-exercises.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { MigratorLive } from '../../src/sql.js'
 
 /**
  * The exact `MigratorLive` layer the server entrypoint runs at startup —
- * every migration including `0003_library` — against an in-memory
- * `@effect/sql-sqlite-node` driver, so these tests exercise `register`
- * against a genuinely fresh, fully-migrated database, same pattern as
- * `test/auth/accounts.test.ts` and `test/library/migration-0003.test.ts`.
+ * every migration including `0003_library` and `0004_exercises` — against
+ * an in-memory `@effect/sql-sqlite-node` driver, so these tests exercise
+ * `register` against a genuinely fresh, fully-migrated database, same
+ * pattern as `test/auth/accounts.test.ts` and
+ * `test/library/migration-0003.test.ts`.
  */
 const SqlTestLive = MigratorLive.pipe(
   Layer.provideMerge(SqliteClient.layer({ filename: ':memory:' })),
@@ -41,6 +44,7 @@ const SharedServicesLive = Layer.mergeAll(
   UserRepo.Default,
   AuthSessions.Default,
   WorkoutsRepo.Default,
+  ExercisesRepo.Default,
 ).pipe(Layer.provideMerge(SqlTestLive))
 
 const AccountsTestLive = Accounts.Default.pipe(
@@ -67,15 +71,30 @@ const EXPECTED_SEED_NAMES = [
   'Apex',
 ]
 
+const EXPECTED_EXERCISE_COUNT = seedExercises.length
+
 describe('registration seeding', () => {
   it.effect(
-    'register creates exactly 12 workouts owned by the new user, named exactly the 12 legacy seeds; a failed registration (UsernameTaken) rolls back — no extra user row and no extra workouts',
+    'register creates exactly 12 workouts and the full seed exercise catalog owned by the new user; a failed registration (UsernameTaken or unknown invite) rolls back — no user row, no workouts, no exercises',
     () =>
       Effect.gen(function* () {
         const invites = yield* Invites
         const userRepo = yield* UserRepo
         const workoutsRepo = yield* WorkoutsRepo
+        const exercisesRepo = yield* ExercisesRepo
         const accounts = yield* Accounts
+
+        // Unknown invite fails before any writes — zero users, zero library rows.
+        const unknownAttempt = yield* Effect.exit(
+          accounts.register({
+            code: 'UNKN0WN2' as InviteCode,
+            username: asUsername('ghost'),
+            displayName: 'Ghost',
+            pin: asPin('0000'),
+          }),
+        )
+        expect(unknownAttempt._tag).toBe('Failure')
+        expect(yield* userRepo.count()).toBe(0)
 
         const invite = yield* invites.mint()
         const registered = yield* accounts.register({
@@ -92,9 +111,13 @@ describe('registration seeding', () => {
           new Set(EXPECTED_SEED_NAMES),
         )
 
+        const exerciseCatalog = yield* exercisesRepo.listForOwner(registered.user.id)
+        expect(exerciseCatalog).toHaveLength(EXPECTED_EXERCISE_COUNT)
+        expect(new Set(exerciseCatalog.map((entry) => entry.id)).size).toBe(EXPECTED_EXERCISE_COUNT)
+
         // A second attempt at the same username fails UsernameTaken and rolls
-        // back the whole transaction — no second user row, and no extra
-        // workouts (still exactly 12 total, all owned by the first user).
+        // back the whole transaction — no second user row, no extra workouts,
+        // no extra exercises (still exactly the first user's catalogs).
         const secondInvite = yield* invites.mint()
         const collision = yield* Effect.exit(
           accounts.register({
@@ -109,15 +132,19 @@ describe('registration seeding', () => {
 
         const libraryAfterFailure = yield* workoutsRepo.listForOwner(registered.user.id)
         expect(libraryAfterFailure).toHaveLength(12)
+
+        const exercisesAfterFailure = yield* exercisesRepo.listForOwner(registered.user.id)
+        expect(exercisesAfterFailure).toHaveLength(EXPECTED_EXERCISE_COUNT)
       }).pipe(Effect.provide(AccountsTestLive)),
   )
 
   it.effect(
-    'two registrations each get their own 12-workout library with distinct ids; deleting a workout from one leaves the other’s 12 untouched',
+    'two registrations each get their own 12-workout library and exercise catalog with distinct ids; deleting a workout or exercise from one leaves the other’s catalogs untouched',
     () =>
       Effect.gen(function* () {
         const invites = yield* Invites
         const workoutsRepo = yield* WorkoutsRepo
+        const exercisesRepo = yield* ExercisesRepo
         const accounts = yield* Accounts
 
         const firstInvite = yield* invites.mint()
@@ -149,11 +176,24 @@ describe('registration seeding', () => {
           expect(secondIds.has(id)).toBe(false)
         }
 
-        const toDelete = firstLibrary[0]
-        if (toDelete === undefined) {
+        const firstExercises = yield* exercisesRepo.listForOwner(first.user.id)
+        const secondExercises = yield* exercisesRepo.listForOwner(second.user.id)
+        expect(firstExercises).toHaveLength(EXPECTED_EXERCISE_COUNT)
+        expect(secondExercises).toHaveLength(EXPECTED_EXERCISE_COUNT)
+
+        const firstExerciseIds = new Set(firstExercises.map((entry) => entry.id))
+        const secondExerciseIds = new Set(secondExercises.map((entry) => entry.id))
+        expect(firstExerciseIds.size).toBe(EXPECTED_EXERCISE_COUNT)
+        expect(secondExerciseIds.size).toBe(EXPECTED_EXERCISE_COUNT)
+        for (const id of firstExerciseIds) {
+          expect(secondExerciseIds.has(id)).toBe(false)
+        }
+
+        const toDeleteWorkout = firstLibrary[0]
+        if (toDeleteWorkout === undefined) {
           throw new Error('expected a workout to delete')
         }
-        yield* workoutsRepo.delete(toDelete.id, first.user.id)
+        yield* workoutsRepo.delete(toDeleteWorkout.id, first.user.id)
 
         const firstLibraryAfterDelete = yield* workoutsRepo.listForOwner(first.user.id)
         expect(firstLibraryAfterDelete).toHaveLength(11)
@@ -161,6 +201,21 @@ describe('registration seeding', () => {
         const secondLibraryAfterDelete = yield* workoutsRepo.listForOwner(second.user.id)
         expect(secondLibraryAfterDelete).toHaveLength(12)
         expect(new Set(secondLibraryAfterDelete.map((entry) => entry.id))).toStrictEqual(secondIds)
+
+        const toDeleteExercise = firstExercises[0]
+        if (toDeleteExercise === undefined) {
+          throw new Error('expected an exercise to delete')
+        }
+        yield* exercisesRepo.delete(toDeleteExercise.id, first.user.id)
+
+        const firstExercisesAfterDelete = yield* exercisesRepo.listForOwner(first.user.id)
+        expect(firstExercisesAfterDelete).toHaveLength(EXPECTED_EXERCISE_COUNT - 1)
+
+        const secondExercisesAfterDelete = yield* exercisesRepo.listForOwner(second.user.id)
+        expect(secondExercisesAfterDelete).toHaveLength(EXPECTED_EXERCISE_COUNT)
+        expect(new Set(secondExercisesAfterDelete.map((entry) => entry.id))).toStrictEqual(
+          secondExerciseIds,
+        )
       }).pipe(Effect.provide(AccountsTestLive)),
   )
 })

@@ -11,6 +11,7 @@ import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { PinHashing } from '../../src/auth/hashing.js'
 import { Invites } from '../../src/auth/invites.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { ExercisesRepo } from '../../src/library/exercises-repo.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { MigratorLive } from '../../src/sql.js'
 
@@ -40,19 +41,21 @@ const TestPinHashing = Layer.succeed(PinHashing, {
 })
 
 /**
- * `Invites`/`UserRepo`/`AuthSessions`/`WorkoutsRepo` each depend only on
- * `SqlClient` — this merges the four against one shared in-memory database,
- * mirroring `AuthTestLive` in `schema-sessions.test.ts`. `WorkoutsRepo` is
- * here because `Accounts.register` now seeds the new user's workout
- * library inside its own transaction (`registration-seeding.test.ts`
- * covers that library's actual contents; these tests just need it wired so
- * `register` resolves at all).
+ * `Invites`/`UserRepo`/`AuthSessions`/`WorkoutsRepo`/`ExercisesRepo` each
+ * depend only on `SqlClient` — this merges them against one shared
+ * in-memory database, mirroring `AuthTestLive` in `schema-sessions.test.ts`.
+ * `WorkoutsRepo`/`ExercisesRepo` are here because `Accounts.register` now
+ * seeds the new user's workout library and exercise catalog inside its own
+ * transaction (`registration-seeding.test.ts` covers those catalogs'
+ * actual contents; these tests just need them wired so `register` resolves
+ * at all).
  */
 const SharedServicesLive = Layer.mergeAll(
   Invites.Default,
   UserRepo.Default,
   AuthSessions.Default,
   WorkoutsRepo.Default,
+  ExercisesRepo.Default,
 ).pipe(Layer.provideMerge(SqlTestLive))
 
 /**

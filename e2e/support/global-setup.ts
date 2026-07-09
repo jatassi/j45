@@ -81,17 +81,17 @@ const waitForHealthz = async (port: number, timeoutMs: number): Promise<void> =>
  * Registers the owner (redeeming `FIRST_RUN_INVITE`, the single-use code
  * `first-run.ts` minted at server startup) through the real `/register`
  * form, then mints `REGISTER_INVITES_PER_PROJECT + LIBRARY_INVITES_PER_PROJECT
- * + TIMER_INVITES_PER_PROJECT + PLAN_EDITING_INVITES_PER_PROJECT` fresh
- * registration invites per Playwright project via the real "Mint invite"
- * button (`people-invites.tsx`'s owner-only `PeopleInvites` section, reached
- * at `/account`) — the "owner surface" every spec file's further
- * registrations redeem through, so none of them ever touches
- * `FIRST_RUN_INVITE` itself (already spent by the time they run) or
- * collides with another project's or spec file's codes. Runs once, in this
- * one `globalSetup` process, before Playwright forks any worker — the only
- * way to guarantee the single-use first-run code is redeemed exactly once
- * no matter how many projects/workers subsequently run specs against the
- * one shared server.
+ * + TIMER_INVITES_PER_PROJECT + PLAN_EDITING_INVITES_PER_PROJECT + 1`
+ * (exercises) fresh registration invites per Playwright project via the
+ * real "Mint invite" button (`people-invites.tsx`'s owner-only
+ * `PeopleInvites` section, reached at `/account`) — the "owner surface"
+ * every spec file's further registrations redeem through, so none of them
+ * ever touches `FIRST_RUN_INVITE` itself (already spent by the time they
+ * run) or collides with another project's or spec file's codes. Runs once,
+ * in this one `globalSetup` process, before Playwright forks any worker —
+ * the only way to guarantee the single-use first-run code is redeemed
+ * exactly once no matter how many projects/workers subsequently run specs
+ * against the one shared server.
  *
  * `packages/client/src/router.tsx`'s route tree has no entry for
  * `/register` itself (only `/`, `/workouts/$workoutId`, and `/account` are
@@ -108,6 +108,7 @@ const registerOwnerAndMintInvites = async (
   readonly libraryInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly timerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly planEditingInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  readonly exercisesInvitesByProject: Record<E2eProjectName, string>
 }> => {
   const browser = await chromium.launch()
   try {
@@ -156,6 +157,7 @@ const registerOwnerAndMintInvites = async (
     const libraryInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
     const timerInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
     const planEditingInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
+    const exercisesInvitesByProject = {} as Record<E2eProjectName, string>
     for (const projectName of PROJECT_NAMES) {
       registerInvitesByProject[projectName] = await mintPair(
         REGISTER_INVITES_PER_PROJECT,
@@ -167,6 +169,10 @@ const registerOwnerAndMintInvites = async (
         PLAN_EDITING_INVITES_PER_PROJECT,
         'plan-editing',
       )
+      // One invite per project for `exercises.spec.ts`'s single registration
+      // (the multi-invite pools pass their count into mintPair; a single
+      // invite is just mintOneInvite once).
+      exercisesInvitesByProject[projectName] = await mintOneInvite()
     }
 
     return {
@@ -174,6 +180,7 @@ const registerOwnerAndMintInvites = async (
       libraryInvitesByProject,
       timerInvitesByProject,
       planEditingInvitesByProject,
+      exercisesInvitesByProject,
     }
   } finally {
     await browser.close()
@@ -232,6 +239,7 @@ export default async function globalSetup(): Promise<void> {
     libraryInvitesByProject,
     timerInvitesByProject,
     planEditingInvitesByProject,
+    exercisesInvitesByProject,
   } = await registerOwnerAndMintInvites(baseUrl)
 
   const state: E2eState = {
@@ -246,6 +254,7 @@ export default async function globalSetup(): Promise<void> {
     libraryInvitesByProject,
     timerInvitesByProject,
     planEditingInvitesByProject,
+    exercisesInvitesByProject,
   }
   writeFileSync(stateFilePath, JSON.stringify(state))
 
@@ -264,4 +273,6 @@ export default async function globalSetup(): Promise<void> {
   process.env.E2E_TIMER_INVITES_WEBKIT = timerInvitesByProject.webkit.join(',')
   process.env.E2E_PLAN_EDITING_INVITES_CHROMIUM = planEditingInvitesByProject.chromium.join(',')
   process.env.E2E_PLAN_EDITING_INVITES_WEBKIT = planEditingInvitesByProject.webkit.join(',')
+  process.env.E2E_EXERCISES_INVITES_CHROMIUM = exercisesInvitesByProject.chromium
+  process.env.E2E_EXERCISES_INVITES_WEBKIT = exercisesInvitesByProject.webkit
 }

@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router'
 
 import { AccountScreen } from '@/components/account-screen'
+import { ExerciseLibraryScreen } from '@/components/exercise-library-screen'
 import { LibraryScreen } from '@/components/library-screen'
 import { TimerScreen } from '@/components/timer-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
@@ -78,6 +79,13 @@ const workoutNewRoute = createRoute({
   component: NewWorkoutScreen,
 })
 
+/** `/exercises` — the `ExerciseLibraryScreen` catalog; no route params or context of its own. */
+const exercisesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/exercises',
+  component: ExerciseLibraryScreen,
+})
+
 /** `/workouts/$workoutId` — `WorkoutDetailScreen`, keyed off the `workoutId` path param. */
 const workoutDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -122,6 +130,7 @@ const routeTree = rootRoute.addChildren([
   workoutDetailRoute,
   workoutEditRoute,
   accountRoute,
+  exercisesRoute,
   notFoundRedirectRoute,
 ])
 

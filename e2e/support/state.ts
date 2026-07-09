@@ -12,9 +12,10 @@ export const stateFilePath: string = path.join(tmpdir(), 'j45-e2e-state.json')
 /**
  * The two Playwright projects (`playwright.config.ts`) that share the one
  * server `global-setup.ts` boots — and, with it, the one single-use
- * first-run invite. Each project gets its own pair of pre-minted
- * registration invites (see `registerInvitesByProject`) so `auth-register.spec.ts`
- * never redeems the same code twice across the two projects.
+ * first-run invite. Each project gets its own pre-minted registration
+ * invites (see `registerInvitesByProject`, `libraryInvitesByProject`, and
+ * `exercisesInvitesByProject`) so the auth-register, library, and exercises
+ * specs never redeem the same code twice across the two projects.
  */
 export type E2eProjectName = 'chromium' | 'webkit'
 
@@ -60,6 +61,13 @@ export type E2eState = {
    * same codes. Minted the same way, in the same `global-setup.ts` pass.
    */
   readonly planEditingInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  /**
+   * A fifth, independent invite per project — `exercises.spec.ts`'s own
+   * per-project account (one registration in that file), kept out of the
+   * other pools so no spec ever races another for the same code. Minted the
+   * same way, in the same `global-setup.ts` pass.
+   */
+  readonly exercisesInvitesByProject: Record<E2eProjectName, string>
 }
 
 /**
@@ -84,6 +92,7 @@ export type E2eEnv = {
   readonly libraryInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly timerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly planEditingInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  readonly exercisesInvitesByProject: Record<E2eProjectName, string>
 }
 
 const requireEnv = (name: string): string => {
@@ -132,6 +141,10 @@ export function readE2eEnv(): E2eEnv {
     planEditingInvitesByProject: {
       chromium: parseInvitePair('E2E_PLAN_EDITING_INVITES_CHROMIUM'),
       webkit: parseInvitePair('E2E_PLAN_EDITING_INVITES_WEBKIT'),
+    },
+    exercisesInvitesByProject: {
+      chromium: requireEnv('E2E_EXERCISES_INVITES_CHROMIUM'),
+      webkit: requireEnv('E2E_EXERCISES_INVITES_WEBKIT'),
     },
   }
 }
