@@ -18,17 +18,24 @@ import { UserRepo } from './user-repo.js'
 export const FIRST_RUN_BANNER_LABEL = 'FIRST-RUN REGISTRATION INVITE'
 
 /**
- * If `users` is empty and no unspent registration invite already exists,
- * mints a no-expiry first-run invite — `FIRST_RUN_INVITE`'s exact value
- * when set, a random code otherwise (`Invites.mint`'s `firstRun`/`code`
- * params) — and logs it in a boxed banner at `logWarning`, well above the
+ * While `users` is empty, guarantees a redeemable no-expiry first-run
+ * invite and logs it in a boxed banner at `logWarning`, well above the
  * noise floor of ordinary request logs, so an operator reading a dev
- * console or `journalctl` can't miss it. A reset code can never be the
- * "unspent registration invite" this checks for — `reset_user_id` is a
+ * console or `journalctl` can't miss it.
+ *
+ * The pin is a guarantee, not a suggestion: with `FIRST_RUN_INVITE` set,
+ * that exact code must be redeemable on every empty-`users` boot — a stale
+ * unspent invite minted by an earlier boot (e.g. a dev database that
+ * outlived its logged code) must not mask it, so only the pinned code's own
+ * presence skips the mint. (The pinned code can never be present-but-spent
+ * here: spending an invite registers a user in the same transaction, which
+ * empties this branch.) Unpinned, any unspent registration invite
+ * suffices — restarting then mints nothing new and stays silent, since the
+ * boot that minted it already bannered it. A reset code can never be the
+ * "unspent registration invite" these checks accept — `reset_user_id` is a
  * foreign key into `users`, which is empty on this branch — but the filter
  * (`resetUserId === undefined`) documents that distinction explicitly
- * rather than leaning on the coincidence. Restarting while an unspent
- * invite still exists mints nothing new.
+ * rather than leaning on the coincidence.
  */
 const bootstrap = Effect.gen(function* () {
   const userRepo = yield* UserRepo
@@ -40,14 +47,16 @@ const bootstrap = Effect.gen(function* () {
   }
 
   const unspentInvites = yield* invites.list()
-  const hasUnspentRegistrationInvite = unspentInvites.some(
-    (invite) => invite.resetUserId === undefined,
-  )
-  if (hasUnspentRegistrationInvite) {
+  const pinnedCode = yield* FirstRunInviteConfig
+
+  const satisfiedBy = Option.isSome(pinnedCode)
+    ? (invite: (typeof unspentInvites)[number]) =>
+        invite.resetUserId === undefined && invite.code === pinnedCode.value
+    : (invite: (typeof unspentInvites)[number]) => invite.resetUserId === undefined
+  if (unspentInvites.some(satisfiedBy)) {
     return
   }
 
-  const pinnedCode = yield* FirstRunInviteConfig
   const invite = yield* invites.mint({
     firstRun: true,
     ...(Option.isSome(pinnedCode) && { code: pinnedCode.value as InviteCode }),

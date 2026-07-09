@@ -249,7 +249,10 @@ consumed — a device used at least yearly never gets logged out.
   registration invite exists, the server mints one (no expiry) and logs it
   loudly. Config `FIRST_RUN_INVITE` (optional) pins its value —
   deterministic for dev and the e2e harness; unset on the VPS, where
-  `journalctl --user -u j45` shows it. **The first account ever created gets
+  `journalctl --user -u j45` shows it. The pin is a guarantee: whenever
+  `users` is empty, the pinned code is redeemable — a stale unspent invite
+  from an earlier boot doesn't mask it (only the pinned code's own presence
+  skips the mint). **The first account ever created gets
   `role = 'owner'`;** all later accounts are `member`.
 - **Recovery is social** (ADR-0002): owner mints a reset code from the admin
   screen and reads it to the locked-out user; redeeming sets a new PIN and

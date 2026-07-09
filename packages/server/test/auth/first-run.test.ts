@@ -161,4 +161,57 @@ describe('FirstRunLive (wired into src/main.ts, after SqlLive)', () => {
       }),
     { timeout: 30_000 },
   )
+
+  it.scopedLive(
+    'given FIRST_RUN_INVITE set and a stale unspent invite from an earlier unpinned boot, startup still mints and banners the pinned code, and it is redeemable',
+    () =>
+      Effect.gen(function* () {
+        const dbPath = yield* makeTmpDbPath
+        const pinnedCode = 'PINNED-AFTER-STALE'
+
+        // First boot, unpinned: mints some random code the operator has
+        // since "lost" — the stale-dev-database scenario.
+        yield* Effect.scoped(bootServerCapturingStdout({ dbPath }))
+
+        // Second boot, pinned: the stale unspent invite must not mask the
+        // pin — the pinned code gets minted and bannered.
+        const pinnedBootOutput = yield* Effect.scoped(
+          bootServerCapturingStdout({ dbPath, firstRunInvite: pinnedCode }),
+        )
+        expect(pinnedBootOutput).toContain(`${FIRST_RUN_BANNER_LABEL}: ${pinnedCode}`)
+
+        // The pinned code is genuinely redeemable; the stale invite is the
+        // one left over afterwards (still unspent, untouched).
+        const remainingAfterRedeem = yield* Effect.gen(function* () {
+          const invites = yield* Invites
+          yield* invites.redeemForRegistration(pinnedCode as InviteCode)
+          return yield* invites.list()
+        }).pipe(Effect.provide(withDbInvites(dbPath)))
+        expect(remainingAfterRedeem).toHaveLength(1)
+      }),
+    { timeout: 45_000 },
+  )
+
+  it.scopedLive(
+    'given FIRST_RUN_INVITE set and the pinned code already unspent, a restart mints nothing new',
+    () =>
+      Effect.gen(function* () {
+        const dbPath = yield* makeTmpDbPath
+        const pinnedCode = 'PINNED-RESTART-CODE'
+
+        yield* Effect.scoped(bootServerCapturingStdout({ dbPath, firstRunInvite: pinnedCode }))
+        const restartOutput = yield* Effect.scoped(
+          bootServerCapturingStdout({ dbPath, firstRunInvite: pinnedCode }),
+        )
+        expect(restartOutput).not.toContain(FIRST_RUN_BANNER_LABEL)
+
+        const unspent = yield* Effect.gen(function* () {
+          const invites = yield* Invites
+          return yield* invites.list()
+        }).pipe(Effect.provide(withDbInvites(dbPath)))
+        expect(unspent).toHaveLength(1)
+        expect(unspent[0]?.code).toBe(pinnedCode)
+      }),
+    { timeout: 45_000 },
+  )
 })
