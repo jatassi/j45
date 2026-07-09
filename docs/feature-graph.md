@@ -76,7 +76,7 @@ features:
       - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: plan-editing
     title: Plan editing at parity — exercises, day structure, pods, work/rest
-    status: designed
+    status: validated
     depends_on: [plan-library]
     acceptance:
       - "Integration: CreateWorkout inserts a caller-owned row returned as a LibraryWorkout with fresh id and equal created/updated timestamps; UpdateWorkout replaces the whole body, bumps updated_at, preserves id and created_at; both against a foreign or absent id fail WorkoutNotFound; ListWorkouts reflects the edit."

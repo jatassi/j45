@@ -46,7 +46,9 @@ export const LibraryHandlersLive: Layer.Layer<
   | Rpc.Handler<'GetWorkout'>
   | Rpc.Handler<'DuplicateWorkout'>
   | Rpc.Handler<'RenameWorkout'>
-  | Rpc.Handler<'DeleteWorkout'>,
+  | Rpc.Handler<'DeleteWorkout'>
+  | Rpc.Handler<'CreateWorkout'>
+  | Rpc.Handler<'UpdateWorkout'>,
   never,
   WorkoutsRepo
 > = LibraryRpcs.toLayer(
@@ -83,6 +85,18 @@ export const LibraryHandlersLive: Layer.Layer<
         Effect.gen(function* () {
           const user = yield* CurrentUser
           yield* workoutsRepo.delete(id, user.id)
+        }).pipe(Effect.catchTag('SqlError', asDefect)),
+
+      CreateWorkout: ({ workout }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser
+          return yield* workoutsRepo.insert(user.id, workout)
+        }).pipe(Effect.catchTag('SqlError', asDefect)),
+
+      UpdateWorkout: ({ id, workout }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser
+          return yield* workoutsRepo.update(id, user.id, workout)
         }).pipe(Effect.catchTag('SqlError', asDefect)),
     }
   }),

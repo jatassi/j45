@@ -115,6 +115,34 @@ const rename = (sql: SqlClient.SqlClient, input: RenameInput) =>
     return yield* decodeRow(row)
   })
 
+type UpdateInput = {
+  readonly id: WorkoutId
+  readonly ownerId: UserId
+  readonly workout: Workout
+}
+
+/**
+ * Whole-body replacement: encode the given workout, write it, bump
+ * `updated_at`, and let `RETURNING *` prove ownership atomically — no
+ * pre-read needed (unlike rename, which must preserve the rest of the body).
+ */
+const update = (sql: SqlClient.SqlClient, input: UpdateInput) =>
+  Effect.gen(function* () {
+    const at = yield* DateTime.now
+    const encoded = yield* Schema.encode(Workout)(input.workout).pipe(Effect.orDie)
+    const rows = yield* sql<WorkoutsTableRow>`
+      UPDATE workouts
+      SET body = ${JSON.stringify(encoded)}, updated_at = ${DateTime.formatIso(at)}
+      WHERE id = ${input.id} AND owner_id = ${input.ownerId}
+      RETURNING *
+    `
+    const row = rows[0]
+    if (row === undefined) {
+      return yield* Effect.fail(new WorkoutNotFound({ id: input.id }))
+    }
+    return yield* decodeRow(row)
+  })
+
 /** Deletes the caller's own workout — `RETURNING id` doubles as the "did a row actually exist" check. */
 const deleteOwned = (sql: SqlClient.SqlClient, id: WorkoutId, ownerId: UserId) =>
   Effect.gen(function* () {
@@ -172,6 +200,8 @@ export class WorkoutsRepo extends Effect.Service<WorkoutsRepo>()('WorkoutsRepo',
       getOwned: (id: WorkoutId, ownerId: UserId) => getOwned(sql, id, ownerId),
       insert: (ownerId: UserId, workout: Workout) => insert(sql, ownerId, workout),
       rename: (id: WorkoutId, ownerId: UserId, name: string) => rename(sql, { id, ownerId, name }),
+      update: (id: WorkoutId, ownerId: UserId, workout: Workout) =>
+        update(sql, { id, ownerId, workout }),
       delete: (id: WorkoutId, ownerId: UserId) => deleteOwned(sql, id, ownerId),
       duplicate: (id: WorkoutId, ownerId: UserId) => duplicate(sql, id, ownerId),
       seedForUser: (userId: UserId) => seedForUser(sql, userId),

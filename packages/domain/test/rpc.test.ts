@@ -26,7 +26,7 @@ describe('ServerInfo', () => {
 describe('J45Rpcs', () => {
   it('merges PublicRpcs, AccountRpcs, OwnerRpcs, and LibraryRpcs', () => {
     const rpcs = J45Rpcs.requests
-    expect(rpcs.size).toBe(15)
+    expect(rpcs.size).toBe(17)
     expect(rpcs.has('ServerInfo')).toBe(true)
     expect(rpcs.has('Me')).toBe(true)
     expect(rpcs.has('ListUsers')).toBe(true)

@@ -49,10 +49,17 @@ export type E2eState = {
   /**
    * A third, independent pair of fresh invites per project — `timer.spec.ts`'s
    * own per-project accounts (one per test in that file), kept out of the
-   * other two pools so the three spec files never race for the same codes.
+   * other two pools so the spec files never race for the same codes.
    * Minted the same way, in the same `global-setup.ts` pass.
    */
   readonly timerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  /**
+   * A fourth, independent pair of fresh invites per project —
+   * `plan-editing.spec.ts`'s own per-project accounts (one per test in that
+   * file), kept out of the other pools so the spec files never race for the
+   * same codes. Minted the same way, in the same `global-setup.ts` pass.
+   */
+  readonly planEditingInvitesByProject: Record<E2eProjectName, readonly [string, string]>
 }
 
 /**
@@ -76,6 +83,7 @@ export type E2eEnv = {
   readonly registerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly libraryInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly timerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  readonly planEditingInvitesByProject: Record<E2eProjectName, readonly [string, string]>
 }
 
 const requireEnv = (name: string): string => {
@@ -120,6 +128,10 @@ export function readE2eEnv(): E2eEnv {
     timerInvitesByProject: {
       chromium: parseInvitePair('E2E_TIMER_INVITES_CHROMIUM'),
       webkit: parseInvitePair('E2E_TIMER_INVITES_WEBKIT'),
+    },
+    planEditingInvitesByProject: {
+      chromium: parseInvitePair('E2E_PLAN_EDITING_INVITES_CHROMIUM'),
+      webkit: parseInvitePair('E2E_PLAN_EDITING_INVITES_WEBKIT'),
     },
   }
 }

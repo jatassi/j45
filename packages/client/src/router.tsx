@@ -11,6 +11,7 @@ import { AccountScreen } from '@/components/account-screen'
 import { LibraryScreen } from '@/components/library-screen'
 import { TimerScreen } from '@/components/timer-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
+import { EditWorkoutScreen, NewWorkoutScreen } from '@/components/workout-editor-screen'
 
 /**
  * Everything a routed screen needs that isn't itself route state: the
@@ -66,11 +67,29 @@ const timerRoute = createRoute({
   component: TimerScreen,
 })
 
+/**
+ * `/workouts/new` — the editor on a blank draft. A static segment, so it
+ * outranks `/workouts/$workoutId` (which would otherwise capture `new` as an
+ * id) in TanStack Router's specificity ordering.
+ */
+const workoutNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workouts/new',
+  component: NewWorkoutScreen,
+})
+
 /** `/workouts/$workoutId` — `WorkoutDetailScreen`, keyed off the `workoutId` path param. */
 const workoutDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workouts/$workoutId',
   component: WorkoutDetailScreen,
+})
+
+/** `/workouts/$workoutId/edit` — the editor on the draft loaded from `GetWorkout`. */
+const workoutEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workouts/$workoutId/edit',
+  component: EditWorkoutScreen,
 })
 
 /**
@@ -99,7 +118,9 @@ const notFoundRedirectRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   timerRoute,
+  workoutNewRoute,
   workoutDetailRoute,
+  workoutEditRoute,
   accountRoute,
   notFoundRedirectRoute,
 ])

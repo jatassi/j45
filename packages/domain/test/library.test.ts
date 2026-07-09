@@ -36,13 +36,15 @@ describe('LibraryWorkout', () => {
 })
 
 describe('LibraryRpcs', () => {
-  it('exposes the five library operations', () => {
+  it('exposes the seven library operations', () => {
     const rpcs = LibraryRpcs.requests
-    expect(rpcs.size).toBe(5)
+    expect(rpcs.size).toBe(7)
     expect(rpcs.has('ListWorkouts')).toBe(true)
     expect(rpcs.has('GetWorkout')).toBe(true)
     expect(rpcs.has('DuplicateWorkout')).toBe(true)
     expect(rpcs.has('RenameWorkout')).toBe(true)
     expect(rpcs.has('DeleteWorkout')).toBe(true)
+    expect(rpcs.has('CreateWorkout')).toBe(true)
+    expect(rpcs.has('UpdateWorkout')).toBe(true)
   })
 })

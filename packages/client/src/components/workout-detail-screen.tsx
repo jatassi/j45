@@ -34,6 +34,10 @@ const deleteWorkoutAtom = ServerRpcClient.mutation('DeleteWorkout')
 const dialogPopupClassName =
   'fixed top-1/2 left-1/2 flex w-[calc(100%-2rem)] max-w-xs -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-xl bg-card p-4 text-card-foreground shadow-lg ring-1 ring-foreground/10'
 
+/** The Edit action is a styled navigation `Link` (to the editor), not a mutation button like the others. */
+const editLinkClass =
+  'rounded-md border border-input bg-input/30 px-2.5 py-1.5 text-sm font-medium hover:bg-input/50'
+
 /**
  * The flow's round structure as one line: `40″/20″ × 3` when every round
  * shares the same work/rest seconds (the common case — "uniform"), the
@@ -110,9 +114,7 @@ function RenameDialog({ open, name, onNameChange, onCancel, onSubmit }: RenameDi
               className="rounded-md border border-input bg-input/30 px-2.5 py-1.5 text-sm"
               data-testid="rename-input"
               value={name}
-              onChange={(event) => {
-                onNameChange(event.target.value)
-              }}
+              onChange={(event) => onNameChange(event.target.value)}
             />
             <div className="flex justify-end gap-2">
               <Button
@@ -319,6 +321,9 @@ function WorkoutActions({ id, name }: WorkoutActionsProps) {
 
   return (
     <>
+      <Link to={`/workouts/${id}/edit`} data-testid="edit-button" className={editLinkClass}>
+        Edit
+      </Link>
       <ActionButtons
         onRename={renameDialog.openDialog}
         onDuplicate={handleDuplicate}

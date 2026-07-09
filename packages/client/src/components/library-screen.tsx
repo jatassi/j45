@@ -107,6 +107,15 @@ export function LibraryScreen() {
           </Link>
         </nav>
       </header>
+      <div className="flex w-full max-w-sm justify-end">
+        <Link
+          to="/workouts/new"
+          data-testid="new-workout-button"
+          className="rounded-md bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+        >
+          New workout
+        </Link>
+      </div>
       <div className="w-full max-w-sm">
         <WorkoutList />
       </div>

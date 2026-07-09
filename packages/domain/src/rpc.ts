@@ -12,6 +12,7 @@ import {
   UserId,
 } from './auth.js'
 import { LibraryWorkout, WorkoutId, WorkoutNotFound } from './library.js'
+import { Workout } from './workout.js'
 
 /**
  * Snapshot of the running server, returned by the `ServerInfo` rpc.
@@ -94,6 +95,12 @@ export class LibraryRpcs extends RpcGroup.make(
     error: WorkoutNotFound,
   }),
   Rpc.make('DeleteWorkout', { payload: { id: WorkoutId }, error: WorkoutNotFound }),
+  Rpc.make('CreateWorkout', { payload: { workout: Workout }, success: LibraryWorkout }),
+  Rpc.make('UpdateWorkout', {
+    payload: { id: WorkoutId, workout: Workout },
+    success: LibraryWorkout,
+    error: WorkoutNotFound,
+  }),
 ).middleware(AuthMiddleware) {}
 
 /**
