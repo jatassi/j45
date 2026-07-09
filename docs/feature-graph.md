@@ -110,7 +110,7 @@ features:
     depends_on: [session-history, exercise-library]
   - id: manual-timer
     title: Quick ad-hoc countdown timer on the domain timer machinery
-    status: designed
+    status: validated
     depends_on: [workout-domain]
     acceptance:
       - "Unit: the synthetic manual workout for work 40 / rest 20 / rounds 9 is schema-valid and compiles to one 5s ready segment, 9 work segments of 40s with 20s rests between consecutive rounds, no rest after the final work, total 525s; with rest 0 no rest segments appear at all."

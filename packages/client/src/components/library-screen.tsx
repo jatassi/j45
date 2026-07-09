@@ -90,13 +90,22 @@ export function LibraryScreen() {
     <div className="flex min-h-svh flex-col items-center gap-6 p-6" data-testid="library-screen">
       <header className="flex w-full max-w-sm items-center justify-between">
         <h1 className="text-lg font-medium">Your library</h1>
-        <Link
-          to="/account"
-          data-testid="account-nav-link"
-          className="text-sm text-primary underline-offset-4 hover:underline"
-        >
-          Account
-        </Link>
+        <nav className="flex items-center gap-4">
+          <Link
+            to="/timer"
+            data-testid="timer-nav-link"
+            className="text-sm text-primary underline-offset-4 hover:underline"
+          >
+            Timer
+          </Link>
+          <Link
+            to="/account"
+            data-testid="account-nav-link"
+            className="text-sm text-primary underline-offset-4 hover:underline"
+          >
+            Account
+          </Link>
+        </nav>
       </header>
       <div className="w-full max-w-sm">
         <WorkoutList />

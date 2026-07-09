@@ -46,6 +46,13 @@ export type E2eState = {
    * the same codes. Minted the same way, in the same `global-setup.ts` pass.
    */
   readonly libraryInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  /**
+   * A third, independent pair of fresh invites per project — `timer.spec.ts`'s
+   * own per-project accounts (one per test in that file), kept out of the
+   * other two pools so the three spec files never race for the same codes.
+   * Minted the same way, in the same `global-setup.ts` pass.
+   */
+  readonly timerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
 }
 
 /**
@@ -68,6 +75,7 @@ export type E2eEnv = {
   }
   readonly registerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly libraryInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  readonly timerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
 }
 
 const requireEnv = (name: string): string => {
@@ -108,6 +116,10 @@ export function readE2eEnv(): E2eEnv {
     libraryInvitesByProject: {
       chromium: parseInvitePair('E2E_LIBRARY_INVITES_CHROMIUM'),
       webkit: parseInvitePair('E2E_LIBRARY_INVITES_WEBKIT'),
+    },
+    timerInvitesByProject: {
+      chromium: parseInvitePair('E2E_TIMER_INVITES_CHROMIUM'),
+      webkit: parseInvitePair('E2E_TIMER_INVITES_WEBKIT'),
     },
   }
 }

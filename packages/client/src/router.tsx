@@ -9,6 +9,7 @@ import {
 
 import { AccountScreen } from '@/components/account-screen'
 import { LibraryScreen } from '@/components/library-screen'
+import { TimerScreen } from '@/components/timer-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 
 /**
@@ -58,6 +59,13 @@ const accountRoute = createRoute({
   },
 })
 
+/** `/timer` — the manual interval timer, run entirely client-side. */
+const timerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/timer',
+  component: TimerScreen,
+})
+
 /** `/workouts/$workoutId` — `WorkoutDetailScreen`, keyed off the `workoutId` path param. */
 const workoutDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -90,6 +98,7 @@ const notFoundRedirectRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  timerRoute,
   workoutDetailRoute,
   accountRoute,
   notFoundRedirectRoute,
