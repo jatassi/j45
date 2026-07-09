@@ -8,7 +8,7 @@ it may build.
 ## Feature graph
 
 ```yaml
-design_version: 5
+design_version: 6
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
@@ -62,12 +62,29 @@ features:
       - "The glass e2e suite passes unchanged (`/glass` still renders unauthenticated); the pre-existing auth e2e suites pass with edits limited to navigation for the routed home (AccountScreen assertions via `/account`, post-auth landing is the library) — no auth assertion weakened or removed; and `bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: live-session
     title: Server-authoritative live sessions — streaming sync, multi-phone controls, beeps/wake-lock, one-tap join
-    status: proposed
-    depends_on: [plan-library]
+    status: designed
+    depends_on: [plan-library, manual-timer]
+    acceptance:
+      - "Integration (TestClock): a session created from a library workout starts at the ready segment and its ticker advances exactly at chained segment deadlines, catching up across multiple boundaries after a long TestClock.adjust; pause freezes remaining time, resume re-anchors, skip/prev enter the target segment at full duration — all driven through SendSessionCommand-shaped service calls, including commands issued by a non-host participant."
+      - "Integration: WatchSession delivers the current snapshot first, then every change — a subscriber joining after several transitions receives the current state as its first element; every published state carries serverNow and an absolute-epoch TimerRunning.endsAtMillis."
+      - "Integration: subscribing adds the caller (userId + displayName) to participants and unsubscribing removes them; quit completes every subscriber's stream and removes the session; a session with zero subscribers for 60 consecutive seconds (TestClock) ends and disappears from ListActiveSessions."
+      - "Integration: StartSession with another user's (or an unknown) workout id fails WorkoutNotFound; WatchSession and SendSessionCommand on an unknown session id fail SessionNotFound; every SessionRpcs member without a valid session cookie fails Unauthorized."
+      - "e2e (chromium, two logged-in contexts): user A starts a session from a workout detail screen and lands on /session/<id>; within 10 seconds user B's home shows an active-session card naming A and the workout, and one tap lands B on the same session showing the same segment; B pausing shows Paused on A's screen; A skipping advances both to the next segment; A quitting returns B to the home screen."
+      - "e2e: with Web Audio instrumented via init script, the join/start tap unlocks audio (data-audio=\"on\") and a segment transition fires at least one beep; with navigator.wakeLock instrumented, the lock is requested while running and released when paused."
+      - "Integration: updating or deleting the source workout while a session runs on it leaves the running session's compiled segments unchanged (the session serves its own copy)."
+      - "Sessions are in-memory only: no migration is added, and restarting the server (integration: rebuilding the layer) yields an empty ListActiveSessions while durable data is untouched."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: plan-editing
     title: Plan editing at parity — exercises, day structure, pods, work/rest
-    status: proposed
+    status: designed
     depends_on: [plan-library]
+    acceptance:
+      - "Integration: CreateWorkout inserts a caller-owned row returned as a LibraryWorkout with fresh id and equal created/updated timestamps; UpdateWorkout replaces the whole body, bumps updated_at, preserves id and created_at; both against a foreign or absent id fail WorkoutNotFound; ListWorkouts reflects the edit."
+      - "e2e (chromium + webkit): from the library home, New workout → editor: set name and focus, add a pod with two stations, set flow to sets with 3 uniform rounds of 30″ work / 10″ rest, Save → the detail screen shows the created workout and it appears in the library after a reload."
+      - "e2e: editing a seed copy — switch flow laps→sets, rename a station, move a station down — then Save; the detail screen reflects all three changes after a page reload."
+      - "e2e: the editor's live summary chip for an unmodified Athletica draft reads exactly 27 works · 26:45; with a station name cleared, Save is disabled and a validation message is visible."
+      - "Unit: the uniform work/rest toggle expands one pair to N rounds and collapses N rounds to round 1's pair; a draft with an empty pod, empty station name, workSeconds 0, or negative restSeconds fails Workout decode and the editor surfaces the failure."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: flow-control
     title: Structural reflow (sets↔laps, pod regrouping) at edit-time and launch-time
     status: proposed
@@ -78,16 +95,30 @@ features:
     depends_on: [live-session]
   - id: exercise-library
     title: First-class tagged exercise library seeded from program content
-    status: proposed
+    status: designed
     depends_on: [plan-library]
+    acceptance:
+      - "Unit: every entry in seed-exercises.ts decodes as a valid Exercise; names are unique case-insensitively; the catalog has at least 80 entries; every MuscleGroup and every Equipment literal is used by at least one entry; entries named Rower (modality cardio, equipment includes rower), Barbell front squat (modality strength, equipment includes barbell), and Burpee (empty equipment) exist."
+      - "Integration: registering an account creates the user row, the 12 seed workouts, and the full seed exercise catalog in one transaction (a failed registration creates none); a second account gets its own catalog with distinct ids; deleting an exercise from one account leaves the other untouched."
+      - "Integration: given a database migrated through 0003 with an existing user, migration 0004 backfills that user's exercise catalog."
+      - "Integration: ListExercises returns only the caller's exercises sorted case-insensitively by name; UpdateExercise and DeleteExercise against another user's (or an unknown) exercise id fail ExerciseNotFound."
+      - "e2e (chromium + webkit): /exercises via a home nav link lists the seeded catalog; selecting a muscle-group filter chip narrows the list; creating an exercise shows it in the list and it persists across a reload; editing its tags persists across a reload; Delete removes it."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: workout-generation
     title: Rule-based workout generator — templates + constraints incl. no-repeat-recently
     status: proposed
     depends_on: [session-history, exercise-library]
   - id: manual-timer
     title: Quick ad-hoc countdown timer on the domain timer machinery
-    status: proposed
+    status: designed
     depends_on: [workout-domain]
+    acceptance:
+      - "Unit: the synthetic manual workout for work 40 / rest 20 / rounds 9 is schema-valid and compiles to one 5s ready segment, 9 work segments of 40s with 20s rests between consecutive rounds, no rest after the final work, total 525s; with rest 0 no rest segments appear at all."
+      - "e2e (chromium + webkit): /timer is reachable via a nav link from the library home while logged in; with short inputs (5s work, 0 rest, 2 rounds) Start runs ready → work → work → Done with the round indicator advancing; Pause freezes the displayed count, Resume continues, Reset returns to the idle input state."
+      - "e2e: with Web Audio instrumented via init script, the Start tap itself unlocks audio (the player shows data-audio=\"on\") and at least one beep fires on a segment transition; with navigator.wakeLock instrumented, the lock is acquired while running and released on pause and on Done."
+      - "The player kit exists as packages/client/src/player/ modules (audio, wake-lock, use-countdown) with no imports from session code, and its audio/countdown units are covered by vitest tests that pass in `bun run test`."
+      - "The timer runs entirely client-side: no new rpc, migration, or server route is added by this feature."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: liquid-glass-ui
     title: Liquid-glass visual layer — WebGL refraction port over shadcn, iOS-Safari-proof, CSS fallback
     status: validated

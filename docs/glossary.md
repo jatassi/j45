@@ -19,6 +19,10 @@ unrecorded wherever they fit.
 - **Segment** — one timed unit of a running session (`ready`, `work`, or
   `rest`), produced by compiling a workout's pods+flow into a flat ordered list.
   The session engine advances segment-by-segment.
+- **Exercise** — a tagged entry in a user's exercise catalog (modality,
+  muscle groups, equipment, intensity). Distinct from a **Station**, which
+  stays free text inside a workout: the catalog is a vocabulary the
+  generator draws from, never a foreign-key target for stations.
 - **Reflow** — a structure-preserving-content transform on a workout: regrouping
   stations into pods and/or switching flow type (sets↔laps) with retiming.
   Applicable permanently (edit-time) or as a one-off overlay (launch-time).

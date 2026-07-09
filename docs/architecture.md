@@ -108,6 +108,17 @@ not contradict them.
   id is indistinguishable from an absent one (`WorkoutNotFound`, never a
   leak). Cross-user experiences (joining a live session, later sharing)
   stream or copy content — they never grant access to another user's rows.
+- **The client player kit is owned by `manual-timer` and reused by
+  `live-session`.** `packages/client/src/player/` holds the shared
+  primitives — beep audio, wake lock, the rAF countdown hook — with no
+  imports from session code; the dependency points
+  from live-session to the kit, never back. Beeps and wake lock are
+  client-side concerns fired off interpolated segment transitions. Audio is
+  a known hazard, not a port: the legacy app's beeps don't work in practice,
+  so the kit unlocks its `AudioContext` synchronously inside the explicit
+  tap that enters a player, re-resumes on visibility changes and before
+  every beep, and surfaces its state in the UI and as a `data-audio`
+  attribute (values exactly `"on"`/`"blocked"`) for e2e assertion.
 - **Domain purity:** segment compilation, flow/reflow transforms, timer math,
   and generation rules are pure functions in `domain`, unit-tested exhaustively.
   Server features orchestrate them; they do not reimplement them.
