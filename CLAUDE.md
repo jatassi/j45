@@ -20,3 +20,8 @@ On **TypeScript 7** (the native compiler) — plain `tsc` everywhere.
 
 Linting is **oxlint**, not ESLint. Rules live in `.oxlintrc.json`;
 import sorting is a Prettier plugin (`bun run format`).
+
+## Subagents
+
+When spawning subagents, always include the model name in brackets at the beginning
+of the agent title like this: `[Opus] Do the thing`.
