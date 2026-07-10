@@ -1,0 +1,27 @@
+{
+  "the-loop": {
+    "testHarness": {
+      "commands": {
+        "test": "bun run test",
+        "typecheck": "bun run check",
+        "e2e": "bun run test:e2e"
+      },
+      "framework": "vitest + @effect/vitest; Playwright for e2e",
+      "notes": "check runs tsc (TypeScript 7 native) across all workspace packages"
+    },
+    "lint": {
+      "commands": [
+        "bun run lint",
+        "bun run format:check"
+      ]
+    },
+    "precommit": {
+      "system": "git-hooks (.githooks via core.hooksPath, activated by bun install prepare script)",
+      "posture": "rely-on-hook"
+    },
+    "worktreeSetup": {
+      "command": "bun install",
+      "timeout": 600000
+    }
+  }
+}

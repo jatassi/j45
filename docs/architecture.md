@@ -147,7 +147,7 @@ The live-session stream must degrade gracefully on disconnect: client shows
 "reconnecting", `Stream.retry` with backoff, and a fresh snapshot heals all
 drift on resubscribe.
 
-## Validation runbook
+## Validation procedure
 
 These commands are the binding contract the `walking-skeleton` feature
 establishes; every later feature inherits them.
@@ -188,3 +188,21 @@ feature builds this pipeline; `deploy/README.md` holds the bootstrap steps.
 - **Cutover (one-time, at parity):** point the old app's Caddy route at J45,
   verify seed workouts run timing-identical, stop and disable the old
   `diet-f45` service.
+
+## Operations toolkit
+
+All ops run against the VPS over `ssh vps`; J45 is the `j45` systemd user
+service (lingering enabled).
+
+- **Status:** `ssh vps systemctl --user status j45`
+- **Logs:** `ssh vps journalctl --user -u j45 -n 200 -f`
+- **Restart:** `ssh vps systemctl --user restart j45`
+- **Health:** `curl -fsS https://j45.atassi.org/healthz` (200 + deployed git
+  SHA)
+- **Data:** SQLite at `/opt/j45/data/j45.sqlite`; inspect read-only via
+  `ssh vps sqlite3 'file:/opt/j45/data/j45.sqlite?mode=ro' ...`
+- **Release env:** `/opt/j45/release.env` (RELEASE_SHA, PORT=4517, DB_PATH)
+
+Read-only inspection (status, logs, health, ro queries) is freely available;
+anything that mutates the instance (restart, DB writes, env edits) is
+human-gated.
