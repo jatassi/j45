@@ -12,6 +12,7 @@ import {
   UserId,
 } from './auth.js'
 import { Exercise, ExerciseId, ExerciseNotFound, LibraryExercise } from './exercise.js'
+import { SessionCompletion } from './history.js'
 import { LibraryWorkout, WorkoutId, WorkoutNotFound } from './library.js'
 import { Reflow, ReflowInvalid } from './reflow.js'
 import {
@@ -151,10 +152,18 @@ export class SessionRpcs extends RpcGroup.make(
 ).middleware(AuthMiddleware) {}
 
 /**
+ * Rpcs for session completion history. Every member requires a valid session
+ * (`AuthMiddleware` provides `CurrentUser`, fails `Unauthorized`).
+ */
+export class HistoryRpcs extends RpcGroup.make(
+  Rpc.make('ListHistory', { success: Schema.Array(SessionCompletion) }),
+).middleware(AuthMiddleware) {}
+
+/**
  * The single rpc contract shared by every J45 client and server — the merge
  * of `PublicRpcs` + `AccountRpcs` + `OwnerRpcs` + `LibraryRpcs` +
- * `ExerciseRpcs` + `SessionRpcs`. Defined exactly once, here — both
- * `packages/server` and `packages/client` import it from `@j45/domain`
+ * `ExerciseRpcs` + `SessionRpcs` + `HistoryRpcs`. Defined exactly once, here —
+ * both `packages/server` and `packages/client` import it from `@j45/domain`
  * rather than redeclaring it.
  */
 export class J45Rpcs extends PublicRpcs.merge(
@@ -163,4 +172,5 @@ export class J45Rpcs extends PublicRpcs.merge(
   LibraryRpcs,
   ExerciseRpcs,
   SessionRpcs,
+  HistoryRpcs,
 ) {}

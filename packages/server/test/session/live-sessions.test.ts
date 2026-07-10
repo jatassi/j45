@@ -1,3 +1,5 @@
+import { NodeContext } from '@effect/platform-node'
+import { SqliteClient } from '@effect/sql-sqlite-node'
 import { describe, expect, it } from '@effect/vitest'
 import {
   compile,
@@ -16,12 +18,15 @@ import * as Deferred from 'effect/Deferred'
 import * as Effect from 'effect/Effect'
 import * as Exit from 'effect/Exit'
 import * as Fiber from 'effect/Fiber'
+import * as Layer from 'effect/Layer'
 import * as Schema from 'effect/Schema'
 import * as Scope from 'effect/Scope'
 import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
+import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
+import { MigratorLive } from '../../src/sql.js'
 
 // A deterministic fixture workout. Compiled it becomes four segments with
 // round, self-checkable deadlines (TestClock starts at epoch 0):
@@ -29,23 +34,41 @@ import { LiveSessions } from '../../src/session/live-sessions.js'
 //   seg1 work  10_000ms  -> deadline 15_000
 //   seg2 rest   5_000ms  -> deadline 20_000
 //   seg3 work  10_000ms  -> deadline 30_000 -> done
-const compiled = compile(
-  new Workout({
-    name: 'Fixture',
-    focus: 'cardio',
-    pods: [
-      new Pod({ name: 'P', stations: [new Station({ name: 'A' }), new Station({ name: 'B' })] }),
-    ],
-    flow: new Flow({ type: 'laps', rounds: [new Round({ workSeconds: 10, restSeconds: 5 })] }),
-  }),
-)
+const fixtureWorkout = new Workout({
+  name: 'Fixture',
+  focus: 'cardio',
+  pods: [
+    new Pod({ name: 'P', stations: [new Station({ name: 'A' }), new Station({ name: 'B' })] }),
+  ],
+  flow: new Flow({ type: 'laps', rounds: [new Round({ workSeconds: 10, restSeconds: 5 })] }),
+})
+const compiled = compile(fixtureWorkout)
 
 const userId = (id: string) => Schema.decodeSync(UserId)(id)
 const alice = new Participant({ userId: userId('alice'), displayName: 'Alice' })
 const bob = new Participant({ userId: userId('bob'), displayName: 'Bob' })
 
 const startFixture = (svc: LiveSessions) =>
-  svc.start({ host: alice, workoutName: 'Fixture', compiled })
+  svc.start({ host: alice, workoutName: 'Fixture', workout: fixtureWorkout, compiled })
+
+/**
+ * `LiveSessions` wired over a real `CompletionsRepo` — the one dependency it
+ * gained for session-history — backed by a migrated in-memory
+ * `@effect/sql-sqlite-node` driver, the same pattern as
+ * `test/session/completions-repo.test.ts`. None of the sessions these tests
+ * end progress past the ready segment, so nothing is written; the repo is here
+ * only to satisfy the layer. The persistence behaviour lives in
+ * `test/session/session-history.test.ts`.
+ */
+const TestLive = LiveSessions.Default.pipe(
+  Layer.provide(CompletionsRepo.Default),
+  Layer.provideMerge(
+    MigratorLive.pipe(
+      Layer.provideMerge(SqliteClient.layer({ filename: ':memory:' })),
+      Layer.provideMerge(NodeContext.layer),
+    ),
+  ),
+)
 
 const participantIds = (state: SessionState): readonly UserId[] =>
   state.participants.map((p) => p.userId)
@@ -83,7 +106,7 @@ describe('LiveSessions', () => {
       // endsAtMillis is absolute server-epoch time (5s ready, clock at 0).
       expect(timer.endsAtMillis).toBe(5000)
       expect(state.serverNow).toBe(0)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('the ticker advances exactly at each chained segment deadline', () =>
@@ -104,7 +127,7 @@ describe('LiveSessions', () => {
 
       yield* TestClock.adjust('10 seconds')
       expect((yield* svc.snapshot(id)).timer._tag).toBe('done')
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('the ticker catches up across multiple boundaries after one long adjust', () =>
@@ -118,7 +141,7 @@ describe('LiveSessions', () => {
       const timer = running(yield* svc.snapshot(id))
       expect(timer.segmentIndex).toBe(3)
       expect(timer.endsAtMillis).toBe(30_000)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('pause freezes remaining time and resume re-anchors the deadline', () =>
@@ -149,7 +172,7 @@ describe('LiveSessions', () => {
       // And the re-anchored ticker fires at the new deadline, not the old one.
       yield* TestClock.adjust('3 seconds')
       expect(running(yield* svc.snapshot(id)).segmentIndex).toBe(1)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('skip and prev enter the target segment at full duration', () =>
@@ -169,7 +192,7 @@ describe('LiveSessions', () => {
       const back = running(yield* svc.snapshot(id))
       expect(back.segmentIndex).toBe(0)
       expect(back.endsAtMillis).toBe(5000)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('a command issued by a non-host participant applies', () =>
@@ -183,7 +206,7 @@ describe('LiveSessions', () => {
       yield* svc.command(id, 'pause')
       expect((yield* svc.snapshot(id)).timer._tag).toBe('paused')
       yield* Scope.close(scope, Exit.void)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect(
@@ -218,7 +241,7 @@ describe('LiveSessions', () => {
         }
 
         yield* Scope.close(scope, Exit.void)
-      }).pipe(Effect.provide(LiveSessions.Default)),
+      }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('a late subscriber receives the current state as its first element', () =>
@@ -236,7 +259,7 @@ describe('LiveSessions', () => {
         expect(running(snap.value).segmentIndex).toBe(2)
       }
       yield* Scope.close(scope, Exit.void)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('subscribing adds the caller to participants and unsubscribing removes them', () =>
@@ -252,7 +275,7 @@ describe('LiveSessions', () => {
       yield* Scope.close(scope, Exit.void)
       expect((yield* svc.snapshot(id)).participants).toHaveLength(0)
       expect((yield* svc.list())[0]?.participantCount).toBe(0)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect(
@@ -276,7 +299,7 @@ describe('LiveSessions', () => {
         // Last subscription released: bob is gone.
         yield* Scope.close(w1.scope, Exit.void)
         expect((yield* svc.snapshot(id)).participants).toHaveLength(0)
-      }).pipe(Effect.provide(LiveSessions.Default)),
+      }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('a subscriber whose stream is interrupted mid-flight is still removed', () =>
@@ -300,7 +323,7 @@ describe('LiveSessions', () => {
       // Interruption (a dropped socket) must still run the release finalizer.
       yield* Fiber.interrupt(fiber)
       expect((yield* svc.snapshot(id)).participants).toHaveLength(0)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('quit completes every subscriber stream and removes the session', () =>
@@ -322,7 +345,7 @@ describe('LiveSessions', () => {
       expect(yield* svc.list()).toHaveLength(0)
       expect(Exit.isFailure(yield* Effect.exit(svc.snapshot(id)))).toBe(true)
       expect(Exit.isFailure(yield* Effect.exit(svc.command(id, 'pause')))).toBe(true)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('a session with zero subscribers for 60 consecutive seconds ends and disappears', () =>
@@ -341,7 +364,7 @@ describe('LiveSessions', () => {
       yield* TestClock.adjust('1 seconds')
       expect(yield* svc.list()).toHaveLength(0)
       expect(Exit.isFailure(yield* Effect.exit(svc.snapshot(id)))).toBe(true)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('a live subscription resets the 60-second abandonment clock', () =>
@@ -363,7 +386,7 @@ describe('LiveSessions', () => {
       expect(yield* svc.list()).toHaveLength(1)
       yield* TestClock.adjust('1 seconds')
       expect(yield* svc.list()).toHaveLength(0)
-    }).pipe(Effect.provide(LiveSessions.Default)),
+    }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('rebuilding the layer yields an empty session list', () =>
@@ -373,13 +396,13 @@ describe('LiveSessions', () => {
         const svc = yield* LiveSessions
         yield* startFixture(svc)
         expect(yield* svc.list()).toHaveLength(1)
-      }).pipe(Effect.provide(LiveSessions.Default))
+      }).pipe(Effect.provide(TestLive))
 
       // A freshly built layer starts empty — sessions are in-memory only.
       yield* Effect.gen(function* () {
         const svc = yield* LiveSessions
         expect(yield* svc.list()).toHaveLength(0)
-      }).pipe(Effect.provide(LiveSessions.Default))
+      }).pipe(Effect.provide(TestLive))
     }),
   )
 })

@@ -17,6 +17,7 @@ import {
   type SessionCommand,
   type TimerState,
   type UserId,
+  type Workout,
 } from '@j45/domain'
 import * as Clock from 'effect/Clock'
 import * as DateTime from 'effect/DateTime'
@@ -33,6 +34,8 @@ import * as Schema from 'effect/Schema'
 import * as Scope from 'effect/Scope'
 import * as Stream from 'effect/Stream'
 import * as SubscriptionRef from 'effect/SubscriptionRef'
+
+import { completionRowsForSession, CompletionsRepo } from './completions-repo.js'
 
 /**
  * A session with zero raw subscribers for this long is considered abandoned
@@ -65,11 +68,19 @@ type SessionHandle = {
   readonly id: SessionId
   readonly host: Participant
   readonly workoutName: string
+  readonly workout: Workout
   readonly compiled: CompiledWorkout
   readonly startedAt: DateTime.Utc
   readonly stateRef: SubscriptionRef.SubscriptionRef<SessionState>
   readonly rawSubs: SubscriptionRef.SubscriptionRef<number>
   readonly presence: Ref.Ref<HashMap.HashMap<UserId, PresenceEntry>>
+  // Add-only: every user who ever joined stays, even after they unsubscribe —
+  // by design distinct from `presence`, which shrinks on leave. Seeded with
+  // the host, grown by `join`, never pruned. Drives who gets a completion row.
+  readonly roster: Ref.Ref<HashMap.HashMap<UserId, Participant>>
+  // Flips true the first time a published timer crosses into segment 1 (past
+  // the ready segment) or reaches done; gates whether ending writes any rows.
+  readonly progressed: Ref.Ref<boolean>
   readonly sem: Effect.Semaphore
   readonly wakeup: Queue.Queue<undefined>
   readonly ended: Deferred.Deferred<undefined>
@@ -80,11 +91,13 @@ type SessionHandle = {
 type Registry = {
   readonly sessions: Ref.Ref<HashMap.HashMap<SessionId, SessionHandle>>
   readonly layerScope: Scope.Scope
+  readonly completionsRepo: CompletionsRepo
 }
 
 type StartParams = {
   readonly host: Participant
   readonly workoutName: string
+  readonly workout: Workout
   readonly compiled: CompiledWorkout
 }
 
@@ -102,32 +115,27 @@ const timersEqual = (a: TimerState, b: TimerState): boolean => {
   return true
 }
 
-/** A fresh snapshot with a new timer and `serverNow`, everything else carried over. */
-const withTimer = (state: SessionState, timer: TimerState, serverNow: number): SessionState =>
-  new SessionState({
-    id: state.id,
-    host: state.host,
-    workoutName: state.workoutName,
-    compiled: state.compiled,
-    timer,
-    serverNow,
-    participants: state.participants,
-  })
-
-/** A fresh snapshot with a new participant list and `serverNow`, timer carried over. */
-const withParticipants = (
+/**
+ * A fresh snapshot with a new `serverNow` plus whichever of `timer` /
+ * `participants` the caller overrides — everything else carried from `state`.
+ * The two publish paths (a timer advance, a presence change) each vary one.
+ */
+const withState = (
   state: SessionState,
-  participants: readonly Participant[],
-  serverNow: number,
+  over: {
+    readonly serverNow: number
+    readonly timer?: TimerState
+    readonly participants?: readonly Participant[]
+  },
 ): SessionState =>
   new SessionState({
     id: state.id,
     host: state.host,
     workoutName: state.workoutName,
     compiled: state.compiled,
-    timer: state.timer,
-    serverNow,
-    participants,
+    timer: over.timer ?? state.timer,
+    serverNow: over.serverNow,
+    participants: over.participants ?? state.participants,
   })
 
 const addPresence =
@@ -159,6 +167,15 @@ const participantsOf = (map: HashMap.HashMap<UserId, PresenceEntry>): readonly P
         ? a.userId.localeCompare(b.userId)
         : a.displayName.localeCompare(b.displayName),
     )
+
+/**
+ * Whether a timer state counts as having progressed past the ready segment —
+ * any running/paused segment beyond index 0, or a finished workout. A session
+ * that only ever sat at the ready segment never progressed.
+ */
+const isProgressed = (timer: TimerState): boolean =>
+  timer._tag === 'done' ||
+  ((timer._tag === 'running' || timer._tag === 'paused') && timer.segmentIndex >= 1)
 
 const getHandle = (
   registry: Registry,
@@ -200,7 +217,10 @@ const applyTimer = (
       if (timersEqual(next, state.timer)) {
         return
       }
-      yield* SubscriptionRef.set(handle.stateRef, withTimer(state, next, now))
+      yield* SubscriptionRef.set(handle.stateRef, withState(state, { serverNow: now, timer: next }))
+      if (isProgressed(next)) {
+        yield* Ref.set(handle.progressed, true)
+      }
       yield* Queue.offer(handle.wakeup, undefined)
     }),
   )
@@ -216,7 +236,7 @@ const republishParticipants = (handle: SessionHandle): Effect.Effect<void> =>
       const state = yield* SubscriptionRef.get(handle.stateRef)
       yield* SubscriptionRef.set(
         handle.stateRef,
-        withParticipants(state, participantsOf(presence), now),
+        withState(state, { serverNow: now, participants: participantsOf(presence) }),
       )
     }),
   )
@@ -225,6 +245,8 @@ const join = (handle: SessionHandle, participant: Participant): Effect.Effect<vo
   Effect.gen(function* () {
     yield* SubscriptionRef.update(handle.rawSubs, (n) => n + 1)
     yield* Ref.update(handle.presence, addPresence(participant))
+    // Add-only: a re-set refreshes their display name but never removes them.
+    yield* Ref.update(handle.roster, HashMap.set(participant.userId, participant))
     yield* republishParticipants(handle)
   })
 
@@ -238,9 +260,26 @@ const leave = (handle: SessionHandle, userId: UserId): Effect.Effect<void> =>
 const endSession = (registry: Registry, handle: SessionHandle): Effect.Effect<void> =>
   Effect.gen(function* () {
     // --- session-ended seam -------------------------------------------------
-    // `session-history` will hook in here: `handle.stateRef` still holds the
-    // final snapshot at this point, so a completion record can be read and
-    // persisted before teardown. This feature persists nothing.
+    // A session that progressed past the ready segment leaves history: one
+    // `SessionCompletion` per ever-participant (the roster), each with a fresh
+    // id, all carrying the same as-run snapshot, host, participants, and span
+    // (`completionRowsForSession` mints them). A session that never left the
+    // ready segment writes nothing. Teardown (below) runs regardless — a
+    // failed insert is logged and swallowed, never blocking the reaper.
+    if (yield* Ref.get(handle.progressed)) {
+      const rows = completionRowsForSession({
+        sessionId: handle.id,
+        workoutName: handle.workoutName,
+        workout: handle.workout,
+        host: handle.host,
+        participants: [...HashMap.values(yield* Ref.get(handle.roster))],
+        startedAt: handle.startedAt,
+        endedAt: yield* DateTime.now,
+      })
+      yield* Effect.catchAllCause(registry.completionsRepo.insertAll(rows), (cause) =>
+        Effect.logError('session completion write failed', cause),
+      )
+    }
     yield* Ref.update(registry.sessions, HashMap.remove(handle.id))
     yield* Deferred.succeed(handle.ended, undefined)
   })
@@ -311,11 +350,16 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
       id,
       host: params.host,
       workoutName: params.workoutName,
+      workout: params.workout,
       compiled: params.compiled,
       startedAt,
       stateRef: yield* SubscriptionRef.make(initial),
       rawSubs: yield* SubscriptionRef.make(0),
       presence: yield* Ref.make(HashMap.empty<UserId, PresenceEntry>()),
+      // Seeded with the host: they count as an ever-participant even if they
+      // never open a watch stream themselves.
+      roster: yield* Ref.make(HashMap.make([params.host.userId, params.host])),
+      progressed: yield* Ref.make(false),
       sem: yield* Effect.makeSemaphore(1),
       wakeup: yield* Queue.unbounded<undefined>(),
       ended: yield* Deferred.make<undefined>(),
@@ -400,7 +444,8 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
   scoped: Effect.gen(function* () {
     const layerScope = yield* Effect.scope
     const sessions = yield* Ref.make(HashMap.empty<SessionId, SessionHandle>())
-    const registry: Registry = { sessions, layerScope }
+    const completionsRepo = yield* CompletionsRepo
+    const registry: Registry = { sessions, layerScope, completionsRepo }
 
     return {
       start: (params: StartParams) => start(registry, params),

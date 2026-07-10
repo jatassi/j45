@@ -99,7 +99,7 @@ features:
       - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: session-history
     title: Per-participant completion log and history view
-    status: designed
+    status: validated
     depends_on: [live-session, flow-control]
     acceptance:
       - "Integration (TestClock): a session that progressed past the ready segment and is then quit writes one completion record per ever-participant — the host and a second user who watched then unsubscribed mid-session each see, via ListHistory, a record carrying the workout name, the as-run Workout snapshot, the host, both participants, startedAt, and endedAt."

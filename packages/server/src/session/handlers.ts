@@ -61,6 +61,9 @@ export const SessionHandlersLive: Layer.Layer<
           return yield* liveSessions.start({
             host: new Participant({ userId: user.id, displayName: user.displayName }),
             workoutName: library.workout.name,
+            // The as-run snapshot: the reflowed workout when a reflow applied,
+            // else the stored plan — the same value `compile` just consumed.
+            workout,
             compiled,
           })
         }).pipe(Effect.catchTag('SqlError', asDefect)),

@@ -9,6 +9,7 @@ import {
 
 import { AccountScreen } from '@/components/account-screen'
 import { ExerciseLibraryScreen } from '@/components/exercise-library-screen'
+import { HistoryScreen } from '@/components/history-screen'
 import { LibraryScreen } from '@/components/library-screen'
 import { SessionScreen } from '@/components/session-screen'
 import { TimerScreen } from '@/components/timer-screen'
@@ -98,6 +99,20 @@ const exercisesRoute = createRoute({
   component: ExerciseLibraryScreen,
 })
 
+/**
+ * `/history` — the caller's session completion list; no path params. Reads
+ * `RouterContext` for the authenticated `User` (host "you" vs display name),
+ * same `useRouteContext() as RouterContext` assertion as `accountRoute`.
+ */
+const historyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/history',
+  component: () => {
+    const { user } = historyRoute.useRouteContext() as RouterContext
+    return <HistoryScreen user={user} />
+  },
+})
+
 /** `/workouts/$workoutId` — `WorkoutDetailScreen`, keyed off the `workoutId` path param. */
 const workoutDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -156,6 +171,7 @@ const routeTree = rootRoute.addChildren([
   workoutReflowRoute,
   accountRoute,
   exercisesRoute,
+  historyRoute,
   notFoundRedirectRoute,
 ])
 

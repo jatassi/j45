@@ -1,5 +1,6 @@
 export * from './auth.js'
 export * from './exercise.js'
+export * from './history.js'
 export * from './library.js'
 export * from './reflow.js'
 export * from './rpc.js'

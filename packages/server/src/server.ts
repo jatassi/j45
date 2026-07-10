@@ -26,7 +26,9 @@ import { LibraryHandlersLive } from './library/handlers.js'
 import { WorkoutsRepo } from './library/workouts-repo.js'
 import { HealthzRouteLive, StaticRouteLive } from './routes.js'
 import { RpcHandlersLive } from './rpc-handlers.js'
+import { CompletionsRepo } from './session/completions-repo.js'
 import { SessionHandlersLive } from './session/handlers.js'
+import { HistoryHandlersLive } from './session/history-handlers.js'
 import { LiveSessions } from './session/live-sessions.js'
 import { SqlLive } from './sql.js'
 
@@ -68,14 +70,17 @@ const RpcProtocolLive = RpcServer.layerProtocolWebsocket({ path: '/rpc' }).pipe(
 
 /**
  * Every service `AuthMiddlewareLive` or an `AccountRpcs`/`OwnerRpcs`/
- * `LibraryRpcs`/`ExerciseRpcs`/`SessionRpcs` handler layer depends on,
- * merged once — `Layer.mergeAll` + `Layer.provide` share one instance of
- * each rather than duplicating it per consumer. `SqlLive` backs the
- * durable ones (`UserRepo`/`Invites`/`Passkeys`/`AuthSessions`/
- * `WorkoutsRepo`/`ExercisesRepo`); `LiveSessions` is the in-memory session
- * registry `SessionHandlersLive` drives and needs no SQL. `SqlLive` is also
- * the very layer `main.ts` merges to run migrations, and Effect memoizes
- * layers by reference, so this second reference (alongside
+ * `LibraryRpcs`/`ExerciseRpcs`/`SessionRpcs`/`HistoryRpcs` handler layer
+ * depends on, merged once — `Layer.mergeAll` + `Layer.provide` share one
+ * instance of each rather than duplicating it per consumer. `SqlLive` backs
+ * the durable ones (`UserRepo`/`Invites`/`Passkeys`/`AuthSessions`/
+ * `WorkoutsRepo`/`ExercisesRepo`/`CompletionsRepo`); `LiveSessions` is the
+ * in-memory session registry `SessionHandlersLive` drives — it holds no SQL
+ * itself but writes a completion row per ever-participant when a progressed
+ * session ends, so it is built over `CompletionsRepo` too (also exposed as
+ * its own sibling here since `HistoryHandlersLive` needs it directly).
+ * `SqlLive` is also the very layer `main.ts` merges to run migrations, and
+ * Effect memoizes layers by reference, so this second reference (alongside
  * `PasskeyRoutesProvided`'s below) opens no second database connection.
  */
 const AuthServicesLive = Layer.mergeAll(
@@ -85,7 +90,8 @@ const AuthServicesLive = Layer.mergeAll(
   AuthSessions.Default,
   WorkoutsRepo.Default,
   ExercisesRepo.Default,
-  LiveSessions.Default,
+  CompletionsRepo.Default,
+  LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default)),
 ).pipe(Layer.provide(SqlLive))
 
 /**
@@ -93,11 +99,12 @@ const AuthServicesLive = Layer.mergeAll(
  * (`ServerInfo`), `MeHandlerLive` (`Me`), `PasskeyHandlersLive` (the four
  * passkey `AccountRpcs` members), `OwnerHandlersLive` (every `OwnerRpcs`
  * member), `LibraryHandlersLive` (every `LibraryRpcs` member),
- * `ExerciseHandlersLive` (every `ExerciseRpcs` member), and
- * `SessionHandlersLive` (every `SessionRpcs` member) — together these
+ * `ExerciseHandlersLive` (every `ExerciseRpcs` member),
+ * `SessionHandlersLive` (every `SessionRpcs` member), and
+ * `HistoryHandlersLive` (every `HistoryRpcs` member) — together these
  * implement every member `AccountRpcs`, `OwnerRpcs`, `LibraryRpcs`,
- * `ExerciseRpcs`, and `SessionRpcs` declare, so `RpcServer.layer(J45Rpcs)`
- * below type-checks.
+ * `ExerciseRpcs`, `SessionRpcs`, and `HistoryRpcs` declare, so
+ * `RpcServer.layer(J45Rpcs)` below type-checks.
  */
 const RpcHandlersAll = Layer.mergeAll(
   RpcHandlersLive,
@@ -107,16 +114,17 @@ const RpcHandlersAll = Layer.mergeAll(
   LibraryHandlersLive,
   ExerciseHandlersLive,
   SessionHandlersLive,
+  HistoryHandlersLive,
 )
 
 /**
  * Serves the full `J45Rpcs` merge (`PublicRpcs` + `AccountRpcs` +
- * `OwnerRpcs` + `LibraryRpcs` + `ExerciseRpcs` + `SessionRpcs`) at `/rpc`,
- * guarded by `AuthMiddlewareLive` for every `AccountRpcs`/`OwnerRpcs`/
- * `LibraryRpcs`/`ExerciseRpcs`/`SessionRpcs` member — the merge this task
- * lands, now that every handler layer (and `AuthMiddlewareLive` itself)
- * exists. `ServerInfo` stays reachable with no session, exactly as
- * `PublicRpcs`'s doc comment promises.
+ * `OwnerRpcs` + `LibraryRpcs` + `ExerciseRpcs` + `SessionRpcs` +
+ * `HistoryRpcs`) at `/rpc`, guarded by `AuthMiddlewareLive` for every
+ * `AccountRpcs`/`OwnerRpcs`/`LibraryRpcs`/`ExerciseRpcs`/`SessionRpcs`/
+ * `HistoryRpcs` member — the merge this task lands, now that every handler
+ * layer (and `AuthMiddlewareLive` itself) exists. `ServerInfo` stays
+ * reachable with no session, exactly as `PublicRpcs`'s doc comment promises.
  */
 const RpcLive = RpcServer.layer(J45Rpcs).pipe(
   Layer.provide(RpcHandlersAll),
@@ -144,10 +152,10 @@ const PasskeyRoutesProvided = PasskeyRoutesLive.pipe(
  * `PasskeyRoutesProvided` for passkey login — both recorded exceptions to
  * the everything-through-rpc rule), `/rpc` (the full `J45Rpcs` merge over
  * websocket + ndjson, `AccountRpcs`/`OwnerRpcs`/`LibraryRpcs`/`ExerciseRpcs`/
- * `SessionRpcs` guarded by `AuthMiddlewareLive`), and static serving of
- * `packages/client/dist` for everything else. Requires `SqlClient.SqlClient`
- * (via `AuthRoutesLive`/`HttpAuthServicesLive`) — `main.ts` provides it from
- * `SqlLive`.
+ * `SessionRpcs`/`HistoryRpcs` guarded by `AuthMiddlewareLive`), and static
+ * serving of `packages/client/dist` for everything else. Requires
+ * `SqlClient.SqlClient` (via `AuthRoutesLive`/`HttpAuthServicesLive`) —
+ * `main.ts` provides it from `SqlLive`.
  */
 export const ServerLive = HttpRouter.Default.serve().pipe(
   Layer.provide(RpcLive),

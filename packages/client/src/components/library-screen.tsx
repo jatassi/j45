@@ -160,6 +160,28 @@ function ActiveSessionsStrip() {
   })
 }
 
+const navLinkClass = 'text-sm text-primary underline-offset-4 hover:underline'
+
+/** Header nav: timer, exercises, history, account. */
+function LibraryNav() {
+  return (
+    <nav className="flex items-center gap-4">
+      <Link to="/timer" data-testid="timer-nav-link" className={navLinkClass}>
+        Timer
+      </Link>
+      <Link to="/exercises" data-testid="exercises-nav-link" className={navLinkClass}>
+        Exercises
+      </Link>
+      <Link to="/history" data-testid="history-nav-link" className={navLinkClass}>
+        History
+      </Link>
+      <Link to="/account" data-testid="account-nav-link" className={navLinkClass}>
+        Account
+      </Link>
+    </nav>
+  )
+}
+
 /**
  * The library home (`/`): active live sessions (when any), the caller's
  * workouts from `ListWorkouts`, and a header nav to `/account`. The `/`
@@ -170,29 +192,7 @@ export function LibraryScreen() {
     <div className="flex min-h-svh flex-col items-center gap-6 p-6" data-testid="library-screen">
       <header className="flex w-full max-w-sm items-center justify-between">
         <h1 className="text-lg font-medium">Your library</h1>
-        <nav className="flex items-center gap-4">
-          <Link
-            to="/timer"
-            data-testid="timer-nav-link"
-            className="text-sm text-primary underline-offset-4 hover:underline"
-          >
-            Timer
-          </Link>
-          <Link
-            to="/exercises"
-            data-testid="exercises-nav-link"
-            className="text-sm text-primary underline-offset-4 hover:underline"
-          >
-            Exercises
-          </Link>
-          <Link
-            to="/account"
-            data-testid="account-nav-link"
-            className="text-sm text-primary underline-offset-4 hover:underline"
-          >
-            Account
-          </Link>
-        </nav>
+        <LibraryNav />
       </header>
       <div className="flex w-full max-w-sm justify-end">
         <Link

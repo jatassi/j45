@@ -32,6 +32,7 @@ import { SESSION_COOKIE_NAME } from '../../src/auth/cookie.js'
 import { AuthMiddlewareLive } from '../../src/auth/middleware.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
+import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
@@ -55,15 +56,16 @@ const SqlTestLive = MigratorLive.pipe(
  * with, sharing one in-memory sqlite connection and one live-session
  * registry.
  */
+const LiveSessionsLive = LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default))
+
 const TestServicesLive = Layer.mergeAll(
   UserRepo.Default,
   AuthSessions.Default,
   WorkoutsRepo.Default,
-  LiveSessions.Default,
+  LiveSessionsLive,
+  CompletionsRepo.Default,
   AuthMiddlewareLive.pipe(Layer.provide(Layer.mergeAll(AuthSessions.Default, UserRepo.Default))),
-  SessionHandlersLive.pipe(
-    Layer.provide(Layer.mergeAll(WorkoutsRepo.Default, LiveSessions.Default)),
-  ),
+  SessionHandlersLive.pipe(Layer.provide(Layer.mergeAll(WorkoutsRepo.Default, LiveSessionsLive))),
 ).pipe(Layer.provideMerge(SqlTestLive))
 
 const makeWorkout = (name: string) =>
