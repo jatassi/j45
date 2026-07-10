@@ -8,7 +8,7 @@ it may build.
 ## Feature graph
 
 ```yaml
-design_version: 6
+design_version: 7
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
@@ -87,12 +87,28 @@ features:
       - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: flow-control
     title: Structural reflow (sets↔laps, pod regrouping) at edit-time and launch-time
-    status: proposed
+    status: designed
     depends_on: [live-session, plan-editing]
+    acceptance:
+      - "Unit: applyReflow on the canonical example — a sets workout whose flattened stations include push-up, sit-up, and squat, regrouped into one 3-station pod run as laps with rounds carried over — matches an exact golden compiled segment sequence (stations interleaved within each lap), and the result keeps the source's name, focus, and note."
+      - "Unit: applyReflow supports reordering stations across pods and dropping them (an unreferenced source station appears nowhere in the result); a rounds override replaces flow.rounds while an absent override carries the source rounds unchanged; an out-of-range or duplicated station index fails ReflowInvalid — never a crash or a silent fix-up."
+      - "Integration: StartSession with a reflow spec starts a session whose SessionState.compiled equals compile(applyReflow(source, spec)) while the stored library workout row is unchanged; an ill-fitting spec fails ReflowInvalid; a foreign or unknown workout id still fails WorkoutNotFound."
+      - "e2e (chromium + webkit): from a workout detail screen, Start with reflow opens the editor's launch mode; regrouping stations into one pod and flipping sets→laps updates the live works · MM:SS chip; Start lands on /session/<id> running the reflowed structure, and the library workout is unchanged after a page reload."
+      - "e2e: the same launch-mode changes applied via Save to plan persist — the detail screen shows the new grouping after a page reload."
+      - "e2e: launch mode offers no content edits (station names read-only, no add-station control); the normal editor's new cross-pod move relocates a station to another pod and the change persists after save and reload."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: session-history
     title: Per-participant completion log and history view
-    status: proposed
-    depends_on: [live-session]
+    status: designed
+    depends_on: [live-session, flow-control]
+    acceptance:
+      - "Integration (TestClock): a session that progressed past the ready segment and is then quit writes one completion record per ever-participant — the host and a second user who watched then unsubscribed mid-session each see, via ListHistory, a record carrying the workout name, the as-run Workout snapshot, the host, both participants, startedAt, and endedAt."
+      - "Integration (TestClock): a session quit while still in the ready segment writes no records for anyone; a session that progressed and is then GC'd after 60 idle seconds writes them."
+      - "Integration: a session started with a reflow spec records the reflowed Workout as its snapshot — the spec's grouping, not the stored plan's."
+      - "Integration: ListHistory returns only the caller's records, newest-first by endedAt, and fails Unauthorized without a valid session cookie; rebuilding the server layer (a restart) preserves completion rows while ListActiveSessions is empty."
+      - "Integration: given a database migrated through 0004 with an existing user, migration 0005 creates session_completions and that user's ListHistory returns an empty list."
+      - "e2e (chromium + webkit): two logged-in contexts run a short session (the host quits after the first work segment); /history, reached via a home nav link, shows the workout name, date, host display name, and both participant names — for both users."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: exercise-library
     title: First-class tagged exercise library seeded from program content
     status: validated
@@ -106,8 +122,16 @@ features:
       - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: workout-generation
     title: Rule-based workout generator — templates + constraints incl. no-repeat-recently
-    status: proposed
+    status: designed
     depends_on: [session-history, exercise-library]
+    acceptance:
+      - "Unit: generate is deterministic — identical catalog, recent names, constraints, and seed yield an identical Workout — and its result always decodes as a valid Workout and compiles."
+      - "Unit: every station in a generated workout names a catalog exercise whose equipment is a subset of the allowed set and whose modality matches the focus (cardio→cardio, strength→strength, hybrid→either); with an emphasis set, every strength-modality pick includes that muscle group; a name on the recent list is never picked (case-insensitive)."
+      - "Unit: for every target from 15 to 45 minutes in 5-minute steps, with the full seed catalog and no exclusions, the generated workout's compiled total duration is within 10% of the target."
+      - "Unit: an equipment filter that empties the pool, a recent list that starves it below the template's station count, and a duration no template fits each fail GenerationInfeasible with a reason naming the constraint — never a crash."
+      - "Integration: GenerateWorkout assembles only the caller's catalog and their newest noRepeatSessions completion snapshots — an exercise named in the caller's recent history is absent from the result, an identical history on another account has no effect, and noRepeatSessions 0 disables exclusion; ListWorkouts is identical before and after (nothing persisted)."
+      - "e2e (chromium + webkit): /generate via a home nav link: choosing focus, duration, equipment, and emphasis then Generate shows a preview with the workout codename and a works · MM:SS chip; Regenerate changes the preview's data-seed; Save lands the workout in the library and it survives a reload; Edit opens it in the workout editor."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: manual-timer
     title: Quick ad-hoc countdown timer on the domain timer machinery
     status: validated

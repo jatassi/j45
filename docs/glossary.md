@@ -23,9 +23,11 @@ unrecorded wherever they fit.
   muscle groups, equipment, intensity). Distinct from a **Station**, which
   stays free text inside a workout: the catalog is a vocabulary the
   generator draws from, never a foreign-key target for stations.
-- **Reflow** — a structure-preserving-content transform on a workout: regrouping
-  stations into pods and/or switching flow type (sets↔laps) with retiming.
-  Applicable permanently (edit-time) or as a one-off overlay (launch-time).
+- **Reflow** — a structural transform on a workout that never authors content:
+  regrouping its existing stations into different pods (reorder and drop
+  allowed, never new or duplicated stations), switching flow type (sets↔laps),
+  and optionally retiming rounds. Applicable permanently (edit-time) or as a
+  one-off overlay at session launch (the saved plan untouched).
 - **Session** — one live run of a workout: server-owned state (current segment,
   clock, participants), synced to all joined phones. Ephemeral; only its
   completion record persists. (Login state is never called a "session" bare —
