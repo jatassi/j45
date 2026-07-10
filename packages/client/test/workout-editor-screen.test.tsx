@@ -19,11 +19,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LibraryScreen } from '@/components/library-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 import { EditWorkoutScreen, NewWorkoutScreen } from '@/components/workout-editor-screen'
+import { setInitialDraft, takeInitialDraft } from '@/lib/editor-draft'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  // Drain any leftover one-shot handoff so tests stay isolated.
+  takeInitialDraft()
 })
 
 type Handlers = Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>
@@ -274,5 +277,64 @@ describe('WorkoutEditorScreen', () => {
     await screen.findByTestId('library-screen')
     // The fake runtime throws on any unexpected rpc; reaching the library with
     // only ListWorkouts registered proves no CreateWorkout fired.
+  })
+
+  it('with a pending draft, NewWorkoutScreen seeds name, pods, stations, and flow; without one, the blank editor renders', async () => {
+    setInitialDraft(athleticaWorkout)
+    renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
+
+    await screen.findByTestId('workout-editor-screen')
+    expect(screen.getByTestId<HTMLInputElement>('editor-name').value).toBe('Athletica')
+    expect(
+      screen.getAllByTestId('pod-name-input').map((el) => (el as HTMLInputElement).value),
+    ).toEqual(['Pod 1', 'Pod 2', 'Pod 3'])
+    expect(
+      screen.getAllByTestId('station-name-input').map((el) => (el as HTMLInputElement).value),
+    ).toEqual([
+      'Rower',
+      'Squat press',
+      'Burpee',
+      'Bike',
+      'Swing',
+      'Climbers',
+      'Snatch',
+      'Step-ups',
+      'Slam ball',
+    ])
+    expect(screen.getByTestId<HTMLSelectElement>('editor-flow-type').value).toBe('laps')
+    expect(screen.getByTestId<HTMLInputElement>('editor-round-count').value).toBe('3')
+    expect(screen.getByTestId<HTMLInputElement>('editor-uniform-work').value).toBe('40')
+    expect(screen.getByTestId<HTMLInputElement>('editor-uniform-rest').value).toBe('20')
+    expect(screen.getByTestId('editor-summary').textContent).toBe('27 works · 26:45')
+
+    cleanup()
+
+    // No pending draft → blank editor exactly as before.
+    renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
+    await screen.findByTestId('workout-editor-screen')
+    expect(screen.getByTestId<HTMLInputElement>('editor-name').value).toBe('')
+    expect(screen.getAllByTestId('pod-name-input')).toHaveLength(1)
+    expect(screen.getByTestId<HTMLInputElement>('pod-name-input').value).toBe('Pod 1')
+    expect(screen.getAllByTestId('station-name-input')).toHaveLength(1)
+    expect(screen.getByTestId<HTMLInputElement>('station-name-input').value).toBe('')
+    expect(screen.getByTestId<HTMLSelectElement>('editor-flow-type').value).toBe('laps')
+    expect(screen.getByTestId<HTMLInputElement>('editor-round-count').value).toBe('1')
+  })
+
+  it('takeInitialDraft is one-shot — a remount after consumption yields the blank editor', async () => {
+    setInitialDraft(athleticaWorkout)
+    renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
+
+    await screen.findByTestId('workout-editor-screen')
+    expect(screen.getByTestId<HTMLInputElement>('editor-name').value).toBe('Athletica')
+
+    cleanup()
+
+    // Draft was consumed on first mount; remount must not re-seed.
+    renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
+    await screen.findByTestId('workout-editor-screen')
+    expect(screen.getByTestId<HTMLInputElement>('editor-name').value).toBe('')
+    expect(screen.getAllByTestId('station-name-input')).toHaveLength(1)
+    expect(screen.getByTestId<HTMLInputElement>('station-name-input').value).toBe('')
   })
 })

@@ -19,6 +19,7 @@ import {
   MetaSection,
   PodsSection,
 } from '@/components/workout-editor-fields'
+import { takeInitialDraft } from '@/lib/editor-draft'
 import * as ReflowDraft from '@/lib/reflow-draft'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import { decodeDraft, summarizeDraft } from '@/lib/workout-draft'
@@ -68,11 +69,20 @@ function WorkoutEditorForm({ heading, initial, onSave, onCancel }: EditorFormPro
   )
 }
 
-/** `/workouts/new` — a blank draft; Save creates a caller-owned workout and opens its detail. */
+/**
+ * `/workouts/new` — blank draft, or a one-shot pending draft from
+ * `takeInitialDraft` when generation (or another producer) handed one off.
+ * Save creates a caller-owned workout and opens its detail.
+ */
 export function NewWorkoutScreen() {
   const navigate = useNavigate()
   const refreshList = useAtomRefresh(listWorkoutsAtom)
   const [, create] = useAtom(createWorkoutAtom, { mode: 'promise' })
+  // Consume the handoff once on mount; remounts after take see blankState.
+  const initial = React.useMemo(() => {
+    const draft = takeInitialDraft()
+    return draft === undefined ? Editor.blankState() : Editor.workoutToState(draft)
+  }, [])
   const onSave = (workout: Workout) => {
     void create({ payload: { workout } })
       .then((created: LibraryWorkout) => {
@@ -84,7 +94,7 @@ export function NewWorkoutScreen() {
   return (
     <WorkoutEditorForm
       heading="New workout"
-      initial={Editor.blankState()}
+      initial={initial}
       onSave={onSave}
       onCancel={() => void navigate({ to: '/' })}
     />

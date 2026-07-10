@@ -12,6 +12,7 @@ import {
   UserId,
 } from './auth.js'
 import { Exercise, ExerciseId, ExerciseNotFound, LibraryExercise } from './exercise.js'
+import { GenerationConstraints, GenerationInfeasible } from './generation.js'
 import { SessionCompletion } from './history.js'
 import { LibraryWorkout, WorkoutId, WorkoutNotFound } from './library.js'
 import { Reflow, ReflowInvalid } from './reflow.js'
@@ -160,11 +161,26 @@ export class HistoryRpcs extends RpcGroup.make(
 ).middleware(AuthMiddleware) {}
 
 /**
+ * Rpcs for pure workout generation. Every member requires a valid session
+ * (`AuthMiddleware` provides `CurrentUser`, fails `Unauthorized`). Nothing is
+ * persisted — the handler reads the caller's exercise catalog and completion
+ * history, runs the domain generator, and returns the `Workout` (or
+ * `GenerationInfeasible` when constraints starve the pool).
+ */
+export class GenerationRpcs extends RpcGroup.make(
+  Rpc.make('GenerateWorkout', {
+    payload: GenerationConstraints,
+    success: Workout,
+    error: GenerationInfeasible,
+  }),
+).middleware(AuthMiddleware) {}
+
+/**
  * The single rpc contract shared by every J45 client and server — the merge
  * of `PublicRpcs` + `AccountRpcs` + `OwnerRpcs` + `LibraryRpcs` +
- * `ExerciseRpcs` + `SessionRpcs` + `HistoryRpcs`. Defined exactly once, here —
- * both `packages/server` and `packages/client` import it from `@j45/domain`
- * rather than redeclaring it.
+ * `ExerciseRpcs` + `SessionRpcs` + `HistoryRpcs` + `GenerationRpcs`. Defined
+ * exactly once, here — both `packages/server` and `packages/client` import it
+ * from `@j45/domain` rather than redeclaring it.
  */
 export class J45Rpcs extends PublicRpcs.merge(
   AccountRpcs,
@@ -173,4 +189,5 @@ export class J45Rpcs extends PublicRpcs.merge(
   ExerciseRpcs,
   SessionRpcs,
   HistoryRpcs,
+  GenerationRpcs,
 ) {}

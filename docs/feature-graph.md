@@ -122,7 +122,7 @@ features:
       - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: workout-generation
     title: Rule-based workout generator — templates + constraints incl. no-repeat-recently
-    status: designed
+    status: validated
     depends_on: [session-history, exercise-library]
     acceptance:
       - "Unit: generate is deterministic — identical catalog, recent names, constraints, and seed yield an identical Workout — and its result always decodes as a valid Workout and compiles."

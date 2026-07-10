@@ -24,9 +24,9 @@ describe('ServerInfo', () => {
 })
 
 describe('J45Rpcs', () => {
-  it('merges PublicRpcs, AccountRpcs, OwnerRpcs, LibraryRpcs, ExerciseRpcs, SessionRpcs, and HistoryRpcs', () => {
+  it('merges PublicRpcs, AccountRpcs, OwnerRpcs, LibraryRpcs, ExerciseRpcs, SessionRpcs, HistoryRpcs, and GenerationRpcs', () => {
     const rpcs = J45Rpcs.requests
-    expect(rpcs.size).toBe(26)
+    expect(rpcs.size).toBe(27)
     expect(rpcs.has('ServerInfo')).toBe(true)
     expect(rpcs.has('Me')).toBe(true)
     expect(rpcs.has('ListUsers')).toBe(true)
@@ -34,5 +34,6 @@ describe('J45Rpcs', () => {
     expect(rpcs.has('ListExercises')).toBe(true)
     expect(rpcs.has('StartSession')).toBe(true)
     expect(rpcs.has('ListHistory')).toBe(true)
+    expect(rpcs.has('GenerateWorkout')).toBe(true)
   })
 })

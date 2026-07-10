@@ -80,6 +80,6 @@ describe('HistoryRpcs', () => {
 
     // Handler-layer commit merges HistoryRpcs into the shared contract.
     expect(J45Rpcs.requests.has('ListHistory')).toBe(true)
-    expect(J45Rpcs.requests.size).toBe(26)
+    expect(J45Rpcs.requests.size).toBe(27)
   })
 })

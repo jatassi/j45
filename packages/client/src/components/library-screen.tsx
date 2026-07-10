@@ -162,12 +162,15 @@ function ActiveSessionsStrip() {
 
 const navLinkClass = 'text-sm text-primary underline-offset-4 hover:underline'
 
-/** Header nav: timer, exercises, history, account. */
+/** Header nav: timer, generate, exercises, history, account. */
 function LibraryNav() {
   return (
     <nav className="flex items-center gap-4">
       <Link to="/timer" data-testid="timer-nav-link" className={navLinkClass}>
         Timer
+      </Link>
+      <Link to="/generate" data-testid="generate-nav-link" className={navLinkClass}>
+        Generate
       </Link>
       <Link to="/exercises" data-testid="exercises-nav-link" className={navLinkClass}>
         Exercises

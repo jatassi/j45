@@ -9,6 +9,7 @@ import {
 
 import { AccountScreen } from '@/components/account-screen'
 import { ExerciseLibraryScreen } from '@/components/exercise-library-screen'
+import { GenerateScreen } from '@/components/generate-screen'
 import { HistoryScreen } from '@/components/history-screen'
 import { LibraryScreen } from '@/components/library-screen'
 import { SessionScreen } from '@/components/session-screen'
@@ -72,6 +73,13 @@ const timerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/timer',
   component: TimerScreen,
+})
+
+/** `/generate` — procedural workout generation form + preview. */
+const generateRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/generate',
+  component: GenerateScreen,
 })
 
 /** `/session/$sessionId` — the live workout player, keyed off the `sessionId` path param. */
@@ -164,6 +172,7 @@ const notFoundRedirectRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   timerRoute,
+  generateRoute,
   sessionRoute,
   workoutNewRoute,
   workoutDetailRoute,
