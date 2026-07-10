@@ -49,7 +49,7 @@ type FlatStation = {
   readonly stationInPod: number
 }
 
-const flattenStations = (workout: Workout): readonly FlatStation[] =>
+export const flattenStations = (workout: Workout): readonly FlatStation[] =>
   workout.pods.flatMap((pod, podIndex) =>
     pod.stations.map((station, index) => ({
       station,

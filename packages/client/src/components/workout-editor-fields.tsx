@@ -18,7 +18,7 @@ import * as Editor from '@/lib/workout-editor-state'
 type SetState = React.Dispatch<React.SetStateAction<Editor.EditorState>>
 type SectionProps = { readonly state: Editor.EditorState; readonly setState: SetState }
 
-const inputClass = 'rounded-md border border-input bg-input/30 px-2.5 py-1.5 text-sm'
+export const inputClass = 'rounded-md border border-input bg-input/30 px-2.5 py-1.5 text-sm'
 
 type IconButtonProps = {
   readonly testid: string
@@ -27,7 +27,7 @@ type IconButtonProps = {
   readonly onClick: () => void
 }
 
-function IconButton({ testid, label, variant, onClick }: IconButtonProps) {
+export function IconButton({ testid, label, variant, onClick }: IconButtonProps) {
   return (
     <Button type="button" size="sm" variant={variant} data-testid={testid} onClick={onClick}>
       {label}
@@ -68,12 +68,52 @@ export function MetaSection({ state, setState }: SectionProps) {
 
 type StationRowProps = {
   readonly setState: SetState
+  readonly pods: readonly Editor.EPod[]
   readonly podIndex: number
   readonly stationIndex: number
   readonly station: Editor.EStation
 }
 
-function StationEditor({ setState, podIndex, stationIndex, station }: StationRowProps) {
+type MoveToPodProps = {
+  readonly setState: SetState
+  readonly pods: readonly Editor.EPod[]
+  readonly podIndex: number
+  readonly stationIndex: number
+}
+
+function MoveToPodSelect({ setState, pods, podIndex, stationIndex }: MoveToPodProps) {
+  const otherPods = pods
+    .map((pod, index) => ({ pod, index }))
+    .filter(({ index }) => index !== podIndex)
+  if (otherPods.length === 0) {
+    return null
+  }
+  return (
+    <select
+      data-testid="station-move-to-pod"
+      className={inputClass}
+      value=""
+      onChange={(e) => {
+        const targetPodIndex = Number.parseInt(e.target.value, 10)
+        if (Number.isNaN(targetPodIndex)) {
+          return
+        }
+        setState((s) => Editor.moveStationToPod(s, { podIndex, stationIndex, targetPodIndex }))
+      }}
+    >
+      <option value="" disabled>
+        Move to pod…
+      </option>
+      {otherPods.map(({ pod, index }) => (
+        <option key={pod.id} value={index}>
+          {pod.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function StationEditor({ setState, pods, podIndex, stationIndex, station }: StationRowProps) {
   const patch = (p: Partial<Omit<Editor.EStation, 'id'>>) =>
     setState((s) => Editor.setStationField(s, { podIndex, stationIndex, patch: p }))
   const move = (direction: -1 | 1) =>
@@ -97,6 +137,12 @@ function StationEditor({ setState, podIndex, stationIndex, station }: StationRow
           onClick={() => setState((s) => Editor.removeStation(s, podIndex, stationIndex))}
         />
       </div>
+      <MoveToPodSelect
+        setState={setState}
+        pods={pods}
+        podIndex={podIndex}
+        stationIndex={stationIndex}
+      />
       <input
         data-testid="station-detail-input"
         className={inputClass}
@@ -110,11 +156,12 @@ function StationEditor({ setState, podIndex, stationIndex, station }: StationRow
 
 type PodEditorProps = {
   readonly setState: SetState
+  readonly pods: readonly Editor.EPod[]
   readonly podIndex: number
   readonly pod: Editor.EPod
 }
 
-function PodEditor({ setState, podIndex, pod }: PodEditorProps) {
+function PodEditor({ setState, pods, podIndex, pod }: PodEditorProps) {
   return (
     <Card size="sm" data-testid="pod-editor">
       <CardContent className="flex flex-col gap-2">
@@ -137,6 +184,7 @@ function PodEditor({ setState, podIndex, pod }: PodEditorProps) {
           <StationEditor
             key={station.id}
             setState={setState}
+            pods={pods}
             podIndex={podIndex}
             stationIndex={i}
             station={station}
@@ -160,7 +208,7 @@ export function PodsSection({ state, setState }: SectionProps) {
   return (
     <section className="flex w-full flex-col gap-3">
       {state.pods.map((pod, i) => (
-        <PodEditor key={pod.id} setState={setState} podIndex={i} pod={pod} />
+        <PodEditor key={pod.id} setState={setState} pods={state.pods} podIndex={i} pod={pod} />
       ))}
       <Button
         type="button"
@@ -181,7 +229,7 @@ type RoundPairProps = {
   readonly onChange: (patch: Partial<DraftRound>) => void
 }
 
-function RoundPair({ testidPrefix, round, onChange }: RoundPairProps) {
+export function RoundPair({ testidPrefix, round, onChange }: RoundPairProps) {
   return (
     <div className="flex gap-1">
       <input

@@ -242,35 +242,25 @@ type ActionButtonsProps = {
 
 /** Rename / duplicate / delete triggers — split out to keep `WorkoutActions` under `max-lines-per-function`. */
 function ActionButtons({ onRename, onDuplicate, onDelete }: ActionButtonsProps) {
+  const actions = [
+    { testid: 'rename-button', label: 'Rename', variant: 'outline', onClick: onRename },
+    { testid: 'duplicate-button', label: 'Duplicate', variant: 'outline', onClick: onDuplicate },
+    { testid: 'delete-button', label: 'Delete', variant: 'destructive', onClick: onDelete },
+  ] as const
   return (
     <div className="flex items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        data-testid="rename-button"
-        onClick={onRename}
-      >
-        Rename
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        data-testid="duplicate-button"
-        onClick={onDuplicate}
-      >
-        Duplicate
-      </Button>
-      <Button
-        type="button"
-        variant="destructive"
-        size="sm"
-        data-testid="delete-button"
-        onClick={onDelete}
-      >
-        Delete
-      </Button>
+      {actions.map(({ testid, label, variant, onClick }) => (
+        <Button
+          key={testid}
+          type="button"
+          variant={variant}
+          size="sm"
+          data-testid={testid}
+          onClick={onClick}
+        >
+          {label}
+        </Button>
+      ))}
     </div>
   )
 }
@@ -335,13 +325,21 @@ function WorkoutActions({ id, name }: WorkoutActionsProps) {
   )
 }
 
-/** The primary Start session action: `StartSession`, then on to `/session/<id>`. */
-function StartSessionButton({ onStart }: { readonly onStart: () => void }) {
+/** Start session, plus the Start-with-reflow entry into launch mode
+ *  (`/workouts/<id>/reflow`) — run reflowed without editing the saved plan. */
+function StartActions({ id, onStart }: { readonly id: WorkoutId; readonly onStart: () => void }) {
   return (
-    <div className="w-full max-w-sm">
+    <div className="flex w-full max-w-sm flex-col gap-2">
       <Button type="button" className="w-full" data-testid="start-session-button" onClick={onStart}>
         Start session
       </Button>
+      <Link
+        to={`/workouts/${id}/reflow`}
+        data-testid="start-with-reflow-button"
+        className={`${editLinkClass} text-center`}
+      >
+        Start with reflow
+      </Link>
     </div>
   )
 }
@@ -379,7 +377,7 @@ function WorkoutDetail({ libraryWorkout }: { readonly libraryWorkout: LibraryWor
         <span data-testid="workout-flow-summary">{formatFlowSummary(workout.flow)}</span>
         <span data-testid="workout-duration">{formatDuration(totalDurationMillis)}</span>
       </div>
-      <StartSessionButton onStart={onStartSession} />
+      <StartActions id={id} onStart={onStartSession} />
       <ul className="flex w-full max-w-sm flex-col gap-3">
         {workout.pods.map((pod) => (
           <li key={pod.name}>

@@ -87,7 +87,7 @@ features:
       - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: flow-control
     title: Structural reflow (sets↔laps, pod regrouping) at edit-time and launch-time
-    status: designed
+    status: validated
     depends_on: [live-session, plan-editing]
     acceptance:
       - "Unit: applyReflow on the canonical example — a sets workout whose flattened stations include push-up, sit-up, and squat, regrouped into one 3-station pod run as laps with rounds carried over — matches an exact golden compiled segment sequence (stations interleaved within each lap), and the result keeps the source's name, focus, and note."

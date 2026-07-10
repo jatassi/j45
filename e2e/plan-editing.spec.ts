@@ -119,8 +119,8 @@ test.describe('plan-editing (chromium + webkit)', () => {
   )
 
   test(
-    'editing a duplicated Athletica: flow switch, rename, reorder, summary chip, and ' +
-      'validation all persist across reloads',
+    'editing a duplicated Athletica: flow switch, rename, reorder, cross-pod move, ' +
+      'summary chip, and validation all persist across reloads',
     async ({ page }, testInfo) => {
       const env = readE2eEnv()
       const projectName = projectNameFrom(testInfo)
@@ -129,6 +129,7 @@ test.describe('plan-editing (chromium + webkit)', () => {
       const displayName = `Plan Editing Edit (${projectName})`
       const pin = '864209'
       const renamedStation = 'Rower Sprint Renamed'
+      const movedStation = 'Dumbbell squat + alternating shoulder press'
 
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
 
@@ -160,15 +161,31 @@ test.describe('plan-editing (chromium + webkit)', () => {
       await stationEditors.nth(0).getByTestId('station-name-input').fill(renamedStation)
       await stationEditors.nth(1).getByTestId('station-down').click()
 
+      // After reorder: renamed, Burpee, Dumbbell. Move Dumbbell (last) to Pod 2.
+      await stationEditors
+        .nth(2)
+        .getByTestId('station-move-to-pod')
+        .selectOption({ label: 'Pod 2' })
+
+      await expect(pod1.getByTestId('station-name-input')).toHaveCount(2)
+      await expect(pod1.getByTestId('station-name-input').nth(0)).toHaveValue(renamedStation)
+      await expect(pod1.getByTestId('station-name-input').nth(1)).toHaveValue('Burpee')
+      const pod2 = page.getByTestId('pod-editor').nth(1)
+      await expect(pod2.getByTestId('station-name-input')).toHaveCount(4)
+      await expect(pod2.getByTestId('station-name-input').nth(3)).toHaveValue(movedStation)
+
       await expect(page.getByTestId('editor-save')).toBeEnabled()
       await page.getByTestId('editor-save').click()
 
       await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
       const firstPod = page.getByTestId('pod').first()
-      await expect(firstPod.getByTestId('station-name')).toHaveText([
-        renamedStation,
-        'Burpee',
-        'Dumbbell squat + alternating shoulder press',
+      await expect(firstPod.getByTestId('station-name')).toHaveText([renamedStation, 'Burpee'])
+      const secondPod = page.getByTestId('pod').nth(1)
+      await expect(secondPod.getByTestId('station-name')).toHaveText([
+        'Bike or treadmill — sprint effort',
+        'Kettlebell swing',
+        'Mountain climbers — fast, hips low',
+        movedStation,
       ])
 
       await page.reload()
@@ -176,7 +193,12 @@ test.describe('plan-editing (chromium + webkit)', () => {
       await expect(page.getByTestId('pod').first().getByTestId('station-name')).toHaveText([
         renamedStation,
         'Burpee',
-        'Dumbbell squat + alternating shoulder press',
+      ])
+      await expect(page.getByTestId('pod').nth(1).getByTestId('station-name')).toHaveText([
+        'Bike or treadmill — sprint effort',
+        'Kettlebell swing',
+        'Mountain climbers — fast, hips low',
+        movedStation,
       ])
 
       await page.getByTestId('edit-button').click()

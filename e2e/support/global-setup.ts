@@ -41,6 +41,9 @@ const TIMER_INVITES_PER_PROJECT = 2
 /** How many fresh registration invites `plan-editing.spec.ts` needs per project (one per test that registers its own per-project account). */
 const PLAN_EDITING_INVITES_PER_PROJECT = 2
 
+/** How many fresh registration invites `flow-control.spec.ts` needs per project (one per test that registers its own per-project account). */
+const FLOW_CONTROL_INVITES_PER_PROJECT = 2
+
 /**
  * Reserves a free TCP port by briefly binding to port 0, then releasing it
  * before the real server (a separate process) binds it. Mirrors
@@ -108,6 +111,7 @@ const registerOwnerAndMintInvites = async (
   readonly libraryInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly timerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly planEditingInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  readonly flowControlInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly exercisesInvitesByProject: Record<E2eProjectName, string>
 }> => {
   const browser = await chromium.launch()
@@ -157,6 +161,7 @@ const registerOwnerAndMintInvites = async (
     const libraryInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
     const timerInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
     const planEditingInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
+    const flowControlInvitesByProject = {} as Record<E2eProjectName, readonly [string, string]>
     const exercisesInvitesByProject = {} as Record<E2eProjectName, string>
     for (const projectName of PROJECT_NAMES) {
       registerInvitesByProject[projectName] = await mintPair(
@@ -169,6 +174,10 @@ const registerOwnerAndMintInvites = async (
         PLAN_EDITING_INVITES_PER_PROJECT,
         'plan-editing',
       )
+      flowControlInvitesByProject[projectName] = await mintPair(
+        FLOW_CONTROL_INVITES_PER_PROJECT,
+        'flow-control',
+      )
       // One invite per project for `exercises.spec.ts`'s single registration
       // (the multi-invite pools pass their count into mintPair; a single
       // invite is just mintOneInvite once).
@@ -180,6 +189,7 @@ const registerOwnerAndMintInvites = async (
       libraryInvitesByProject,
       timerInvitesByProject,
       planEditingInvitesByProject,
+      flowControlInvitesByProject,
       exercisesInvitesByProject,
     }
   } finally {
@@ -239,6 +249,7 @@ export default async function globalSetup(): Promise<void> {
     libraryInvitesByProject,
     timerInvitesByProject,
     planEditingInvitesByProject,
+    flowControlInvitesByProject,
     exercisesInvitesByProject,
   } = await registerOwnerAndMintInvites(baseUrl)
 
@@ -254,6 +265,7 @@ export default async function globalSetup(): Promise<void> {
     libraryInvitesByProject,
     timerInvitesByProject,
     planEditingInvitesByProject,
+    flowControlInvitesByProject,
     exercisesInvitesByProject,
   }
   writeFileSync(stateFilePath, JSON.stringify(state))
@@ -273,6 +285,8 @@ export default async function globalSetup(): Promise<void> {
   process.env.E2E_TIMER_INVITES_WEBKIT = timerInvitesByProject.webkit.join(',')
   process.env.E2E_PLAN_EDITING_INVITES_CHROMIUM = planEditingInvitesByProject.chromium.join(',')
   process.env.E2E_PLAN_EDITING_INVITES_WEBKIT = planEditingInvitesByProject.webkit.join(',')
+  process.env.E2E_FLOW_CONTROL_INVITES_CHROMIUM = flowControlInvitesByProject.chromium.join(',')
+  process.env.E2E_FLOW_CONTROL_INVITES_WEBKIT = flowControlInvitesByProject.webkit.join(',')
   process.env.E2E_EXERCISES_INVITES_CHROMIUM = exercisesInvitesByProject.chromium
   process.env.E2E_EXERCISES_INVITES_WEBKIT = exercisesInvitesByProject.webkit
 }

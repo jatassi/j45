@@ -62,7 +62,14 @@ export type E2eState = {
    */
   readonly planEditingInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   /**
-   * A fifth, independent invite per project — `exercises.spec.ts`'s own
+   * A fifth, independent pair of fresh invites per project —
+   * `flow-control.spec.ts`'s own per-project accounts (one per test in that
+   * file), kept out of the other pools so the spec files never race for the
+   * same codes. Minted the same way, in the same `global-setup.ts` pass.
+   */
+  readonly flowControlInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  /**
+   * A sixth, independent invite per project — `exercises.spec.ts`'s own
    * per-project account (one registration in that file), kept out of the
    * other pools so no spec ever races another for the same code. Minted the
    * same way, in the same `global-setup.ts` pass.
@@ -92,6 +99,7 @@ export type E2eEnv = {
   readonly libraryInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly timerInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly planEditingInvitesByProject: Record<E2eProjectName, readonly [string, string]>
+  readonly flowControlInvitesByProject: Record<E2eProjectName, readonly [string, string]>
   readonly exercisesInvitesByProject: Record<E2eProjectName, string>
 }
 
@@ -141,6 +149,10 @@ export function readE2eEnv(): E2eEnv {
     planEditingInvitesByProject: {
       chromium: parseInvitePair('E2E_PLAN_EDITING_INVITES_CHROMIUM'),
       webkit: parseInvitePair('E2E_PLAN_EDITING_INVITES_WEBKIT'),
+    },
+    flowControlInvitesByProject: {
+      chromium: parseInvitePair('E2E_FLOW_CONTROL_INVITES_CHROMIUM'),
+      webkit: parseInvitePair('E2E_FLOW_CONTROL_INVITES_WEBKIT'),
     },
     exercisesInvitesByProject: {
       chromium: requireEnv('E2E_EXERCISES_INVITES_CHROMIUM'),

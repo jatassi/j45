@@ -13,6 +13,7 @@ import {
 } from './auth.js'
 import { Exercise, ExerciseId, ExerciseNotFound, LibraryExercise } from './exercise.js'
 import { LibraryWorkout, WorkoutId, WorkoutNotFound } from './library.js'
+import { Reflow, ReflowInvalid } from './reflow.js'
 import {
   SessionCommand,
   SessionId,
@@ -132,9 +133,9 @@ export class ExerciseRpcs extends RpcGroup.make(
  */
 export class SessionRpcs extends RpcGroup.make(
   Rpc.make('StartSession', {
-    payload: { workoutId: WorkoutId },
+    payload: { workoutId: WorkoutId, reflow: Schema.optional(Reflow) },
     success: SessionSummary,
-    error: WorkoutNotFound,
+    error: Schema.Union(WorkoutNotFound, ReflowInvalid),
   }),
   Rpc.make('ListActiveSessions', { success: Schema.Array(SessionSummary) }),
   Rpc.make('WatchSession', {

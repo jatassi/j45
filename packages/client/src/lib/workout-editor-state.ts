@@ -181,6 +181,33 @@ export const moveStation = (state: EditorState, args: StationMove): EditorState 
     return copy
   })
 
+export type StationPodMove = {
+  readonly podIndex: number
+  readonly stationIndex: number
+  readonly targetPodIndex: number
+}
+
+/** Remove a station from its pod and append it to the end of another pod. */
+export const moveStationToPod = (state: EditorState, args: StationPodMove): EditorState => {
+  const { podIndex, stationIndex, targetPodIndex } = args
+  if (
+    targetPodIndex < 0 ||
+    targetPodIndex >= state.pods.length ||
+    targetPodIndex === podIndex ||
+    podIndex < 0 ||
+    podIndex >= state.pods.length
+  ) {
+    return state
+  }
+  const sourceStations = state.pods[podIndex].stations
+  if (stationIndex < 0 || stationIndex >= sourceStations.length) {
+    return state
+  }
+  const station = sourceStations[stationIndex]
+  const withoutSource = removeStation(state, podIndex, stationIndex)
+  return podStations(withoutSource, targetPodIndex, (st) => [...st, station])
+}
+
 export const setFlowType = (state: EditorState, type: 'laps' | 'sets'): EditorState => ({
   ...state,
   flowType: type,

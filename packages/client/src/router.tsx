@@ -13,7 +13,11 @@ import { LibraryScreen } from '@/components/library-screen'
 import { SessionScreen } from '@/components/session-screen'
 import { TimerScreen } from '@/components/timer-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
-import { EditWorkoutScreen, NewWorkoutScreen } from '@/components/workout-editor-screen'
+import {
+  EditWorkoutScreen,
+  NewWorkoutScreen,
+  ReflowWorkoutScreen,
+} from '@/components/workout-editor-screen'
 
 /**
  * Everything a routed screen needs that isn't itself route state: the
@@ -109,6 +113,17 @@ const workoutEditRoute = createRoute({
 })
 
 /**
+ * `/workouts/$workoutId/reflow` — launch mode: the reflow editor on the
+ * workout loaded from `GetWorkout`. A static `reflow` suffix like `edit`
+ * above, so it never collides with the `$workoutId` detail route.
+ */
+const workoutReflowRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workouts/$workoutId/reflow',
+  component: ReflowWorkoutScreen,
+})
+
+/**
  * `/$` — the catch-all: any authenticated path the tree above doesn't
  * match (most notably `/register?invite=…`, the post-registration landing
  * — `AuthGate` renders `RegisterScreen` there while anonymous, but once
@@ -138,6 +153,7 @@ const routeTree = rootRoute.addChildren([
   workoutNewRoute,
   workoutDetailRoute,
   workoutEditRoute,
+  workoutReflowRoute,
   accountRoute,
   exercisesRoute,
   notFoundRedirectRoute,
