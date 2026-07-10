@@ -9,7 +9,7 @@ import {
   type Flow,
   type LibraryWorkout,
   type Pod,
-  type Station,
+  type SessionSummary,
 } from '@j45/domain'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import * as Cause from 'effect/Cause'
@@ -29,6 +29,7 @@ import { formatDuration, listWorkoutsAtom } from '@/lib/workouts'
 const renameWorkoutAtom = ServerRpcClient.mutation('RenameWorkout')
 const duplicateWorkoutAtom = ServerRpcClient.mutation('DuplicateWorkout')
 const deleteWorkoutAtom = ServerRpcClient.mutation('DeleteWorkout')
+const startSessionAtom = ServerRpcClient.mutation('StartSession')
 
 /** Popup styling shared by the rename and delete dialogs. */
 const dialogPopupClassName =
@@ -45,38 +46,15 @@ const editLinkClass =
  */
 function formatFlowSummary(flow: Flow): string {
   const [first, ...rest] = flow.rounds
-  const uniform = rest.every(
+  return rest.every(
     (round) => round.workSeconds === first.workSeconds && round.restSeconds === first.restSeconds,
   )
-  return uniform
     ? `${first.workSeconds}″/${first.restSeconds}″ × ${flow.rounds.length}`
     : flow.rounds.map((round) => `${round.workSeconds}″/${round.restSeconds}″`).join(', ')
 }
 
-type StationRowProps = {
-  readonly station: Station
-}
-
-/** One station: its name, and — if present — its `detail` rendered muted. */
-function StationRow({ station }: StationRowProps) {
-  return (
-    <li className="flex flex-col text-sm" data-testid="station">
-      <span data-testid="station-name">{station.name}</span>
-      {station.detail === undefined ? null : (
-        <span className="text-muted-foreground" data-testid="station-detail">
-          {station.detail}
-        </span>
-      )}
-    </li>
-  )
-}
-
-type PodCardProps = {
-  readonly pod: Pod
-}
-
-/** One pod: its name, and the stations it runs, in order. */
-function PodCard({ pod }: PodCardProps) {
+/** One pod: its name, and the stations (name + optional muted `detail`) it runs, in order. */
+function PodCard({ pod }: { readonly pod: Pod }) {
   return (
     <Card size="sm" data-testid="pod">
       <CardHeader>
@@ -85,7 +63,14 @@ function PodCard({ pod }: PodCardProps) {
       <CardContent>
         <ul className="flex flex-col gap-2">
           {pod.stations.map((station) => (
-            <StationRow key={station.name} station={station} />
+            <li key={station.name} className="flex flex-col text-sm" data-testid="station">
+              <span data-testid="station-name">{station.name}</span>
+              {station.detail === undefined ? null : (
+                <span className="text-muted-foreground" data-testid="station-detail">
+                  {station.detail}
+                </span>
+              )}
+            </li>
           ))}
         </ul>
       </CardContent>
@@ -197,6 +182,7 @@ function useRenameDialog(id: WorkoutId, currentName: string, onRenamed: () => vo
     setOpen(true)
   }
 
+  // A rejection surfaces via renameWorkoutAtom's own Result; the dialog simply stays open.
   const submit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     void rename({ payload: { id, name } })
@@ -204,9 +190,7 @@ function useRenameDialog(id: WorkoutId, currentName: string, onRenamed: () => vo
         onRenamed()
         setOpen(false)
       })
-      .catch(() => {
-        // Surfaced via renameWorkoutAtom's own Result; the dialog simply stays open.
-      })
+      .catch(() => undefined)
   }
 
   return { open, name, setName, openDialog, close: () => setOpen(false), submit }
@@ -217,15 +201,14 @@ function useDeleteDialog(id: WorkoutId, onDeleted: () => void) {
   const [open, setOpen] = React.useState(false)
   const [, remove] = useAtom(deleteWorkoutAtom, { mode: 'promise' })
 
+  // A rejection surfaces via deleteWorkoutAtom's own Result; the confirm dialog simply stays open.
   const confirm = () => {
     void remove({ payload: { id } })
       .then(() => {
         setOpen(false)
         onDeleted()
       })
-      .catch(() => {
-        // Surfaced via deleteWorkoutAtom's own Result; the confirm dialog simply stays open.
-      })
+      .catch(() => undefined)
   }
 
   return { open, openDialog: () => setOpen(true), close: () => setOpen(false), confirm }
@@ -234,14 +217,21 @@ function useDeleteDialog(id: WorkoutId, onDeleted: () => void) {
 /** Drives `DuplicateWorkout` from a plain click; `onDuplicated` fires once the rpc settles. */
 function useDuplicateWorkout(id: WorkoutId, onDuplicated: () => void) {
   const [, duplicate] = useAtom(duplicateWorkoutAtom, { mode: 'promise' })
-
-  return () => {
+  // A rejection surfaces via duplicateWorkoutAtom's own Result; nothing further to do here.
+  return () =>
     void duplicate({ payload: { id } })
       .then(onDuplicated)
-      .catch(() => {
-        // Surfaced via duplicateWorkoutAtom's own Result; nothing further to do here.
-      })
-  }
+      .catch(() => undefined)
+}
+
+/** Drives `StartSession` and navigates to `/session/<id>` with the returned summary's id. */
+function useStartSession(workoutId: WorkoutId) {
+  const navigate = useNavigate()
+  const [, start] = useAtom(startSessionAtom, { mode: 'promise' })
+  return () =>
+    void start({ payload: { workoutId } })
+      .then((summary: SessionSummary) => navigate({ to: `/session/${summary.id}` }))
+      .catch(() => undefined)
 }
 
 type ActionButtonsProps = {
@@ -250,7 +240,7 @@ type ActionButtonsProps = {
   readonly onDelete: () => void
 }
 
-/** The three trigger buttons — split out of `WorkoutActions` to keep it under this project's `max-lines-per-function`. */
+/** Rename / duplicate / delete triggers — split out to keep `WorkoutActions` under `max-lines-per-function`. */
 function ActionButtons({ onRename, onDuplicate, onDelete }: ActionButtonsProps) {
   return (
     <div className="flex items-center gap-2">
@@ -345,14 +335,22 @@ function WorkoutActions({ id, name }: WorkoutActionsProps) {
   )
 }
 
-type WorkoutDetailProps = {
-  readonly libraryWorkout: LibraryWorkout
+/** The primary Start session action: `StartSession`, then on to `/session/<id>`. */
+function StartSessionButton({ onStart }: { readonly onStart: () => void }) {
+  return (
+    <div className="w-full max-w-sm">
+      <Button type="button" className="w-full" data-testid="start-session-button" onClick={onStart}>
+        Start session
+      </Button>
+    </div>
+  )
 }
 
 /** The fetched workout's flow summary, pods/stations, total duration, and actions. */
-function WorkoutDetail({ libraryWorkout }: WorkoutDetailProps) {
+function WorkoutDetail({ libraryWorkout }: { readonly libraryWorkout: LibraryWorkout }) {
   const { id, workout } = libraryWorkout
   const { totalDurationMillis } = compile(workout)
+  const onStartSession = useStartSession(id)
 
   return (
     <div
@@ -381,6 +379,7 @@ function WorkoutDetail({ libraryWorkout }: WorkoutDetailProps) {
         <span data-testid="workout-flow-summary">{formatFlowSummary(workout.flow)}</span>
         <span data-testid="workout-duration">{formatDuration(totalDurationMillis)}</span>
       </div>
+      <StartSessionButton onStart={onStartSession} />
       <ul className="flex w-full max-w-sm flex-col gap-3">
         {workout.pods.map((pod) => (
           <li key={pod.name}>
@@ -392,17 +391,13 @@ function WorkoutDetail({ libraryWorkout }: WorkoutDetailProps) {
   )
 }
 
-type WorkoutFailureProps = {
-  readonly cause: Cause.Cause<unknown>
-}
-
 /**
  * A human-readable state for a failed `GetWorkout` — `WorkoutNotFound`
  * (foreign or deleted id) renders its own message; anything else (a
  * connectivity failure, say) renders a generic one. Either way the screen
  * never goes blank.
  */
-function WorkoutFailure({ cause }: WorkoutFailureProps) {
+function WorkoutFailure({ cause }: { readonly cause: Cause.Cause<unknown> }) {
   const error = Cause.failureOption(cause)
   const notFound = Option.isSome(error) && error.value instanceof WorkoutNotFound
 

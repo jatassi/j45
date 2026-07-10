@@ -62,7 +62,7 @@ features:
       - "The glass e2e suite passes unchanged (`/glass` still renders unauthenticated); the pre-existing auth e2e suites pass with edits limited to navigation for the routed home (AccountScreen assertions via `/account`, post-auth landing is the library) — no auth assertion weakened or removed; and `bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: live-session
     title: Server-authoritative live sessions — streaming sync, multi-phone controls, beeps/wake-lock, one-tap join
-    status: designed
+    status: validated
     depends_on: [plan-library, manual-timer]
     acceptance:
       - "Integration (TestClock): a session created from a library workout starts at the ready segment and its ticker advances exactly at chained segment deadlines, catching up across multiple boundaries after a long TestClock.adjust; pause freezes remaining time, resume re-anchors, skip/prev enter the target segment at full duration — all driven through SendSessionCommand-shaped service calls, including commands issued by a non-host participant."

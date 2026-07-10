@@ -5,6 +5,8 @@ import {
   LibraryWorkout,
   Pod,
   Round,
+  SessionId,
+  SessionSummary,
   Station,
   Workout,
   WorkoutId,
@@ -17,6 +19,7 @@ import {
   createRouter,
   Outlet,
   RouterProvider,
+  useParams,
 } from '@tanstack/react-router'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
@@ -109,12 +112,18 @@ const ladderWorkout = new LibraryWorkout({
 
 type Handlers = Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>
 
+/** Stand-in destination for `/session/<id>` navigation — the real session screen is a parallel task. */
+function SessionDestination() {
+  const { sessionId } = useParams({ strict: false }) as { sessionId: string }
+  return <div data-testid={`session-screen-${sessionId}`} />
+}
+
 /**
- * Mounts a throwaway `/` + `/workouts/$workoutId` route tree (memory
- * history, no file-based codegen) — the same minimal stand-in for
- * `router.tsx`'s own tree that `library-screen.test.tsx`'s
- * `renderLibraryScreen` uses, extended with the detail route this task adds
- * so a click on a `LibraryScreen` card actually navigates.
+ * Mounts a throwaway `/` + `/workouts/$workoutId` + `/session/$sessionId`
+ * route tree (memory history, no file-based codegen) — the same minimal
+ * stand-in for `router.tsx`'s own tree that `library-screen.test.tsx`'s
+ * `renderLibraryScreen` uses, extended with the detail route and a
+ * session destination so Start session / active-session cards can navigate.
  */
 function renderApp(handlers: Handlers, initialPath: string) {
   const fakeRuntime = makeFakeRuntime(handlers)
@@ -129,8 +138,13 @@ function renderApp(handlers: Handlers, initialPath: string) {
     path: '/workouts/$workoutId',
     component: WorkoutDetailScreen,
   })
+  const sessionRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/session/$sessionId',
+    component: SessionDestination,
+  })
   const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, workoutDetailRoute]),
+    routeTree: rootRoute.addChildren([indexRoute, workoutDetailRoute, sessionRoute]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   })
 
@@ -141,11 +155,20 @@ function renderApp(handlers: Handlers, initialPath: string) {
   )
 }
 
+const sampleSession = new SessionSummary({
+  id: Schema.decodeSync(SessionId)('session-abc'),
+  hostDisplayName: 'Alex',
+  workoutName: 'Athletica',
+  startedAt: seededAt,
+  participantCount: 3,
+})
+
 describe('WorkoutDetailScreen', () => {
   it("is reached by clicking a LibraryScreen card's typed Link to /workouts/$workoutId", async () => {
     renderApp(
       {
         ListWorkouts: () => Effect.succeed([athletica]),
+        ListActiveSessions: () => Effect.succeed([]),
         GetWorkout: () => Effect.succeed(athletica),
       },
       '/',
@@ -202,6 +225,29 @@ describe('WorkoutDetailScreen', () => {
     await screen.findByTestId('workout-not-found')
   })
 
+  it('starts a session through StartSession and navigates to /session/<id> on success', async () => {
+    let startPayload: unknown
+
+    renderApp(
+      {
+        GetWorkout: () => Effect.succeed(athletica),
+        ListWorkouts: () => Effect.succeed([athletica]),
+        ListActiveSessions: () => Effect.succeed([]),
+        StartSession: (payload) => {
+          startPayload = payload
+          return Effect.succeed(sampleSession)
+        },
+      },
+      `/workouts/${athletica.id}`,
+    )
+
+    await screen.findByTestId('start-session-button')
+    fireEvent.click(screen.getByTestId('start-session-button'))
+
+    await screen.findByTestId(`session-screen-${sampleSession.id}`)
+    expect(startPayload).toEqual({ workoutId: athletica.id })
+  })
+
   it('renames through RenameWorkout, updating the title and refreshing the module-scoped list atom', async () => {
     let current = athletica
     let listCalls = 0
@@ -213,6 +259,7 @@ describe('WorkoutDetailScreen', () => {
           listCalls++
           return Effect.succeed([current])
         },
+        ListActiveSessions: () => Effect.succeed([]),
         RenameWorkout: (payload) => {
           const { name } = payload as { name: string }
           current = new LibraryWorkout({
@@ -257,6 +304,7 @@ describe('WorkoutDetailScreen', () => {
       {
         GetWorkout: () => Effect.succeed(athletica),
         ListWorkouts: () => Effect.succeed([athletica]),
+        ListActiveSessions: () => Effect.succeed([]),
         DuplicateWorkout: (payload) => {
           duplicatePayload = payload
           return Effect.succeed(
@@ -286,6 +334,7 @@ describe('WorkoutDetailScreen', () => {
       {
         GetWorkout: () => Effect.succeed(athletica),
         ListWorkouts: () => Effect.succeed([athletica]),
+        ListActiveSessions: () => Effect.succeed([]),
         DeleteWorkout: (payload) => {
           deletePayload = payload
           return Effect.succeed(undefined)

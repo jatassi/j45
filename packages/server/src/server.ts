@@ -26,6 +26,8 @@ import { LibraryHandlersLive } from './library/handlers.js'
 import { WorkoutsRepo } from './library/workouts-repo.js'
 import { HealthzRouteLive, StaticRouteLive } from './routes.js'
 import { RpcHandlersLive } from './rpc-handlers.js'
+import { SessionHandlersLive } from './session/handlers.js'
+import { LiveSessions } from './session/live-sessions.js'
 import { SqlLive } from './sql.js'
 
 /** The Bun http server, listening on `PortConfig` (default 3000). */
@@ -66,12 +68,15 @@ const RpcProtocolLive = RpcServer.layerProtocolWebsocket({ path: '/rpc' }).pipe(
 
 /**
  * Every service `AuthMiddlewareLive` or an `AccountRpcs`/`OwnerRpcs`/
- * `LibraryRpcs`/`ExerciseRpcs` handler layer depends on, merged once —
- * `Layer.mergeAll` + `Layer.provide` share one instance of each rather than
- * duplicating it per consumer. `SqlLive` backs all six; it is also the very
- * layer `main.ts` merges to run migrations, and Effect memoizes layers by
- * reference, so this second reference (alongside `PasskeyRoutesProvided`'s
- * below) opens no second database connection.
+ * `LibraryRpcs`/`ExerciseRpcs`/`SessionRpcs` handler layer depends on,
+ * merged once — `Layer.mergeAll` + `Layer.provide` share one instance of
+ * each rather than duplicating it per consumer. `SqlLive` backs the
+ * durable ones (`UserRepo`/`Invites`/`Passkeys`/`AuthSessions`/
+ * `WorkoutsRepo`/`ExercisesRepo`); `LiveSessions` is the in-memory session
+ * registry `SessionHandlersLive` drives and needs no SQL. `SqlLive` is also
+ * the very layer `main.ts` merges to run migrations, and Effect memoizes
+ * layers by reference, so this second reference (alongside
+ * `PasskeyRoutesProvided`'s below) opens no second database connection.
  */
 const AuthServicesLive = Layer.mergeAll(
   UserRepo.Default,
@@ -80,16 +85,19 @@ const AuthServicesLive = Layer.mergeAll(
   AuthSessions.Default,
   WorkoutsRepo.Default,
   ExercisesRepo.Default,
+  LiveSessions.Default,
 ).pipe(Layer.provide(SqlLive))
 
 /**
  * Every `J45Rpcs` handler layer merged into one: `RpcHandlersLive`
  * (`ServerInfo`), `MeHandlerLive` (`Me`), `PasskeyHandlersLive` (the four
  * passkey `AccountRpcs` members), `OwnerHandlersLive` (every `OwnerRpcs`
- * member), `LibraryHandlersLive` (every `LibraryRpcs` member), and
- * `ExerciseHandlersLive` (every `ExerciseRpcs` member) — together these
- * implement every member `AccountRpcs`, `OwnerRpcs`, `LibraryRpcs`, and
- * `ExerciseRpcs` declare, so `RpcServer.layer(J45Rpcs)` below type-checks.
+ * member), `LibraryHandlersLive` (every `LibraryRpcs` member),
+ * `ExerciseHandlersLive` (every `ExerciseRpcs` member), and
+ * `SessionHandlersLive` (every `SessionRpcs` member) — together these
+ * implement every member `AccountRpcs`, `OwnerRpcs`, `LibraryRpcs`,
+ * `ExerciseRpcs`, and `SessionRpcs` declare, so `RpcServer.layer(J45Rpcs)`
+ * below type-checks.
  */
 const RpcHandlersAll = Layer.mergeAll(
   RpcHandlersLive,
@@ -98,15 +106,17 @@ const RpcHandlersAll = Layer.mergeAll(
   OwnerHandlersLive,
   LibraryHandlersLive,
   ExerciseHandlersLive,
+  SessionHandlersLive,
 )
 
 /**
  * Serves the full `J45Rpcs` merge (`PublicRpcs` + `AccountRpcs` +
- * `OwnerRpcs` + `LibraryRpcs` + `ExerciseRpcs`) at `/rpc`, guarded by
- * `AuthMiddlewareLive` for every `AccountRpcs`/`OwnerRpcs`/`LibraryRpcs`/
- * `ExerciseRpcs` member — the merge this task lands, now that every handler
- * layer (and `AuthMiddlewareLive` itself) exists. `ServerInfo` stays
- * reachable with no session, exactly as `PublicRpcs`'s doc comment promises.
+ * `OwnerRpcs` + `LibraryRpcs` + `ExerciseRpcs` + `SessionRpcs`) at `/rpc`,
+ * guarded by `AuthMiddlewareLive` for every `AccountRpcs`/`OwnerRpcs`/
+ * `LibraryRpcs`/`ExerciseRpcs`/`SessionRpcs` member — the merge this task
+ * lands, now that every handler layer (and `AuthMiddlewareLive` itself)
+ * exists. `ServerInfo` stays reachable with no session, exactly as
+ * `PublicRpcs`'s doc comment promises.
  */
 const RpcLive = RpcServer.layer(J45Rpcs).pipe(
   Layer.provide(RpcHandlersAll),
@@ -133,8 +143,8 @@ const PasskeyRoutesProvided = PasskeyRoutesLive.pipe(
  * HTTP surface — `AuthRoutesLive` for register/PIN-login/reset/me/logout,
  * `PasskeyRoutesProvided` for passkey login — both recorded exceptions to
  * the everything-through-rpc rule), `/rpc` (the full `J45Rpcs` merge over
- * websocket + ndjson, `AccountRpcs`/`OwnerRpcs`/`LibraryRpcs`/`ExerciseRpcs`
- * guarded by `AuthMiddlewareLive`), and static serving of
+ * websocket + ndjson, `AccountRpcs`/`OwnerRpcs`/`LibraryRpcs`/`ExerciseRpcs`/
+ * `SessionRpcs` guarded by `AuthMiddlewareLive`), and static serving of
  * `packages/client/dist` for everything else. Requires `SqlClient.SqlClient`
  * (via `AuthRoutesLive`/`HttpAuthServicesLive`) — `main.ts` provides it from
  * `SqlLive`.

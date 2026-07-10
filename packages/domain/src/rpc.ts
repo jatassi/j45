@@ -13,6 +13,13 @@ import {
 } from './auth.js'
 import { Exercise, ExerciseId, ExerciseNotFound, LibraryExercise } from './exercise.js'
 import { LibraryWorkout, WorkoutId, WorkoutNotFound } from './library.js'
+import {
+  SessionCommand,
+  SessionId,
+  SessionNotFound,
+  SessionState,
+  SessionSummary,
+} from './session.js'
 import { Workout } from './workout.js'
 
 /**
@@ -120,8 +127,39 @@ export class ExerciseRpcs extends RpcGroup.make(
 ).middleware(AuthMiddleware) {}
 
 /**
- * The single rpc contract shared by every J45 client and server. Defined
- * exactly once, here — both `packages/server` and `packages/client` import
- * it from `@j45/domain` rather than redeclaring it.
+ * Rpcs for live workout sessions. Every member requires a valid session
+ * (`AuthMiddleware` provides `CurrentUser`, fails `Unauthorized`).
  */
-export class J45Rpcs extends PublicRpcs.merge(AccountRpcs, OwnerRpcs, LibraryRpcs, ExerciseRpcs) {}
+export class SessionRpcs extends RpcGroup.make(
+  Rpc.make('StartSession', {
+    payload: { workoutId: WorkoutId },
+    success: SessionSummary,
+    error: WorkoutNotFound,
+  }),
+  Rpc.make('ListActiveSessions', { success: Schema.Array(SessionSummary) }),
+  Rpc.make('WatchSession', {
+    payload: { id: SessionId },
+    success: SessionState,
+    error: SessionNotFound,
+    stream: true,
+  }),
+  Rpc.make('SendSessionCommand', {
+    payload: { id: SessionId, command: SessionCommand },
+    error: SessionNotFound,
+  }),
+).middleware(AuthMiddleware) {}
+
+/**
+ * The single rpc contract shared by every J45 client and server — the merge
+ * of `PublicRpcs` + `AccountRpcs` + `OwnerRpcs` + `LibraryRpcs` +
+ * `ExerciseRpcs` + `SessionRpcs`. Defined exactly once, here — both
+ * `packages/server` and `packages/client` import it from `@j45/domain`
+ * rather than redeclaring it.
+ */
+export class J45Rpcs extends PublicRpcs.merge(
+  AccountRpcs,
+  OwnerRpcs,
+  LibraryRpcs,
+  ExerciseRpcs,
+  SessionRpcs,
+) {}

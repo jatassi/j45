@@ -10,6 +10,7 @@ import {
 import { AccountScreen } from '@/components/account-screen'
 import { ExerciseLibraryScreen } from '@/components/exercise-library-screen'
 import { LibraryScreen } from '@/components/library-screen'
+import { SessionScreen } from '@/components/session-screen'
 import { TimerScreen } from '@/components/timer-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 import { EditWorkoutScreen, NewWorkoutScreen } from '@/components/workout-editor-screen'
@@ -66,6 +67,13 @@ const timerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/timer',
   component: TimerScreen,
+})
+
+/** `/session/$sessionId` — the live workout player, keyed off the `sessionId` path param. */
+const sessionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/session/$sessionId',
+  component: SessionScreen,
 })
 
 /**
@@ -126,6 +134,7 @@ const notFoundRedirectRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   timerRoute,
+  sessionRoute,
   workoutNewRoute,
   workoutDetailRoute,
   workoutEditRoute,
