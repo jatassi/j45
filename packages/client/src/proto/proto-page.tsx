@@ -58,7 +58,7 @@ export function ProtoPage(): JSX.Element {
   }, [])
 
   return (
-    <div className="proto-scope flex min-h-svh flex-col items-center bg-[var(--proto-ground)] px-4 py-5">
+    <div className="proto-scope flex h-svh flex-col items-center overflow-hidden bg-[var(--proto-ground)] px-4 py-5">
       <div className="mb-5 flex w-full max-w-[390px] flex-col items-center gap-3">
         <p className="proto-eyebrow text-[10px] text-white/35">Liquid glass · role study</p>
         <Segmented value={variant} onChange={setVariant} />

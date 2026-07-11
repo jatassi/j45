@@ -39,14 +39,13 @@ function GlassHeader(): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   useLiquidGlass(ref)
   return (
-    <div
-      ref={ref}
-      className="glass-surface absolute inset-x-0 top-0 z-20 rounded-none px-5 pt-11 pb-4"
-    >
-      <p className="proto-eyebrow text-[10px] text-[var(--proto-orange)]">J45 · Studio</p>
-      <h1 className="mt-1 font-heading text-[26px] leading-none font-extrabold tracking-[-0.02em] text-white">
-        Library
-      </h1>
+    <div className="absolute inset-x-0 top-0 z-20">
+      <div ref={ref} className="glass-surface rounded-none px-5 pt-11 pb-4">
+        <p className="proto-eyebrow text-[10px] text-[var(--proto-orange)]">J45 · Studio</p>
+        <h1 className="mt-1 font-heading text-[26px] leading-none font-extrabold tracking-[-0.02em] text-white">
+          Library
+        </h1>
+      </div>
     </div>
   )
 }
@@ -56,11 +55,10 @@ function GlassTabBar(): JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   useLiquidGlass(ref)
   return (
-    <div
-      ref={ref}
-      className="glass-surface absolute inset-x-3 bottom-4 z-20 flex items-stretch rounded-3xl px-2 py-2.5"
-    >
-      <TabItems active="library" />
+    <div className="absolute inset-x-3 bottom-4 z-20">
+      <div ref={ref} className="glass-surface flex items-stretch rounded-3xl px-2 py-2.5">
+        <TabItems active="library" />
+      </div>
     </div>
   )
 }

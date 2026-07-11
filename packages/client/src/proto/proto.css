@@ -24,7 +24,9 @@
   position: relative;
   width: 100%;
   max-width: 390px;
-  height: min(844px, 100svh);
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 844px;
   overflow: hidden;
   border-radius: 44px;
   background: var(--proto-ground);
@@ -34,7 +36,7 @@
 }
 @media (max-width: 430px) {
   .proto-phone {
-    height: 100svh;
+    max-height: none;
     border-radius: 0;
     box-shadow: none;
   }
