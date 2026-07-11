@@ -2,6 +2,7 @@ import { RouterProvider } from '@tanstack/react-router'
 
 import { AuthGate } from '@/components/auth-gate'
 import { GlassDemo } from '@/glass-demo'
+import { ProtoPage } from '@/proto/proto-page'
 import { router } from '@/router'
 
 /**
@@ -32,6 +33,10 @@ const handleLoggedOut = (): void => {
 export function App() {
   if (location.pathname === '/glass') {
     return <GlassDemo />
+  }
+
+  if (location.pathname === '/proto') {
+    return <ProtoPage />
   }
 
   return (
