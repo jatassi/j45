@@ -2,16 +2,16 @@
 
 ## Digest
 
-_6 run(s), 9 feature(s) recorded._
+_7 run(s), 11 feature(s) recorded._
 
 ### Workflow paths
 | path | runs | median agents | median duration |
 | --- | --- | --- | --- |
 | small | 1 | 3 | 0 |
-| standard | 8 | 7 | 136 |
+| standard | 10 | 6.5 | 136 |
 
 ### Re-slices
-0 of 9 feature(s) re-sliced (0%).
+0 of 11 feature(s) re-sliced (0%).
 
 ### Footprint accuracy by size class
 | size | features | median planned files | median actual files |
@@ -19,6 +19,7 @@ _6 run(s), 9 feature(s) recorded._
 | m | 5 | 18 | 21 |
 
 ### Top block reasons
+- 1× Blocker: `bun run test:e2e` (playwright fullyParallel, chromium+webkit, no worker cap, no retries — the exact criterion-6 command) does not exit 0 in this execution environment. Three default-parallel runs each failed with 3-4 non-deterministic failures, and the failing set differed every run (webkit timer.spec:152 and :219, nav-shell.spec:183 push-routes, flow-control.spec:152). Every one of those tests passes when run in isolation on webkit and in a full serial run. Root cause is CPU contention: load average 12.70 on a 10-core box (partly self-inflicted by repeated e2e builds), which starves the real-time countdown-timer specs so timer-phase never advances from 'Get ready' to 'Work' within the 8s sub-timeout, and starves push-route navigation under load. Evidence the suite content is sound: `bun run test:e2e -- --workers=1` gave 59 passed / 3 skipped / 0 failed, exit 0; nav-shell.spec.ts alone on webkit gave 4/4 passed; timer.spec and flow-control.spec alone on webkit passed (1.4s-24s each). No integrity violations found: no eslint/oxlint suppressions, no lint-config or test-config edits, no weakened tests. The removed history-screen 'LibraryScreen history nav' test and the trimmed library-screen tests covered the deleted LibraryNav navigation, now covered by the tab bar. The 3 skipped e2e tests are pre-existing conditional skips (live-session x2, auth-passkey WebAuthn), not added by this feature.
 - 1× Turn/output budget exhausted while the judge executor (grok) was still running mid-verdict; work is intact and adoptable, not lost. Adopt as follows:
 
 WORKTREE: /Users/jatassi/Git/j45/.claude/worktrees/integrate--session-history (branch: integrate--session-history, created via `node "/Users/jatassi/Git/the-loop/plugin/bin/the-loop.js" worktree-create integrate--session-history --base-branch main`).
@@ -39,6 +40,7 @@ Criterion 3 fails and is not fixable within this footprint: I independently repr
 Additionally, `bun run test` (the full vitest unit suite) also fails on the clean committed tree with 2 pre-existing failures unrelated to this commit: packages/client/test/account-screen.test.tsx and packages/client/test/timer-screen.test.tsx still `findByTestId('library-screen')` for the post-auth landing, which is now `home-screen` — another base-branch IA-lag defect not owned by any file this task can touch, confirmed on the clean tree with vitest run directly.
 
 Left in the worktree, uncommitted (diagnostic only, not part of the commit, documenting the exact fix a follow-up needs): packages/client/src/components/session-screen.tsx, workout-detail-screen.tsx, workout-editor-screen.tsx (useParams `from` -> `strict: false`), and packages/client/test/account-screen.test.tsx, timer-screen.test.tsx (landing assertion flipped to home-screen). A follow-up task with footprint covering those five files (likely owned by whatever task is responsible for route-restructure fixups, since the identical regression was independently hit by the sibling nav-shell-e2e and e2e-landing-swaps drives per this executor's own investigation) needs to land that fix; after that, this branch's criterion 3 becomes reproducible-green with no further change to the six e2e specs.
+- 1× Worktree-adoption note: worktree path /Users/jatassi/Git/j45/.claude/worktrees/loop-glass-live-refraction--e2e-live-refraction, branch loop/glass-live-refraction--e2e-live-refraction (base branch loop/glass-live-refraction--demo-perf-harness). Executor: grok (model grok-4.5), launched headless via `grok -m grok-4.5 --prompt-file <scratchpad>/prompt-glass-live-refraction-e2e-live-refraction.md --cwd <worktree> --always-approve --no-subagents --max-turns 500 --output-format plain`, backgrounded with nohup, pid 96538 — confirm with `ps -p 96538` whether it is still alive before deciding to wait vs relaunch; its stdout/stderr log is at /private/tmp/claude-501/-Users-jatassi-Git-j45/e90321ba-1945-4b4b-b1ab-6500446d198c/scratchpad/logs/grok-e2e-live-refraction.log (last seen: it had read the existing e2e/glass.spec.ts and glass-demo source, written e2e/glass-live.spec.ts, and was starting its own check/test/lint pass before e2e). Footprint touched so far: e2e/glass-live.spec.ts (new, untracked, git status showed only this file changed) — e2e/glass.spec.ts was not modified as of the last check. Full footprint lease for this task is limited to e2e/glass-live.spec.ts and (only if truly needed) e2e/glass.spec.ts — nothing else. Verification commands still owed, to run from the worktree root once the executor is confirmed done (dead pid + non-advancing diff): `bun run check`, `bun run test`, `bun run test:e2e`, `bun run lint` — all must exit 0, and bun run test:e2e must show the new e2e/glass-live.spec.ts tests passing under both chromium and webkit plus the pre-existing e2e/glass.spec.ts suite still green. The full task brief (acceptance criteria 1-7, footprint, wiring notes) is preserved verbatim in the prompt file above if the next drive needs it again. No auth/availability failure occurred — grok's smoke test (`grok -p "say PONG" --max-turns 1`) succeeded before launch; this is purely a turn/time-budget exhaustion on the driving side, not an environment defect. Commit has NOT happened — no commit exists on this branch yet from this task.
 - 1× Worktree: /Users/jatassi/Git/j45/.claude/worktrees/loop-glass-live-refraction--scheduler, branch loop/glass-live-refraction--scheduler (base loop/glass-live-refraction), created via `the-loop worktree-create`. Left intact and uncommitted (not removed) so a follow-up drive can adopt it once the plan/footprint gap below is resolved.
 
 Executor: grok / grok-4.5, run headless via the registry's `grok -m grok-4.5 --prompt-file ... --cwd ... --always-approve --no-subagents --max-turns 500 --output-format plain`, twice (initial pass + one retry), each backgrounded with a foreground PID-wait (no polling loop); both runs exited cleanly (pid 97496 then pid 7198, both confirmed exited before I read output — no stall/liveness concern).
@@ -59,9 +61,9 @@ This is a genuine plan/footprint gap, not an executor mistake: `docs/designs/gla
 Because this task's footprint is strictly `packages/client/src/glass/scheduler.ts` and `packages/client/test/glass-scheduler.test.ts`, I cannot fix `glass-css.test.ts` myself without violating the footprint I'm bound to enforce, and I will not accept a test-gaming workaround in its place. Resolution requires a plan-level decision: either extend this task's (or another task's) footprint to include removing/updating that obsolete assertion in `packages/client/test/glass-css.test.ts`, or explicitly assign that update to a task before `scheduler` can be re-verified to a fully green suite and committed. No commit was made.
 
 ### Token split (overhead vs build)
-Lifetime: 81% overhead / 19% build.
-Last-10 median: 85% overhead / 15% build.
-Attribution: 5 of 6 run(s) overlapped — the overhead/build split is approximate.
+Lifetime: 80% overhead / 20% build.
+Last-10 median: 80% overhead / 20% build.
+Attribution: 6 of 7 run(s) overlapped — the overhead/build split is approximate.
 
 ## Runs
 
@@ -71,3 +73,4 @@ Attribution: 5 of 6 run(s) overlapped — the overhead/build split is approximat
 - 2026-07-10T08:20:48.589Z · target main · [workout-generation] · 1 validated · 663553 tokens · overlapped
 - 2026-07-12T02:59:20.061Z · target redesign · [design-system, session-leave] · 2 validated · 345803 tokens · overlapped
 - 2026-07-12T04:12:09.513Z · target redesign · [glass-live-refraction, nav-shell, auth-screens] · 1 validated, 2 blocked · 790218 tokens · overlapped
+- 2026-07-12T05:18:42.801Z · target redesign · [glass-live-refraction, nav-shell] · 2 stalled · 1024501 tokens · overlapped
