@@ -1,0 +1,101 @@
+{
+  "run": {
+    "prepared_at": "2026-07-12T12:30:54.119Z",
+    "target": "redesign",
+    "scope": [
+      "editor-screens"
+    ],
+    "tokens": {
+      "spent": 2292219,
+      "by_role": {
+        "plan": 49867,
+        "build": 74723,
+        "drive": 113989,
+        "validate": 12650
+      },
+      "attribution": "overlapped"
+    },
+    "halted": null
+  },
+  "features": [
+    {
+      "id": "editor-screens",
+      "workflow_path": "standard",
+      "outcome": "validated",
+      "reason": null,
+      "reslice": null,
+      "agents": {
+        "plan": 1,
+        "build": 1,
+        "drive": 5,
+        "validate": 1
+      },
+      "tasks": [
+        {
+          "id": "draft-field-errors",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/lib/workout-draft.ts",
+            "packages/client/test/workout-draft.test.ts"
+          ]
+        },
+        {
+          "id": "push-shell-hooks",
+          "size": "xs",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/shell/push-header.tsx",
+            "packages/client/src/router.tsx",
+            "packages/client/test/push-header.test.tsx"
+          ]
+        },
+        {
+          "id": "editor-screens-kit",
+          "size": "m",
+          "judgment_level": "complex",
+          "footprint": [
+            "packages/client/src/components/workout-editor-screen.tsx",
+            "packages/client/src/components/editor/ (new — meta/flow sections, pods section, station-actions drawer, shared form controls sized for reflow reuse)",
+            "packages/client/src/components/workout-editor-fields.tsx (gutted; must keep reflow-fields.tsx compiling this commit)",
+            "packages/client/test/workout-editor-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "reflow-screen-kit",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/workout-editor-screen.tsx (reflow half — may split to components/editor/reflow-screen.tsx)",
+            "packages/client/src/components/reflow-fields.tsx (deleted/replaced with kit modules under components/editor/)",
+            "packages/client/src/components/workout-editor-fields.tsx (legacy shim deleted once nothing imports it)"
+          ]
+        },
+        {
+          "id": "e2e-plan-editing",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/plan-editing.spec.ts",
+            "e2e/generate.spec.ts (reconcile `editor-cancel` to the back chevron; other assertions unchanged)"
+          ]
+        },
+        {
+          "id": "e2e-flow-control",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/flow-control.spec.ts"
+          ]
+        }
+      ],
+      "actual": {
+        "files_touched": 26,
+        "insertions": 2238,
+        "deletions": 906,
+        "commits": null,
+        "duration_minutes": null
+      }
+    }
+  ]
+}
