@@ -2,6 +2,7 @@ import { RouterProvider } from '@tanstack/react-router'
 
 import { AuthGate } from '@/components/auth-gate'
 import { DesignPage } from '@/components/design/design-page'
+import { Toaster } from '@/components/ui/sonner'
 import { GlassDemo } from '@/glass-demo'
 import { ProtoPage } from '@/proto/proto-page'
 import { router } from '@/router'
@@ -31,26 +32,35 @@ const handleLoggedOut = (): void => {
  * deep links like `/workouts/<id>`) see `LoginScreen` first, since the gate
  * never redirects — once `GET /auth/me` succeeds, `RouterProvider` mounts
  * and renders whatever path the browser was already on.
+ *
+ * `Toaster` is mounted once for every route this app serves so command
+ * failures (e.g. exercise create/update/delete) can surface sonner toasts
+ * outside the design gallery.
  */
 export function App() {
+  let tree: React.ReactNode
+
   if (location.pathname === '/glass') {
-    return <GlassDemo />
-  }
-
-  if (location.pathname === '/proto') {
-    return <ProtoPage />
-  }
-
-  if (location.pathname === '/design') {
-    return <DesignPage />
+    tree = <GlassDemo />
+  } else if (location.pathname === '/proto') {
+    tree = <ProtoPage />
+  } else if (location.pathname === '/design') {
+    tree = <DesignPage />
+  } else {
+    tree = (
+      <AuthGate>
+        {(user) => (
+          <RouterProvider router={router} context={{ user, onLoggedOut: handleLoggedOut }} />
+        )}
+      </AuthGate>
+    )
   }
 
   return (
-    <AuthGate>
-      {(user) => (
-        <RouterProvider router={router} context={{ user, onLoggedOut: handleLoggedOut }} />
-      )}
-    </AuthGate>
+    <>
+      {tree}
+      <Toaster />
+    </>
   )
 }
 

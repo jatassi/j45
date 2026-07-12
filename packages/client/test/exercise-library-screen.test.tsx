@@ -9,14 +9,16 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ExerciseLibraryScreen } from '@/components/exercise-library-screen'
+import { Toaster } from '@/components/ui/sonner'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 afterEach(() => {
@@ -75,6 +77,7 @@ const frontSquat = new LibraryExercise({
  * Mounts `ExerciseLibraryScreen` as the `/library/exercises` route of a
  * throwaway router (memory history, no file-based codegen) — a minimal
  * stand-in for `router.tsx`'s own tree, matching `library-screen.test.tsx`.
+ * App-root `Toaster` is included so mutation failures can surface sonner toasts.
  */
 function renderScreen(
   handlers: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>,
@@ -99,8 +102,16 @@ function renderScreen(
   render(
     <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
       <RouterProvider router={testRouter} />
+      <Toaster />
     </RegistryProvider>,
   )
+}
+
+/** Opens a base-ui Select by its trigger testid and picks the option with the given label. */
+async function selectOption(testId: string, optionLabel: string): Promise<void> {
+  fireEvent.click(screen.getByTestId(testId))
+  const option = await screen.findByRole('option', { name: optionLabel })
+  fireEvent.click(option)
 }
 
 describe('ExerciseLibraryScreen', () => {
@@ -125,6 +136,19 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Barbell')
   })
 
+  it('renders modality as a sport-hue badge variant', async () => {
+    renderScreen({ ListExercises: () => Effect.succeed([rower, frontSquat]) })
+
+    const rowerRow = await screen.findByTestId(`exercise-row-${rower.id}`)
+    const cardioBadge = within(rowerRow).getByText('Cardio')
+    expect(cardioBadge.dataset.slot).toBe('badge')
+    expect(cardioBadge.dataset.variant).toBe('cardio')
+
+    const squatRow = screen.getByTestId(`exercise-row-${frontSquat.id}`)
+    const strengthBadge = within(squatRow).getByText('Strength')
+    expect(strengthBadge.dataset.variant).toBe('strength')
+  })
+
   it('renders library-nav-link to /library and LibrarySegments with Exercises active', async () => {
     renderScreen({ ListExercises: () => Effect.succeed([rower]) })
 
@@ -139,7 +163,7 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.getByTestId('library-segment-workouts').dataset.active).toBe('false')
   })
 
-  it('filter chips render domain labels while testids stay keyed to raw literals', async () => {
+  it('filter chips are toggle-groups with domain labels and testids on raw literals', async () => {
     renderScreen({ ListExercises: () => Effect.succeed([rower, frontSquat]) })
 
     await screen.findByTestId('filter-bar')
@@ -154,6 +178,11 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.getByTestId('filter-muscle-quads').textContent).toBe('Quads')
     expect(screen.getByTestId('filter-equipment-rower').textContent).toBe('Rower')
     expect(screen.getByTestId('filter-equipment-barbell').textContent).toBe('Barbell')
+
+    // Multi-select: toggle groups expose aria-pressed on items.
+    expect(fullBodyChip.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(fullBodyChip)
+    expect(fullBodyChip.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('empty equipment renders the Bodyweight pseudo-tag label on the row', async () => {
@@ -188,7 +217,34 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.queryByTestId(`exercise-row-${rower.id}`)).toBeNull()
   })
 
-  it('creates an exercise via the dialog and shows it in the refreshed list', async () => {
+  it('shows skeleton loading, empty, and failure+retry via QueryBoundary', async () => {
+    // Failure + retry
+    let calls = 0
+    renderScreen({
+      ListExercises: () => {
+        calls += 1
+        if (calls === 1) {
+          return Effect.fail('network down')
+        }
+        return Effect.succeed([rower])
+      },
+    })
+
+    const error = await screen.findByTestId('query-boundary-error')
+    expect(error.textContent).toMatch(/network down|Failed/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await screen.findByTestId(`exercise-row-${rower.id}`)
+  })
+
+  it('shows empty state when the catalog has no exercises', async () => {
+    renderScreen({ ListExercises: () => Effect.succeed([]) })
+
+    const empty = await screen.findByTestId('query-boundary-empty')
+    expect(empty.textContent).toMatch(/No exercises/i)
+    expect(screen.getByTestId('create-exercise-button')).toBeTruthy()
+  })
+
+  it('creates an exercise via the drawer and shows it in the refreshed list', async () => {
     const catalog: LibraryExercise[] = [rower]
 
     renderScreen({
@@ -209,17 +265,13 @@ describe('ExerciseLibraryScreen', () => {
     await screen.findByTestId(`exercise-row-${rower.id}`)
 
     fireEvent.click(screen.getByTestId('create-exercise-button'))
-    await screen.findByTestId('exercise-dialog')
+    await screen.findByTestId('exercise-drawer')
 
     fireEvent.change(screen.getByTestId('exercise-form-name'), {
       target: { value: 'Wall ball' },
     })
-    fireEvent.change(screen.getByTestId('exercise-form-modality'), {
-      target: { value: 'strength' },
-    })
-    fireEvent.change(screen.getByTestId('exercise-form-intensity'), {
-      target: { value: 'moderate' },
-    })
+    await selectOption('exercise-form-modality', 'Strength')
+    await selectOption('exercise-form-intensity', 'Moderate')
     fireEvent.click(screen.getByTestId('exercise-form-muscle-quads'))
     fireEvent.click(screen.getByTestId('exercise-form-equipment-med-ball'))
 
@@ -227,5 +279,88 @@ describe('ExerciseLibraryScreen', () => {
 
     await screen.findByTestId('exercise-row-ex-new')
     expect(screen.getByTestId('exercise-name-ex-new').textContent).toBe('Wall ball')
+  })
+
+  it('edits tags via the drawer', async () => {
+    const catalog: LibraryExercise[] = [frontSquat]
+
+    renderScreen({
+      ListExercises: () => Effect.succeed([...catalog]),
+      UpdateExercise: (payload) => {
+        const { id, exercise } = payload as { id: ExerciseId; exercise: Exercise }
+        const updated = new LibraryExercise({
+          id,
+          exercise,
+          createdAt: seededAt,
+          updatedAt: seededAt,
+        })
+        catalog[0] = updated
+        return Effect.succeed(updated)
+      },
+    })
+
+    await screen.findByTestId(`exercise-row-${frontSquat.id}`)
+    fireEvent.click(screen.getByTestId(`edit-exercise-${frontSquat.id}`))
+    await screen.findByTestId('exercise-drawer')
+
+    fireEvent.click(screen.getByTestId('exercise-form-muscle-chest'))
+    fireEvent.click(screen.getByTestId('exercise-form-muscle-quads'))
+    fireEvent.click(screen.getByTestId('exercise-form-submit'))
+
+    const row = await screen.findByTestId(`exercise-row-${frontSquat.id}`)
+    expect(row.textContent).toContain('Chest')
+    expect(row.textContent).not.toContain('Quads')
+  })
+
+  it('deletes via the alert-dialog confirm', async () => {
+    const catalog: LibraryExercise[] = [rower, frontSquat]
+
+    renderScreen({
+      ListExercises: () => Effect.succeed([...catalog]),
+      DeleteExercise: (payload) => {
+        const { id } = payload as { id: ExerciseId }
+        const idx = catalog.findIndex((entry) => entry.id === id)
+        if (idx !== -1) {
+          catalog.splice(idx, 1)
+        }
+        return Effect.void
+      },
+    })
+
+    await screen.findByTestId(`exercise-row-${rower.id}`)
+    fireEvent.click(screen.getByTestId(`delete-exercise-${rower.id}`))
+    await screen.findByTestId('delete-dialog')
+    fireEvent.click(screen.getByTestId('confirm-delete-button'))
+
+    await screen.findByTestId(`exercise-row-${frontSquat.id}`)
+    expect(screen.queryByTestId(`exercise-row-${rower.id}`)).toBeNull()
+  })
+
+  it('surfaces a sonner toast when create fails', async () => {
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => '')
+
+    renderScreen({
+      ListExercises: () => Effect.succeed([rower]),
+      CreateExercise: () => Effect.fail('create exploded'),
+    })
+
+    await screen.findByTestId(`exercise-row-${rower.id}`)
+    fireEvent.click(screen.getByTestId('create-exercise-button'))
+    await screen.findByTestId('exercise-drawer')
+
+    fireEvent.change(screen.getByTestId('exercise-form-name'), {
+      target: { value: 'Wall ball' },
+    })
+    fireEvent.click(screen.getByTestId('exercise-form-muscle-quads'))
+    fireEvent.click(screen.getByTestId('exercise-form-submit'))
+
+    await vi.waitFor(() => {
+      expect(toastError).toHaveBeenCalled()
+    })
+    const message = toastError.mock.calls[0]?.[0]
+    expect(typeof message === 'string' ? message : '').toMatch(/Command failed|Could not/i)
+    // Drawer stays open — error was not silently swallowed by closing.
+    expect(screen.getByTestId('exercise-drawer')).toBeTruthy()
+    toastError.mockRestore()
   })
 })

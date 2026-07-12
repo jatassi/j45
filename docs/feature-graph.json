@@ -298,7 +298,7 @@
     {
       "id": "library-screens",
       "title": "Library tab interiors — workout list, exercises segment with drawer editing, workout detail",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "nav-shell"
       ],

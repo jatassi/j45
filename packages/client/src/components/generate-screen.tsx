@@ -14,7 +14,7 @@ import {
 } from '@j45/domain'
 import { Link, useNavigate } from '@tanstack/react-router'
 
-import { ChipRow } from '@/components/exercise-dialogs'
+import { ChipRow } from '@/components/chip-row'
 import { Button } from '@/components/ui/button'
 import { inputClass } from '@/components/workout-editor-fields'
 import { setInitialDraft } from '@/lib/editor-draft'
@@ -28,7 +28,6 @@ const EQUIPMENT = Equipment.literals
 const MUSCLE_GROUPS = MuscleGroup.literals
 const mintSeed = (): number => Math.floor(Math.random() * 2 ** 31)
 
-/** Pull `.reason` out of a squashed `GenerationInfeasible`. */
 const infeasibleReason = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null) return undefined
   if (!('_tag' in error) || error._tag !== 'GenerationInfeasible') return undefined
@@ -322,7 +321,6 @@ function useConstraints(): FormModel {
   return { c, setFocus, setMinutes, setEquipment, setEmphasis, setNoRepeat }
 }
 
-/** `/generate` — form knobs + preview, Regenerate/Save/Edit, infeasible error. */
 export function GenerateScreen() {
   const form = useConstraints()
   const { preview, error, busy, runGenerate, onSave, onEdit } = useGenerateActions()

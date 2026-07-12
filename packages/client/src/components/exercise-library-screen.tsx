@@ -14,9 +14,12 @@ import {
   type LibraryExercise,
 } from '@j45/domain'
 import { Link } from '@tanstack/react-router'
+import { toast } from 'sonner'
 
-import { ChipRow, DeleteConfirm, ExerciseDialog } from '@/components/exercise-dialogs'
+import { DeleteAlert, ExerciseDrawer, FacetGroup } from '@/components/exercise-catalog-overlays'
 import { LibrarySegments } from '@/components/library-segments'
+import { QueryBoundary } from '@/components/query-boundary'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   createExerciseAtom,
@@ -25,17 +28,10 @@ import {
   updateExerciseAtom,
 } from '@/lib/exercises'
 
-/** The tag vocabularies the filter chips draw from, kept in the domain's own order. */
 const MODALITIES = Modality.literals
 const MUSCLE_GROUPS = MuscleGroup.literals
 const EQUIPMENT = Equipment.literals
 
-/**
- * The three filter facets, each a set of currently-selected chip values. A
- * facet with an empty set imposes no constraint; a non-empty one keeps an
- * exercise whose field intersects it (OR within a facet). The facets combine
- * with AND across each other.
- */
 type Filters = {
   readonly muscleGroups: ReadonlySet<MuscleGroup>
   readonly equipment: ReadonlySet<Equipment>
@@ -48,109 +44,86 @@ const emptyFilters: Filters = {
   modalities: new Set(),
 }
 
-/** Toggle membership of `value` in `set`, returning a fresh set (immutably). */
-function toggle<A>(set: ReadonlySet<A>, value: A): ReadonlySet<A> {
-  const next = new Set(set)
-  if (next.has(value)) {
-    next.delete(value)
-  } else {
-    next.add(value)
-  }
-  return next
-}
+type DrawerState =
+  | { readonly kind: 'closed' }
+  | { readonly kind: 'create' }
+  | { readonly kind: 'edit'; readonly id: ExerciseId }
 
-/** Whether `exercise` survives every active facet (AND across facets, OR within one). */
 function matchesFilters(exercise: Exercise, filters: Filters): boolean {
   const muscleOk =
     filters.muscleGroups.size === 0 ||
-    exercise.muscleGroups.some((group) => filters.muscleGroups.has(group))
+    exercise.muscleGroups.some((g) => filters.muscleGroups.has(g))
   const equipmentOk =
     filters.equipment.size === 0 || exercise.equipment.some((eq) => filters.equipment.has(eq))
   const modalityOk = filters.modalities.size === 0 || filters.modalities.has(exercise.modality)
   return muscleOk && equipmentOk && modalityOk
 }
 
-/**
- * The tag labels shown as badges on a row. Empty equipment is a client-side
- * "bodyweight" pseudo-tag (not a domain literal) with hardcoded human text.
- * Everything else comes from the domain label maps.
- */
-function tagsOf(exercise: Exercise): readonly string[] {
-  const equipment =
-    exercise.equipment.length === 0
-      ? (['Bodyweight'] as const)
-      : exercise.equipment.map((eq) => equipmentLabel[eq])
-  return [
-    modalityLabel[exercise.modality],
-    intensityLabel[exercise.intensity],
-    ...exercise.muscleGroups.map((group) => muscleGroupLabel[group]),
-    ...equipment,
-  ]
-}
-
-/** The state driving which dialog is open, and (for edit) over which entry. */
-type DialogState =
-  | { readonly kind: 'closed' }
-  | { readonly kind: 'create' }
-  | { readonly kind: 'edit'; readonly id: ExerciseId }
-
-type FilterBarProps = {
+function FilterBar(props: {
   readonly exercises: readonly LibraryExercise[]
   readonly filters: Filters
   readonly setFilters: React.Dispatch<React.SetStateAction<Filters>>
-}
-
-/**
- * The chip rows across the top. Only facet values present in the current
- * catalog get a chip, so a chip never offers a filter that would empty the
- * list on its own.
- */
-function FilterBar({ exercises, filters, setFilters }: FilterBarProps) {
-  const modalities = new Set(exercises.map((e) => e.exercise.modality))
+}) {
+  const { exercises, filters, setFilters } = props
+  const mods = new Set(exercises.map((e) => e.exercise.modality))
   const muscles = new Set(exercises.flatMap((e) => e.exercise.muscleGroups))
-  const equipment = new Set(exercises.flatMap((e) => e.exercise.equipment))
-
+  const equip = new Set(exercises.flatMap((e) => e.exercise.equipment))
   return (
     <div className="flex w-full flex-col gap-2" data-testid="filter-bar">
-      <ChipRow
-        values={MODALITIES.filter((m) => modalities.has(m))}
-        selected={filters.modalities}
-        testIdPrefix="filter-modality"
+      <FacetGroup
+        values={MODALITIES.filter((m) => mods.has(m))}
+        selected={[...filters.modalities]}
         labels={modalityLabel}
-        onToggle={(m) =>
-          setFilters((prev) => ({ ...prev, modalities: toggle(prev.modalities, m) }))
-        }
+        testIdPrefix="filter-modality"
+        onChange={(next) => setFilters((p) => ({ ...p, modalities: new Set(next) }))}
       />
-      <ChipRow
+      <FacetGroup
         values={MUSCLE_GROUPS.filter((g) => muscles.has(g))}
-        selected={filters.muscleGroups}
-        testIdPrefix="filter-muscle"
+        selected={[...filters.muscleGroups]}
         labels={muscleGroupLabel}
-        onToggle={(g) =>
-          setFilters((prev) => ({ ...prev, muscleGroups: toggle(prev.muscleGroups, g) }))
-        }
+        testIdPrefix="filter-muscle"
+        onChange={(next) => setFilters((p) => ({ ...p, muscleGroups: new Set(next) }))}
       />
-      <ChipRow
-        values={EQUIPMENT.filter((eq) => equipment.has(eq))}
-        selected={filters.equipment}
-        testIdPrefix="filter-equipment"
+      <FacetGroup
+        values={EQUIPMENT.filter((eq) => equip.has(eq))}
+        selected={[...filters.equipment]}
         labels={equipmentLabel}
-        onToggle={(eq) =>
-          setFilters((prev) => ({ ...prev, equipment: toggle(prev.equipment, eq) }))
-        }
+        testIdPrefix="filter-equipment"
+        onChange={(next) => setFilters((p) => ({ ...p, equipment: new Set(next) }))}
       />
     </div>
   )
 }
 
-type RowProps = {
+function RowTags({ exercise }: { readonly exercise: Exercise }) {
+  const equip =
+    exercise.equipment.length === 0
+      ? (['Bodyweight'] as const)
+      : exercise.equipment.map((eq) => equipmentLabel[eq])
+  return (
+    <div className="flex flex-wrap gap-1">
+      <Badge variant={exercise.modality}>{modalityLabel[exercise.modality]}</Badge>
+      <Badge variant="secondary">{intensityLabel[exercise.intensity]}</Badge>
+      {exercise.muscleGroups.map((g) => (
+        <Badge key={g} variant="outline">
+          {muscleGroupLabel[g]}
+        </Badge>
+      ))}
+      {equip.map((tag) => (
+        <Badge key={tag} variant="outline">
+          {tag}
+        </Badge>
+      ))}
+    </div>
+  )
+}
+
+function ExerciseRow(props: {
   readonly entry: LibraryExercise
   readonly onEdit: () => void
   readonly onDelete: () => void
-}
-
-/** One catalog row: name (+ optional detail), tag badges, and edit/delete actions. */
-function ExerciseRow({ entry, onEdit, onDelete }: RowProps) {
+}) {
+  const { entry, onEdit, onDelete } = props
   const { exercise } = entry
   return (
     <li
@@ -187,146 +160,50 @@ function ExerciseRow({ entry, onEdit, onDelete }: RowProps) {
           </Button>
         </div>
       </div>
-      <div className="flex flex-wrap gap-1">
-        {tagsOf(exercise).map((tag) => (
-          <span
-            key={tag}
-            className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
+      <RowTags exercise={exercise} />
     </li>
   )
 }
 
-type ListProps = {
-  readonly visible: readonly LibraryExercise[]
-  readonly onEdit: (id: ExerciseId) => void
-  readonly onDelete: (id: ExerciseId) => void
-}
-
-/** The filtered catalog as a list, or an empty-state line when nothing matches. */
-function ExerciseList({ visible, onEdit, onDelete }: ListProps) {
-  if (visible.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground" data-testid="exercise-empty">
-        No exercises match.
-      </p>
-    )
-  }
-  return (
-    <ul className="flex w-full flex-col gap-2" data-testid="exercise-list">
-      {visible.map((entry) => (
-        <ExerciseRow
-          key={entry.id}
-          entry={entry}
-          onEdit={() => onEdit(entry.id)}
-          onDelete={() => onDelete(entry.id)}
-        />
-      ))}
-    </ul>
-  )
-}
-
-/**
- * The create/update/delete mutation atoms driven from the dialogs. Each
- * resolves its promise on success; `run` then fires the caller's `after`
- * (close the dialog) and refreshes `listExercisesAtom` so the list reflects
- * the change — the same refresh-on-success idiom as `workout-detail-screen`.
- */
 function useExerciseMutations() {
   const refresh = useAtomRefresh(listExercisesAtom)
-  const [createResult, create] = useAtom(createExerciseAtom, { mode: 'promise' })
-  const [updateResult, update] = useAtom(updateExerciseAtom, { mode: 'promise' })
-  const [deleteResult, remove] = useAtom(deleteExerciseAtom, { mode: 'promise' })
-
-  const run = (promise: Promise<unknown>, after: () => void) => {
+  const [, create] = useAtom(createExerciseAtom, { mode: 'promise' })
+  const [, update] = useAtom(updateExerciseAtom, { mode: 'promise' })
+  const [, remove] = useAtom(deleteExerciseAtom, { mode: 'promise' })
+  const [busy, setBusy] = React.useState(false)
+  const run = (promise: Promise<unknown>, after: () => void, failMessage: string) => {
+    setBusy(true)
     void promise
       .then(() => {
         after()
         refresh()
       })
       .catch(() => {
-        // Surfaced via each atom's own `Result`; the dialog simply stays open.
+        toast.error('Command failed', { description: failMessage })
+      })
+      .finally(() => {
+        setBusy(false)
       })
   }
-
   return {
-    creating: Result.isWaiting(createResult),
-    updating: Result.isWaiting(updateResult),
-    deleting: Result.isWaiting(deleteResult),
+    busy,
     create: (exercise: Exercise, after: () => void) =>
-      run(create({ payload: { exercise } }), after),
+      run(create({ payload: { exercise } }), after, 'Could not create the exercise.'),
     update: (id: ExerciseId, exercise: Exercise, after: () => void) =>
-      run(update({ payload: { id, exercise } }), after),
-    remove: (id: ExerciseId, after: () => void) => run(remove({ payload: { id } }), after),
+      run(update({ payload: { id, exercise } }), after, 'Could not update the exercise.'),
+    remove: (id: ExerciseId, after: () => void) =>
+      run(remove({ payload: { id } }), after, 'Could not delete the exercise.'),
   }
 }
 
-type CatalogDialogsProps = {
+function Catalog(props: {
   readonly exercises: readonly LibraryExercise[]
-  readonly dialog: DialogState
-  readonly pendingDelete: ExerciseId | undefined
-  readonly mutations: ReturnType<typeof useExerciseMutations>
-  readonly onClose: () => void
-  readonly onCancelDelete: () => void
-}
-
-/** The create/edit/delete dialogs, mounted over the list when one is open. */
-function CatalogDialogs({
-  exercises,
-  dialog,
-  pendingDelete,
-  mutations,
-  onClose,
-  onCancelDelete,
-}: CatalogDialogsProps) {
-  const editing =
-    dialog.kind === 'edit' ? exercises.find((entry) => entry.id === dialog.id) : undefined
-  const deleting = exercises.find((entry) => entry.id === pendingDelete)
-
-  return (
-    <>
-      {dialog.kind === 'create' || editing !== undefined ? (
-        <ExerciseDialog
-          title={editing === undefined ? 'New exercise' : 'Edit exercise'}
-          exercise={editing?.exercise}
-          submitting={editing === undefined ? mutations.creating : mutations.updating}
-          onSubmit={(exercise) =>
-            editing === undefined
-              ? mutations.create(exercise, onClose)
-              : mutations.update(editing.id, exercise, onClose)
-          }
-          onCancel={onClose}
-        />
-      ) : null}
-      {deleting === undefined ? null : (
-        <DeleteConfirm
-          name={deleting.exercise.name}
-          submitting={mutations.deleting}
-          onConfirm={() => mutations.remove(deleting.id, onCancelDelete)}
-          onCancel={onCancelDelete}
-        />
-      )}
-    </>
-  )
-}
-
-type CatalogProps = {
-  readonly exercises: readonly LibraryExercise[]
-}
-
-/** The filterable catalog and its create/edit/delete surface, once the list has loaded. */
-function Catalog({ exercises }: CatalogProps) {
-  const mutations = useExerciseMutations()
+  readonly onCreate: () => void
+  readonly onEdit: (id: ExerciseId) => void
+  readonly onDelete: (id: ExerciseId) => void
+}) {
   const [filters, setFilters] = React.useState<Filters>(emptyFilters)
-  const [dialog, setDialog] = React.useState<DialogState>({ kind: 'closed' })
-  const [pendingDelete, setPendingDelete] = React.useState<ExerciseId | undefined>(undefined)
-
-  const visible = exercises.filter((entry) => matchesFilters(entry.exercise, filters))
-
+  const visible = props.exercises.filter((e) => matchesFilters(e.exercise, filters))
   return (
     <div className="flex w-full flex-col gap-4">
       <div className="flex justify-end">
@@ -334,66 +211,148 @@ function Catalog({ exercises }: CatalogProps) {
           type="button"
           size="sm"
           data-testid="create-exercise-button"
-          onClick={() => setDialog({ kind: 'create' })}
+          onClick={props.onCreate}
         >
           New exercise
         </Button>
       </div>
-      <FilterBar exercises={exercises} filters={filters} setFilters={setFilters} />
-      <ExerciseList
-        visible={visible}
-        onEdit={(id) => setDialog({ kind: 'edit', id })}
-        onDelete={(id) => setPendingDelete(id)}
-      />
-      <CatalogDialogs
-        exercises={exercises}
-        dialog={dialog}
-        pendingDelete={pendingDelete}
-        mutations={mutations}
-        onClose={() => setDialog({ kind: 'closed' })}
-        onCancelDelete={() => setPendingDelete(undefined)}
-      />
+      <FilterBar exercises={props.exercises} filters={filters} setFilters={setFilters} />
+      {visible.length === 0 ? (
+        <p className="text-sm text-muted-foreground" data-testid="exercise-empty">
+          No exercises match.
+        </p>
+      ) : (
+        <ul className="flex w-full flex-col gap-2" data-testid="exercise-list">
+          {visible.map((entry) => (
+            <ExerciseRow
+              key={entry.id}
+              entry={entry}
+              onEdit={() => props.onEdit(entry.id)}
+              onDelete={() => props.onDelete(entry.id)}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
 
-/**
- * The exercise library (`/library/exercises` once the route tree restructure
- * lands): Workouts | Exercises segment control, a back-link to the workout
- * list, and the caller's catalog from `ListExercises` as a filterable,
- * editable list. The catalog, its filter chips, and the create/edit/delete
- * dialogs live in `Catalog`, whose mutations refresh `listExercisesAtom` via
- * the shared `useAtomValue` + `Result.match` idiom.
- */
+function ScreenOverlays(props: {
+  readonly exercises: readonly LibraryExercise[]
+  readonly drawer: DrawerState
+  readonly pendingDelete: ExerciseId | undefined
+  readonly mutations: ReturnType<typeof useExerciseMutations>
+  readonly onCloseDrawer: () => void
+  readonly onCloseDelete: () => void
+}) {
+  const drawer = props.drawer
+  const editing =
+    drawer.kind === 'edit' ? props.exercises.find((e) => e.id === drawer.id) : undefined
+  const deleting = props.exercises.find((e) => e.id === props.pendingDelete)
+  return (
+    <>
+      <ExerciseDrawer
+        open={drawer.kind === 'create' || editing !== undefined}
+        title={editing === undefined ? 'New exercise' : 'Edit exercise'}
+        exercise={editing?.exercise}
+        submitting={props.mutations.busy}
+        onOpenChange={(open) => {
+          if (!open) {
+            props.onCloseDrawer()
+          }
+        }}
+        onSubmit={(exercise) =>
+          editing === undefined
+            ? props.mutations.create(exercise, props.onCloseDrawer)
+            : props.mutations.update(editing.id, exercise, props.onCloseDrawer)
+        }
+      />
+      <DeleteAlert
+        open={deleting !== undefined}
+        name={deleting?.exercise.name ?? ''}
+        submitting={props.mutations.busy}
+        onOpenChange={(open) => {
+          if (!open) {
+            props.onCloseDelete()
+          }
+        }}
+        onConfirm={() => {
+          if (deleting !== undefined) {
+            props.mutations.remove(deleting.id, props.onCloseDelete)
+          }
+        }}
+      />
+    </>
+  )
+}
+
+function EmptyCreate({ onCreate }: { readonly onCreate: () => void }) {
+  return (
+    <Button type="button" size="sm" data-testid="create-exercise-button" onClick={onCreate}>
+      New exercise
+    </Button>
+  )
+}
+
+function ScreenHeader() {
+  return (
+    <header className="flex w-full max-w-md flex-col gap-3">
+      <Link
+        to="/library"
+        data-testid="library-nav-link"
+        className="text-sm text-primary underline-offset-4 hover:underline"
+      >
+        ← Your library
+      </Link>
+      <LibrarySegments />
+    </header>
+  )
+}
+
+/** `/library/exercises` — filterable catalog; create/edit drawer; delete alert-dialog. */
 export function ExerciseLibraryScreen() {
-  const exercises = useAtomValue(listExercisesAtom)
+  const result = useAtomValue(listExercisesAtom)
+  const refresh = useAtomRefresh(listExercisesAtom)
+  const mutations = useExerciseMutations()
+  const [drawer, setDrawer] = React.useState<DrawerState>({ kind: 'closed' })
+  const [pendingDelete, setPendingDelete] = React.useState<ExerciseId | undefined>(undefined)
+  const exercises = Result.isSuccess(result) ? result.value : []
+  const openCreate = () => setDrawer({ kind: 'create' })
 
   return (
     <div
       className="flex min-h-svh flex-col items-center gap-6 p-6"
       data-testid="exercise-library-screen"
     >
-      <header className="flex w-full max-w-md flex-col gap-3">
-        <Link
-          to="/library"
-          data-testid="library-nav-link"
-          className="text-sm text-primary underline-offset-4 hover:underline"
-        >
-          ← Your library
-        </Link>
-        <LibrarySegments />
-      </header>
+      <ScreenHeader />
       <div className="w-full max-w-md">
-        {Result.match(exercises, {
-          onInitial: () => <p className="text-sm text-muted-foreground">Loading your exercises…</p>,
-          onFailure: (failure) => (
-            <p className="text-sm text-destructive">
-              Failed to load your exercises: {String(failure.cause)}
-            </p>
-          ),
-          onSuccess: ({ value }) => <Catalog exercises={value} />,
-        })}
+        <QueryBoundary
+          result={result}
+          isEmpty={(list) => list.length === 0}
+          emptyTitle="No exercises yet"
+          emptyDescription="Create your first exercise to get started."
+          emptyAction={<EmptyCreate onCreate={openCreate} />}
+          errorTitle="Failed to load your exercises"
+          onRetry={refresh}
+        >
+          {(value) => (
+            <Catalog
+              exercises={value}
+              onCreate={openCreate}
+              onEdit={(id) => setDrawer({ kind: 'edit', id })}
+              onDelete={setPendingDelete}
+            />
+          )}
+        </QueryBoundary>
       </div>
+      <ScreenOverlays
+        exercises={exercises}
+        drawer={drawer}
+        pendingDelete={pendingDelete}
+        mutations={mutations}
+        onCloseDrawer={() => setDrawer({ kind: 'closed' })}
+        onCloseDelete={() => setPendingDelete(undefined)}
+      />
     </div>
   )
 }

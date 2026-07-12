@@ -1,39 +1,56 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 
-const segmentClass =
-  'rounded-md px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:shadow-sm'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 /**
- * Workouts | Exercises segmented control for the Library tab. Active segment
- * is derived from the current path (`/library` vs `/library/exercises`, plus
- * the legacy `/` and `/exercises` paths until the route restructure lands).
+ * Workouts | Exercises segmented control for the Library tab. Built on
+ * `ui/toggle-group`; the active segment is derived from the current path
+ * (`/library` vs `/library/exercises`, plus the legacy `/` and `/exercises`
+ * paths until the route restructure lands). Each item is a real `Link` so
+ * navigation and hrefs stay intact for consumers (e.g. exercise-library).
  */
 export function LibrarySegments() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const exercisesActive = pathname === '/library/exercises' || pathname === '/exercises'
   const workoutsActive = !exercisesActive
+  const active = exercisesActive ? 'exercises' : 'workouts'
 
   return (
-    <nav
-      className="inline-flex items-center gap-1 rounded-lg bg-muted p-[3px]"
+    <ToggleGroup
+      value={[active]}
       data-testid="library-segments"
+      className="rounded-lg bg-muted p-[3px]"
+      spacing={1}
+      size="sm"
     >
-      <Link
-        to="/library"
-        data-testid="library-segment-workouts"
-        data-active={workoutsActive ? 'true' : 'false'}
-        className={segmentClass}
+      <ToggleGroupItem
+        value="workouts"
+        nativeButton={false}
+        render={
+          <Link
+            to="/library"
+            data-testid="library-segment-workouts"
+            data-active={workoutsActive ? 'true' : 'false'}
+          />
+        }
+        className="rounded-md px-2.5 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm"
       >
         Workouts
-      </Link>
-      <Link
-        to="/library/exercises"
-        data-testid="library-segment-exercises"
-        data-active={exercisesActive ? 'true' : 'false'}
-        className={segmentClass}
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="exercises"
+        nativeButton={false}
+        render={
+          <Link
+            to="/library/exercises"
+            data-testid="library-segment-exercises"
+            data-active={exercisesActive ? 'true' : 'false'}
+          />
+        }
+        className="rounded-md px-2.5 text-muted-foreground data-pressed:bg-background data-pressed:text-foreground data-pressed:shadow-sm"
       >
         Exercises
-      </Link>
-    </nav>
+      </ToggleGroupItem>
+    </ToggleGroup>
   )
 }

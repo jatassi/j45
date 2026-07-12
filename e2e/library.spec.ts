@@ -110,8 +110,27 @@ test.describe('library (chromium + webkit)', () => {
       await openLibraryTab(page)
       await expect(workoutCards(page)).toHaveCount(12)
 
+      // Every seed card shows a focus-label badge and an `N works · MM:SS` summary.
+      for (const card of await workoutCards(page).all()) {
+        const cardTestId = await card.getAttribute('data-testid')
+        if (cardTestId === null) {
+          throw new Error('expected workout-card-<id> data-testid on each library card')
+        }
+        const cardId = cardTestId.replace('workout-card-', '')
+        await expect(page.getByTestId(`workout-focus-${cardId}`)).not.toHaveText('')
+        await expect(page.getByTestId(`workout-summary-${cardId}`)).toHaveText(
+          /\d+ works · \d+:\d{2}/,
+        )
+      }
+
       const athleticaLink = workoutCards(page).filter({ hasText: 'Athletica' })
       await expect(athleticaLink).toHaveCount(1)
+      const athleticaCardTestId = await athleticaLink.getAttribute('data-testid')
+      if (athleticaCardTestId === null) {
+        throw new Error('expected Athletica card to carry a workout-card-<id> testid')
+      }
+      const athleticaId = athleticaCardTestId.replace('workout-card-', '')
+      await expect(page.getByTestId(`workout-summary-${athleticaId}`)).toHaveText('9 works · 26:45')
       await athleticaLink.click()
 
       await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
@@ -148,9 +167,8 @@ test.describe('library (chromium + webkit)', () => {
       await expect(page.getByTestId('delete-dialog')).toBeVisible()
       await page.getByTestId('delete-confirm').click()
 
-      // Delete navigates to `/` (home); open Library to assert the list shrank.
-      await expect(page.getByTestId('home-screen')).toBeVisible()
-      await openLibraryTab(page)
+      // Delete navigates to `/library` (not `/`); list should already be visible.
+      await expect(page.getByTestId('library-screen')).toBeVisible()
       await expect(workoutCards(page)).toHaveCount(12)
       await expect(workoutCards(page).filter({ hasText: 'Athletica Renamed' })).toHaveCount(0)
     },

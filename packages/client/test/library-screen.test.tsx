@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
@@ -122,7 +122,7 @@ function renderLibraryScreen(
 }
 
 describe('LibraryScreen', () => {
-  it("lists the caller's workouts (name, focus, station count, MM:SS duration) from ListWorkouts", async () => {
+  it("lists the caller's workouts (name, focus label, works·duration summary) from ListWorkouts", async () => {
     renderLibraryScreen({
       ListWorkouts: () => Effect.succeed([athletica, ironCircuit]),
     })
@@ -130,31 +130,107 @@ describe('LibraryScreen', () => {
     await screen.findByTestId(`workout-card-${athletica.id}`)
 
     expect(screen.getByTestId(`workout-name-${athletica.id}`).textContent).toBe('Athletica')
-    expect(screen.getByTestId(`workout-focus-${athletica.id}`).textContent).toBe('cardio')
-    expect(screen.getByTestId(`workout-stations-${athletica.id}`).textContent).toBe('2 stations')
-    expect(screen.getByTestId(`workout-duration-${athletica.id}`).textContent).toBe('1:05')
+    // FocusBadge must show the human label, never the raw literal.
+    expect(screen.getByTestId(`workout-focus-${athletica.id}`).textContent).toBe('Cardio')
+    expect(screen.getByTestId(`workout-summary-${athletica.id}`).textContent).toBe('2 works · 1:05')
 
     expect(screen.getByTestId(`workout-name-${ironCircuit.id}`).textContent).toBe('Iron Circuit')
-    expect(screen.getByTestId(`workout-focus-${ironCircuit.id}`).textContent).toBe('strength')
-    expect(screen.getByTestId(`workout-stations-${ironCircuit.id}`).textContent).toBe('3 stations')
-    expect(screen.getByTestId(`workout-duration-${ironCircuit.id}`).textContent).toBe('2:50')
+    expect(screen.getByTestId(`workout-focus-${ironCircuit.id}`).textContent).toBe('Strength')
+    expect(screen.getByTestId(`workout-summary-${ironCircuit.id}`).textContent).toBe(
+      '3 works · 2:50',
+    )
+
+    // Old split testids are gone.
+    expect(screen.queryByTestId(`workout-stations-${athletica.id}`)).toBeNull()
+    expect(screen.queryByTestId(`workout-duration-${athletica.id}`)).toBeNull()
+
+    // Whole card is the Link to the detail route.
+    expect(screen.getByTestId(`workout-card-${athletica.id}`).getAttribute('href')).toBe(
+      `/workouts/${athletica.id}`,
+    )
 
     expect(screen.getByTestId('new-workout-button').getAttribute('href')).toBe('/workouts/new')
   })
 
-  it('renders LibrarySegments with Workouts active on /library', async () => {
+  it('renders LibrarySegments from ui/toggle-group with Workouts active on /library', async () => {
     renderLibraryScreen({
       ListWorkouts: () => Effect.succeed([]),
     })
 
     await screen.findByTestId('library-screen')
-    expect(screen.getByTestId('library-segments')).toBeTruthy()
+    const segments = screen.getByTestId('library-segments')
+    expect(segments).toBeTruthy()
+    // Composed from ui/toggle-group, not hand-rolled nav pills.
+    expect(segments.dataset.slot).toBe('toggle-group')
     expect(screen.getByTestId('library-segment-workouts').getAttribute('href')).toBe('/library')
     expect(screen.getByTestId('library-segment-exercises').getAttribute('href')).toBe(
       '/library/exercises',
     )
     expect(screen.getByTestId('library-segment-workouts').dataset.active).toBe('true')
     expect(screen.getByTestId('library-segment-exercises').dataset.active).toBe('false')
+  })
+
+  it('routes to /library/exercises when the Exercises segment is activated', async () => {
+    renderLibraryScreen({
+      ListWorkouts: () => Effect.succeed([]),
+    })
+
+    await screen.findByTestId('library-screen')
+    fireEvent.click(screen.getByTestId('library-segment-exercises'))
+    await screen.findByTestId('exercises-destination')
+  })
+
+  it('shows skeleton rows while listWorkoutsAtom is loading', async () => {
+    renderLibraryScreen({
+      ListWorkouts: () => Effect.never,
+    })
+
+    await screen.findByTestId('library-screen')
+    expect(screen.getByTestId('query-boundary-loading')).toBeTruthy()
+    // Not the old bare loading string.
+    expect(screen.queryByText('Loading your workouts…')).toBeNull()
+    // Empty / failure surfaces stay hidden.
+    expect(screen.queryByTestId('query-boundary-empty')).toBeNull()
+    expect(screen.queryByTestId('query-boundary-error')).toBeNull()
+  })
+
+  it('shows ui/empty with a New workout CTA when ListWorkouts is empty', async () => {
+    renderLibraryScreen({
+      ListWorkouts: () => Effect.succeed([]),
+    })
+
+    await screen.findByTestId('query-boundary-empty')
+    // Empty CTA navigates to the new-workout editor.
+    const emptyCta = screen.getByTestId('new-workout-empty-cta')
+    expect(emptyCta.getAttribute('href')).toBe('/workouts/new')
+    // Header New workout button remains always-visible outside the branch.
+    expect(screen.getByTestId('new-workout-button').getAttribute('href')).toBe('/workouts/new')
+    // Visually distinct from loading / failure.
+    expect(screen.queryByTestId('query-boundary-loading')).toBeNull()
+    expect(screen.queryByTestId('query-boundary-error')).toBeNull()
+  })
+
+  it('shows ui/alert with retry when ListWorkouts fails', async () => {
+    renderLibraryScreen({
+      ListWorkouts: () => Effect.fail('list-failed' as never),
+    })
+
+    await screen.findByTestId('query-boundary-error')
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    // Visually distinct from loading / empty.
+    expect(screen.queryByTestId('query-boundary-loading')).toBeNull()
+    expect(screen.queryByTestId('query-boundary-empty')).toBeNull()
+  })
+
+  it('contains no native select or bare input elements', async () => {
+    renderLibraryScreen({
+      ListWorkouts: () => Effect.succeed([athletica]),
+    })
+
+    await screen.findByTestId(`workout-card-${athletica.id}`)
+    const root = screen.getByTestId('library-screen')
+    expect(root.querySelector('select')).toBeNull()
+    expect(root.querySelector('input')).toBeNull()
   })
 
   it('does not render the old header nav, ActiveSessionsStrip, or the old h1 header', async () => {

@@ -69,12 +69,18 @@ function exerciseRows(page: Page) {
   return page.locator('[data-testid="exercise-list"] [data-testid^="exercise-row-"]')
 }
 
+/** Opens a base-ui Select by its trigger testid and picks the option with the given label. */
+async function pickSelectOption(page: Page, testId: string, optionLabel: string): Promise<void> {
+  await page.getByTestId(testId).click()
+  await page.getByRole('option', { name: optionLabel }).click()
+}
+
 /**
  * Exercises the whole stack this feature adds atop `global-setup.ts`'s
  * harness: registration-time exercise seeding (`registration-seeding`), the
  * live `ExerciseRpcs` handlers, and the routed `/library/exercises` client
- * screen (`exercise-library-screen` / `exercise-dialogs`). Registers its own
- * per-project account from `exercises.spec.ts`'s own pre-minted invite
+ * screen (`exercise-library-screen` drawer/alert-dialog UI). Registers its
+ * own per-project account from `exercises.spec.ts`'s own pre-minted invite
  * (`readE2eEnv().exercisesInvitesByProject`) precisely so `fullyParallel`
  * chromium+webkit runs never race `registerInvitesByProject` or
  * `libraryInvitesByProject` for the same codes.
@@ -83,7 +89,7 @@ test.describe('exercises (chromium + webkit)', () => {
   test(
     "after registration, '/library/exercises' via the Library tab + Exercises segment lists the 96 seed exercises; " +
       'the calves muscle filter narrows the list; create → reload → edit tags → reload → ' +
-      'delete all persist through the real stack',
+      'delete all persist through the real stack; a forced command failure surfaces a toast',
     async ({ page }, testInfo) => {
       const env = readE2eEnv()
       const projectName = projectNameFrom(testInfo)
@@ -129,17 +135,17 @@ test.describe('exercises (chromium + webkit)', () => {
       await expect(exerciseRows(page)).toHaveCount(SEEDED_EXERCISE_COUNT)
 
       await page.getByTestId('create-exercise-button').click()
-      await expect(page.getByTestId('exercise-dialog')).toBeVisible()
+      await expect(page.getByTestId('exercise-drawer')).toBeVisible()
       await page.getByTestId('exercise-form-name').fill(createdName)
       await page.getByTestId('exercise-form-detail').fill('e2e create flow')
-      await page.getByTestId('exercise-form-modality').selectOption('strength')
-      await page.getByTestId('exercise-form-intensity').selectOption('moderate')
+      await pickSelectOption(page, 'exercise-form-modality', 'Strength')
+      await pickSelectOption(page, 'exercise-form-intensity', 'Moderate')
       // `muscleGroups` is non-empty — submit stays disabled until at least one chip.
       await page.getByTestId('exercise-form-muscle-quads').click()
       await page.getByTestId('exercise-form-equipment-med-ball').click()
       await page.getByTestId('exercise-form-submit').click()
 
-      await expect(page.getByTestId('exercise-dialog')).toHaveCount(0)
+      await expect(page.getByTestId('exercise-drawer')).toHaveCount(0)
       await expect(exerciseRows(page)).toHaveCount(SEEDED_EXERCISE_COUNT + 1)
 
       const createdRow = exerciseRows(page).filter({ hasText: createdName })
@@ -150,7 +156,7 @@ test.describe('exercises (chromium + webkit)', () => {
       }
       const createdId = createdTestId.replace('exercise-row-', '')
       await expect(page.getByTestId(`exercise-name-${createdId}`)).toHaveText(createdName)
-      // tagsOf: domain labels for modality, intensity, muscle groups, equipment.
+      // Domain labels for modality, intensity, muscle groups, equipment.
       await expect(createdRow).toContainText('Strength')
       await expect(createdRow).toContainText('Moderate')
       await expect(createdRow).toContainText('Quads')
@@ -166,12 +172,12 @@ test.describe('exercises (chromium + webkit)', () => {
       // Real tag change: swap quads → chest (toggle chest on first so the
       // draft stays valid while quads is removed).
       await page.getByTestId(`edit-exercise-${createdId}`).click()
-      await expect(page.getByTestId('exercise-dialog')).toBeVisible()
+      await expect(page.getByTestId('exercise-drawer')).toBeVisible()
       await page.getByTestId('exercise-form-muscle-chest').click()
       await page.getByTestId('exercise-form-muscle-quads').click()
       await page.getByTestId('exercise-form-submit').click()
 
-      await expect(page.getByTestId('exercise-dialog')).toHaveCount(0)
+      await expect(page.getByTestId('exercise-drawer')).toHaveCount(0)
       const editedRow = page.getByTestId(`exercise-row-${createdId}`)
       await expect(editedRow).toContainText('Chest')
       await expect(editedRow).not.toContainText('Quads')
@@ -192,6 +198,52 @@ test.describe('exercises (chromium + webkit)', () => {
       await expect(exerciseRows(page)).toHaveCount(SEEDED_EXERCISE_COUNT)
       await expect(page.getByTestId(`exercise-row-${createdId}`)).toHaveCount(0)
       await expect(exerciseRows(page).filter({ hasText: createdName })).toHaveCount(0)
+
+      // Force a create failure by dropping CreateExercise frames on the rpc
+      // WebSocket, then assert a sonner toast surfaces (not silent swallow).
+      await page.routeWebSocket('**/rpc', (ws) => {
+        const server = ws.connectToServer()
+        ws.onMessage((message) => {
+          const text =
+            typeof message === 'string'
+              ? message
+              : Buffer.from(message as ArrayBuffer).toString('utf8')
+          if (text.includes('CreateExercise')) {
+            try {
+              void server.close({ code: 1011, reason: 'forced e2e failure' })
+            } catch {
+              // ignore
+            }
+            try {
+              void ws.close()
+            } catch {
+              // ignore
+            }
+            return
+          }
+          server.send(message)
+        })
+        server.onMessage((message) => {
+          ws.send(message)
+        })
+      })
+
+      // Reconnect the client over the intercepted socket.
+      await page.reload()
+      await expect(page.getByTestId('exercise-library-screen')).toBeVisible()
+      await expect(page.getByTestId('exercise-list')).toBeVisible()
+
+      const failName = `E2E Fail Create (${projectName})`
+      await page.getByTestId('create-exercise-button').click()
+      await expect(page.getByTestId('exercise-drawer')).toBeVisible()
+      await page.getByTestId('exercise-form-name').fill(failName)
+      await page.getByTestId('exercise-form-muscle-quads').click()
+      await page.getByTestId('exercise-form-submit').click()
+
+      await expect(page.locator('[data-sonner-toast]').first()).toBeVisible()
+      await expect(page.getByText(/Command failed|Could not/i).first()).toBeVisible()
+      // Drawer stays open on failure.
+      await expect(page.getByTestId('exercise-drawer')).toBeVisible()
     },
   )
 })

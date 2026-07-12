@@ -26,15 +26,21 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LibraryScreen } from '@/components/library-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn() },
+}))
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.mocked(toast.error).mockClear()
 })
 
 /**
@@ -119,11 +125,8 @@ function SessionDestination() {
 }
 
 /**
- * Mounts a throwaway `/` + `/workouts/$workoutId` + `/session/$sessionId`
- * route tree (memory history, no file-based codegen) — the same minimal
- * stand-in for `router.tsx`'s own tree that `library-screen.test.tsx`'s
- * `renderLibraryScreen` uses, extended with the detail route and a
- * session destination so Start session / active-session cards can navigate.
+ * Mounts a throwaway `/` + `/library` + `/workouts/$workoutId` + `/session/$sessionId`
+ * route tree (memory history) so Start session / delete → `/library` can navigate.
  */
 function renderApp(handlers: Handlers, initialPath: string) {
   const fakeRuntime = makeFakeRuntime(handlers)
@@ -131,6 +134,11 @@ function renderApp(handlers: Handlers, initialPath: string) {
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
+    component: LibraryScreen,
+  })
+  const libraryRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/library',
     component: LibraryScreen,
   })
   const workoutDetailRoute = createRoute({
@@ -144,7 +152,7 @@ function renderApp(handlers: Handlers, initialPath: string) {
     component: SessionDestination,
   })
   const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, workoutDetailRoute, sessionRoute]),
+    routeTree: rootRoute.addChildren([indexRoute, libraryRoute, workoutDetailRoute, sessionRoute]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   })
 
@@ -181,7 +189,7 @@ describe('WorkoutDetailScreen', () => {
     expect(screen.getByTestId('workout-title').textContent).toBe('Athletica')
   })
 
-  it('renders the uniform flow summary, every pod/station (name + muted detail), and the total duration from a fake GetWorkout', async () => {
+  it('renders FocusBadge, flowTypeLabel summary, works line, duration, pods/stations, and start actions', async () => {
     renderApp(
       {
         GetWorkout: () => Effect.succeed(athletica),
@@ -191,9 +199,13 @@ describe('WorkoutDetailScreen', () => {
     )
 
     await screen.findByTestId('workout-detail-screen')
-    expect(screen.getByTestId('workout-flow-summary').textContent).toBe('40″/20″ × 2')
+    expect(screen.getByTestId('workout-focus').textContent).toBe('Cardio')
+    expect(screen.getByTestId('workout-flow-summary').textContent).toBe('Laps · 40″/20″ × 2')
+    expect(screen.getByTestId('workout-works-summary').textContent).toMatch(/6 works/)
     expect(screen.getByTestId('workout-duration').textContent).toBe('5:45')
     expect(screen.getByTestId('library-nav-link').getAttribute('href')).toBe('/library')
+    expect(screen.getByTestId('start-session-button').textContent).toBe('Start')
+    expect(screen.getByTestId('start-with-reflow-button')).toBeTruthy()
 
     expect(screen.getAllByTestId('pod').map((pod) => pod.textContent)).toHaveLength(2)
     expect(screen.getAllByTestId('pod-name').map((pod) => pod.textContent)).toEqual([
@@ -207,16 +219,19 @@ describe('WorkoutDetailScreen', () => {
     ])
     expect(screen.getAllByTestId('station-detail')).toHaveLength(1)
     expect(screen.getByTestId('station-detail').textContent).toBe('or mountain climbers')
+    // Work/rest chips appear on every station row (3 stations).
+    expect(screen.getAllByText('40″')).toHaveLength(3)
+    expect(screen.getAllByText('20″')).toHaveLength(3)
   })
 
   it('lists the ladder round-by-round when the rounds differ', async () => {
     renderApp({ GetWorkout: () => Effect.succeed(ladderWorkout) }, `/workouts/${ladderWorkout.id}`)
 
     await screen.findByTestId('workout-detail-screen')
-    expect(screen.getByTestId('workout-flow-summary').textContent).toBe('40″/20″, 30″/10″')
+    expect(screen.getByTestId('workout-flow-summary').textContent).toBe('Laps · 40″/20″, 30″/10″')
   })
 
-  it('renders a human-readable state for a WorkoutNotFound GetWorkout failure, never a blank screen', async () => {
+  it('renders an Alert + library Link for WorkoutNotFound, never a blank screen', async () => {
     const missingId = Schema.decodeSync(WorkoutId)('workout-missing')
     renderApp(
       { GetWorkout: () => Effect.fail(new WorkoutNotFound({ id: missingId })) },
@@ -224,6 +239,8 @@ describe('WorkoutDetailScreen', () => {
     )
 
     await screen.findByTestId('workout-not-found')
+    const link = screen.getByTestId('workout-not-found-library-link')
+    expect(link.getAttribute('href')).toBe('/library')
   })
 
   it('starts a session through StartSession and navigates to /session/<id> on success', async () => {
@@ -298,6 +315,27 @@ describe('WorkoutDetailScreen', () => {
     expect(screen.queryByTestId('rename-dialog')).toBeNull()
   })
 
+  it('toasts when RenameWorkout rejects', async () => {
+    renderApp(
+      {
+        GetWorkout: () => Effect.succeed(athletica),
+        ListWorkouts: () => Effect.succeed([athletica]),
+        RenameWorkout: () => Effect.fail(new Error('rename failed')),
+      },
+      `/workouts/${athletica.id}`,
+    )
+
+    await screen.findByTestId('rename-button')
+    fireEvent.click(screen.getByTestId('rename-button'))
+    fireEvent.click(await screen.findByTestId('rename-confirm'))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Command failed', {
+        description: 'Could not rename the workout.',
+      })
+    })
+  })
+
   it('duplicates through DuplicateWorkout, refreshing the list atom and navigating home', async () => {
     let duplicatePayload: unknown
 
@@ -328,7 +366,7 @@ describe('WorkoutDetailScreen', () => {
     expect(duplicatePayload).toEqual({ id: athletica.id })
   })
 
-  it('deletes through DeleteWorkout behind a confirm dialog, refreshing the list atom and navigating home', async () => {
+  it('deletes through DeleteWorkout behind alert-dialog, refreshing the list and navigating to /library', async () => {
     let deletePayload: unknown
 
     renderApp(

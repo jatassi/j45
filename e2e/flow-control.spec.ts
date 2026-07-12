@@ -145,7 +145,7 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
         'Alpha Pull',
         'Bravo Squat',
       ])
-      await expect(page.getByTestId('workout-flow-summary')).toHaveText('20″/10″ × 2')
+      await expect(page.getByTestId('workout-flow-summary')).toHaveText('Sets · 20″/10″ × 2')
     },
   )
 
