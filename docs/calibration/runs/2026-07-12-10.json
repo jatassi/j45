@@ -1,0 +1,71 @@
+{
+  "run": {
+    "prepared_at": "2026-07-12T11:08:31.656Z",
+    "target": "redesign",
+    "scope": [
+      "secondary-screens"
+    ],
+    "tokens": {
+      "spent": 1969584,
+      "by_role": {
+        "plan": 31479,
+        "build": 0,
+        "drive": 128451,
+        "validate": 22527
+      },
+      "attribution": "overlapped"
+    },
+    "halted": null
+  },
+  "features": [
+    {
+      "id": "secondary-screens",
+      "workflow_path": "standard",
+      "outcome": "blocked",
+      "reason": "Criterion 2 (e2e empty-state + failure/retry) unmet at the specified level: the /history empty state (Start-a-workout CTA into /library) and the query-failure inline alert with a retry control distinct from the loading skeleton are implemented and verified only in packages/client/test/history-screen.test.ts (unit). No e2e anywhere exercises either path — e2e/history.spec.ts contains one populated-history test, and grep across e2e/ finds no reference to the empty CTA, query-boundary-empty, or query-boundary-error. The criterion explicitly says 'e2e'; real-transport (not mocked) failure rendering is unproven end-to-end.; Criterion 1 (participant pills) minor e2e gap: the populated e2e in e2e/history.spec.ts asserts name/date/host/progress/snapshot on chromium+webkit but deliberately does not assert participant pills (documented per-stint-roster reason at assertHistoryRow). Participant-pill rendering is covered only by the unit test (history-screen.test.ts:174/208-223). The criterion lists participant pills as one of the card's four required elements.",
+      "reslice": null,
+      "agents": {
+        "plan": 1,
+        "build": 0,
+        "drive": 3,
+        "validate": 1
+      },
+      "tasks": [
+        {
+          "id": "history-cards",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/history-screen.tsx",
+            "packages/client/test/history-screen.test.ts",
+            "e2e/history.spec.ts"
+          ]
+        },
+        {
+          "id": "account-shell",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/account-screen.tsx",
+            "packages/client/src/components/server-info-card.tsx",
+            "packages/client/test/account-screen.test.tsx",
+            "packages/client/test/server-info-card.test.tsx",
+            "e2e/auth-passkey.spec.ts",
+            "e2e/server-info.spec.ts"
+          ]
+        },
+        {
+          "id": "people-invites",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/people-invites.tsx",
+            "packages/client/test/people-invites.test.tsx",
+            "e2e/auth-admin.spec.ts"
+          ]
+        }
+      ],
+      "actual": null
+    }
+  ]
+}
