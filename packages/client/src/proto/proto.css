@@ -6,17 +6,12 @@
  */
 
 .proto-scope {
-  /* Evolved legacy tokens, kept local to the prototype. */
+  /* Surface stack stays local to the prototype (not yet graduated).
+     Sport hues + orange graduated into index.css as --hue-* / --primary. */
   --proto-ground: #0b0d11;
   --proto-surface: #14171d;
   --proto-surface-2: #191d24;
   --proto-line: rgb(255 255 255 / 0.07);
-  --proto-orange: #ff6b35;
-  --proto-cardio: #38bdf8;
-  --proto-strength: #a78bfa;
-  --proto-hybrid: #fb7185;
-  --proto-work: #22c55e;
-  --proto-rest: #f59e0b;
 }
 
 /* Phone frame — a ~390px column centred on desktop, edge-to-edge on phones. */
@@ -74,7 +69,7 @@
   height: 300px;
   top: -60px;
   left: -80px;
-  background: var(--proto-orange);
+  background: var(--primary);
   opacity: 0.28;
   animation: proto-drift-1 22s ease-in-out infinite alternate;
 }
@@ -83,7 +78,7 @@
   height: 260px;
   bottom: 40px;
   right: -70px;
-  background: var(--proto-strength);
+  background: var(--hue-strength);
   opacity: 0.22;
   animation: proto-drift-2 27s ease-in-out infinite alternate;
 }
@@ -92,7 +87,7 @@
   height: 220px;
   top: 40%;
   left: 30%;
-  background: var(--proto-cardio);
+  background: var(--hue-cardio);
   opacity: 0.14;
   animation: proto-drift-3 31s ease-in-out infinite alternate;
 }
@@ -128,7 +123,7 @@
   overflow: hidden;
   background: radial-gradient(
     120% 80% at 50% 8%,
-    color-mix(in oklab, var(--proto-work) 22%, #0b0d11) 0%,
+    color-mix(in oklab, var(--hue-work) 22%, #0b0d11) 0%,
     #0b0d11 55%,
     #08090b 100%
   );
@@ -138,7 +133,7 @@
   inset: -10% 5% auto 5%;
   height: 320px;
   border-radius: 9999px;
-  background: var(--proto-work);
+  background: var(--hue-work);
   filter: blur(60px);
   opacity: 0.18;
   animation: proto-pulse 4s ease-in-out infinite alternate;

@@ -45,7 +45,7 @@ const RECENT = WORKOUTS.slice(0, 5)
 function Wordmark(): JSX.Element {
   return (
     <span className="font-heading text-[24px] leading-none font-black tracking-tighter text-white italic">
-      J<span className="text-[var(--proto-orange)]">45</span>
+      J<span className="text-[var(--primary)]">45</span>
     </span>
   )
 }
@@ -82,7 +82,7 @@ function GlassHeader(): JSX.Element {
 function Greeting(): JSX.Element {
   return (
     <div>
-      <p className="proto-eyebrow text-[10px] text-[var(--proto-orange)]">Thursday · Afternoon</p>
+      <p className="proto-eyebrow text-[10px] text-[var(--primary)]">Thursday · Afternoon</p>
       <h1 className="mt-1.5 font-heading text-[28px] leading-none font-black tracking-[-0.03em] text-white">
         Ready to move?
       </h1>
@@ -122,7 +122,7 @@ function ActiveBanner(): JSX.Element {
         </div>
         <button
           type="button"
-          className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--proto-orange)] px-4 text-[13px] font-bold text-black"
+          className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--primary)] px-4 text-[13px] font-bold text-black"
         >
           <Play className="size-4" fill="currentColor" />
           Join
@@ -145,7 +145,7 @@ function Tile(props: {
       type="button"
       className={
         accent
-          ? 'flex min-h-[116px] flex-col justify-between rounded-2xl bg-[var(--proto-orange)] p-4 text-left shadow-[0_16px_40px_-14px_var(--proto-orange)]'
+          ? 'flex min-h-[116px] flex-col justify-between rounded-2xl bg-[var(--primary)] p-4 text-left shadow-[0_16px_40px_-14px_var(--primary)]'
           : 'flex min-h-[116px] flex-col justify-between rounded-2xl bg-[var(--proto-surface)] p-4 text-left ring-1 ring-[var(--proto-line)]'
       }
     >

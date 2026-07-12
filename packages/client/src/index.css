@@ -36,8 +36,14 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-card-2: var(--card-2);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-hue-cardio: var(--hue-cardio);
+  --color-hue-strength: var(--hue-strength);
+  --color-hue-hybrid: var(--hue-hybrid);
+  --color-hue-work: var(--hue-work);
+  --color-hue-rest: var(--hue-rest);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -45,6 +51,9 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --duration-state: 150ms;
+  --duration-enter: 250ms;
+  --ease-out: ease-out;
 }
 
 :root {
@@ -55,11 +64,15 @@
      colours against, not a `.dark`-scoped override. */
   --background: #08090b;
   --foreground: oklch(0.987 0.002 197.1);
+  /* Lifted slate surface (#14171d-family). Nested -2 step from /proto
+     surface-2 (#191d24 → oklch). */
   --card: oklch(0.218 0.008 223.9);
+  --card-2: oklch(0.23 0.015 261.637);
   --card-foreground: oklch(0.987 0.002 197.1);
   --popover: oklch(0.218 0.008 223.9);
   --popover-foreground: oklch(0.987 0.002 197.1);
-  --primary: oklch(0.47 0.157 37.304);
+  /* Signature hot orange (#ff6b35-family). */
+  --primary: oklch(0.705 0.193 39.231);
   --primary-foreground: oklch(0.98 0.016 73.684);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
@@ -84,6 +97,30 @@
   --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.56 0.021 213.5);
+  /* Sport-coded semantic hues (from /proto: cardio #38bdf8, strength
+     #a78bfa, hybrid #fb7185, work #22c55e, rest #f59e0b). */
+  --hue-cardio: oklch(0.754 0.139 232.661);
+  --hue-strength: oklch(0.709 0.159 293.541);
+  --hue-hybrid: oklch(0.719 0.169 13.428);
+  --hue-work: oklch(0.723 0.192 149.579);
+  --hue-rest: oklch(0.769 0.165 70.08);
+  /* Motion language: state transitions / enter-exit / default easing. */
+  --duration-state: 150ms;
+  --duration-enter: 250ms;
+  --ease-out: ease-out;
+}
+
+/* Eyebrow caps — uppercase, wide tracking, bold (the .proto-eyebrow idiom). */
+@utility text-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+
+/* Tabular display / timer digits (the .proto-nums idiom). */
+@utility text-display {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 @layer base {

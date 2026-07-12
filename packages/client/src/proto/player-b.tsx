@@ -242,7 +242,7 @@ function ControlDock(): JSX.Element {
         <button
           type="button"
           aria-label="Pause"
-          className="flex size-16 items-center justify-center rounded-full bg-[var(--proto-orange)] text-black shadow-[0_10px_40px_-8px_var(--proto-orange)]"
+          className="flex size-16 items-center justify-center rounded-full bg-[var(--primary)] text-black shadow-[0_10px_40px_-8px_var(--primary)]"
         >
           <Pause className="size-7" fill="currentColor" />
         </button>

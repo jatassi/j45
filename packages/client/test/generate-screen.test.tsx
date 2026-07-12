@@ -319,4 +319,34 @@ describe('GenerateScreen', () => {
     fireEvent.click(screen.getByTestId('generate-no-repeat-dec'))
     expect(noRepeat.value).toBe('0')
   })
+
+  it('focus, emphasis, and equipment options render domain labels (not raw vocabulary literals)', async () => {
+    renderApp({}, '/generate')
+    await screen.findByTestId('generate-screen')
+
+    // Focus select: option values stay raw; visible text is the domain label.
+    const focus = screen.getByTestId<HTMLSelectElement>('generate-focus')
+    const focusTexts = [...focus.options].map((o) => o.textContent)
+    expect(focusTexts).toContain('Hybrid')
+    expect(focusTexts).toContain('Cardio')
+    expect(focusTexts).toContain('Strength')
+    expect(focusTexts).not.toContain('hybrid')
+    expect(focusTexts).not.toContain('cardio')
+    expect(focusTexts).not.toContain('strength')
+    expect([...focus.options].map((o) => o.value)).toEqual(['cardio', 'strength', 'hybrid'])
+
+    // Emphasis select includes muscle-group labels.
+    const emphasis = screen.getByTestId<HTMLSelectElement>('generate-emphasis')
+    const emphasisTexts = [...emphasis.options].map((o) => o.textContent)
+    expect(emphasisTexts).toContain('Full body')
+    expect(emphasisTexts).not.toContain('full-body')
+    expect([...emphasis.options].map((o) => o.value)).toContain('full-body')
+
+    // Equipment chips: testids stay raw; chip text is the domain label.
+    expect(screen.getByTestId('generate-equipment-med-ball').textContent).toBe('Med ball')
+    expect(screen.getByTestId('generate-equipment-jump-rope').textContent).toBe('Jump rope')
+    expect(screen.getByTestId('generate-equipment-dumbbell').textContent).toBe('Dumbbells')
+    expect(screen.getByTestId('generate-equipment-med-ball').textContent).not.toBe('med-ball')
+    expect(screen.getByTestId('generate-equipment-jump-rope').textContent).not.toBe('jump-rope')
+  })
 })

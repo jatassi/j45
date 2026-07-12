@@ -4,8 +4,11 @@ import { useAtom, useAtomRefresh } from '@effect-atom/atom-react'
 import {
   compile,
   Equipment,
+  equipmentLabel,
   Focus,
+  focusLabel,
   MuscleGroup,
+  muscleGroupLabel,
   type LibraryWorkout,
   type Workout,
 } from '@j45/domain'
@@ -76,7 +79,7 @@ function FocusMinutes({ form }: { readonly form: FormModel }) {
         >
           {FOCI.map((v) => (
             <option key={v} value={v}>
-              {v}
+              {focusLabel[v]}
             </option>
           ))}
         </select>
@@ -109,6 +112,7 @@ function EquipmentEmphasis({ form }: { readonly form: FormModel }) {
           values={EQUIPMENT}
           selected={form.c.equipment}
           testIdPrefix="generate-equipment"
+          labels={equipmentLabel}
           onToggle={(eq) => {
             form.setEquipment((prev) => toggle(prev, eq))
           }}
@@ -127,7 +131,7 @@ function EquipmentEmphasis({ form }: { readonly form: FormModel }) {
           <option value="">None</option>
           {MUSCLE_GROUPS.map((v) => (
             <option key={v} value={v}>
-              {v}
+              {muscleGroupLabel[v]}
             </option>
           ))}
         </select>

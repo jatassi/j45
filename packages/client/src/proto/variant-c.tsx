@@ -99,7 +99,7 @@ function ControlBar(): JSX.Element {
       </button>
       <button
         type="button"
-        className="flex size-20 items-center justify-center rounded-full bg-[var(--proto-orange)] text-black shadow-[0_10px_40px_-8px_var(--proto-orange)]"
+        className="flex size-20 items-center justify-center rounded-full bg-[var(--primary)] text-black shadow-[0_10px_40px_-8px_var(--primary)]"
       >
         <Pause className="size-8" fill="currentColor" />
       </button>

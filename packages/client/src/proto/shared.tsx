@@ -47,7 +47,7 @@ export function TabItems(props: { active: TabId }): JSX.Element {
             key={id}
             className={cn(
               'flex flex-1 flex-col items-center gap-1 py-0.5 transition-colors',
-              active ? 'text-[var(--proto-orange)]' : 'text-white/45',
+              active ? 'text-[var(--primary)]' : 'text-white/45',
             )}
           >
             <Icon className="size-[22px]" strokeWidth={active ? 2.4 : 1.9} />

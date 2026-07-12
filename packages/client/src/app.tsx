@@ -1,6 +1,7 @@
 import { RouterProvider } from '@tanstack/react-router'
 
 import { AuthGate } from '@/components/auth-gate'
+import { DesignPage } from '@/components/design/design-page'
 import { GlassDemo } from '@/glass-demo'
 import { ProtoPage } from '@/proto/proto-page'
 import { router } from '@/router'
@@ -18,12 +19,13 @@ const handleLoggedOut = (): void => {
 
 /**
  * Switches on `location.pathname` with no router dependency: `/glass`
- * renders the liquid-glass demo, everything else the existing landing page.
- * The server's static route falls back to `index.html` for any path
- * (`packages/server/src/routes.ts`), so a direct load of `/glass` reaches
- * this switch too. `/glass`'s own e2e suite runs unauthenticated and must
- * keep passing unchanged, so this check stays *outside* `AuthGate` — the
- * router (and therefore every rpc-backed route) never mounts for it.
+ * renders the liquid-glass demo, `/design` the design-system gallery,
+ * everything else the existing landing page. The server's static route
+ * falls back to `index.html` for any path (`packages/server/src/routes.ts`),
+ * so a direct load of `/glass` or `/design` reaches this switch too.
+ * `/glass`'s and `/design`'s e2e suites run unauthenticated and must keep
+ * passing, so these checks stay *outside* `AuthGate` — the router (and
+ * therefore every rpc-backed route) never mounts for them.
  *
  * Everything else renders behind `AuthGate`: anonymous visitors (including
  * deep links like `/workouts/<id>`) see `LoginScreen` first, since the gate
@@ -37,6 +39,10 @@ export function App() {
 
   if (location.pathname === '/proto') {
     return <ProtoPage />
+  }
+
+  if (location.pathname === '/design') {
+    return <DesignPage />
   }
 
   return (

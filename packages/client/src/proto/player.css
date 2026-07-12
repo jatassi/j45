@@ -20,7 +20,7 @@
   background: linear-gradient(
     100deg,
     transparent 30%,
-    color-mix(in oklab, var(--proto-work) 22%, transparent) 50%,
+    color-mix(in oklab, var(--hue-work) 22%, transparent) 50%,
     transparent 70%
   );
   transform: translateX(-100%);
@@ -42,10 +42,10 @@
 }
 @keyframes player-breathe {
   from {
-    text-shadow: 0 0 30px color-mix(in oklab, var(--proto-work) 28%, transparent);
+    text-shadow: 0 0 30px color-mix(in oklab, var(--hue-work) 28%, transparent);
   }
   to {
-    text-shadow: 0 0 54px color-mix(in oklab, var(--proto-work) 55%, transparent);
+    text-shadow: 0 0 54px color-mix(in oklab, var(--hue-work) 55%, transparent);
   }
 }
 
@@ -55,10 +55,10 @@
 }
 @keyframes player-dot {
   from {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--proto-work) 55%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--hue-work) 55%, transparent);
   }
   to {
-    box-shadow: 0 0 0 4px color-mix(in oklab, var(--proto-work) 0%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--hue-work) 0%, transparent);
   }
 }
 

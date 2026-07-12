@@ -1,0 +1,81 @@
+# packages/client
+
+Conventions for anyone working in the React client. Keep these when adding or
+changing screens and components.
+
+## Domain labels — never render literals raw
+
+Vocabulary values (`Modality`, `Intensity`, `MuscleGroup`, `Equipment`,
+`Focus`, `FlowType`) are `Schema.Literal` strings. Never put those raw ids in
+the UI.
+
+Import the exhaustive label maps from `@j45/domain` and render the label:
+
+- `modalityLabel`
+- `intensityLabel`
+- `muscleGroupLabel`
+- `equipmentLabel`
+- `focusLabel`
+- `flowTypeLabel`
+
+Example: `modalityLabel[exercise.modality]`, not `exercise.modality`. A generic
+humanizer (title-case, replace hyphens, etc.) is never a substitute — labels
+live in the domain so the vocabulary stays consistent everywhere.
+
+## Base UI, not Radix
+
+Primitives come from `@base-ui/react`, composed through the `ui/` kit at
+`packages/client/src/components/ui/`. Screens and feature components import from
+`ui/` (or re-exports that sit on top of it). Never import Radix packages
+directly.
+
+## Tokens and variants
+
+Use the design tokens in `src/index.css` and the variants on `ui/` components.
+Do not hand-style raw form elements with one-off Tailwind when a kit piece
+exists.
+
+Sport-coded semantic hues (meaning, not decoration):
+
+- `--hue-cardio`
+- `--hue-strength`
+- `--hue-hybrid`
+- `--hue-work`
+- `--hue-rest`
+
+Exposed via Tailwind theme (`text-hue-cardio`, etc.) for focus badges, phase
+identity, and chart accents.
+
+### Feedback-state standard
+
+Apply on every screen:
+
+| Situation          | Pattern                                     |
+| ------------------ | ------------------------------------------- |
+| Query loading      | `skeleton`                                  |
+| Empty result       | `empty` with a CTA                          |
+| Query failure      | inline `alert` + retry button               |
+| Command failure    | `sonner` toast (nothing silently swallowed) |
+| Destructive action | `alert-dialog` confirm                      |
+
+Loading and failure must never look the same. Success stays quiet unless the
+outcome is otherwise invisible on-screen.
+
+## Glass: positioned wrapper gotcha
+
+`.glass-surface` sets `position: relative` on the element it is applied to.
+Tailwind positioning utilities on that **same** element (`absolute`, `fixed`,
+`inset-*`, etc.) lose to it.
+
+Put positioning on a wrapper; put `.glass-surface` (or `GlassCard`) on the
+inner surface:
+
+```tsx
+// good
+<div className="absolute inset-x-0 bottom-0">
+  <div className="glass-surface ...">{/* chrome */}</div>
+</div>
+
+// bad — absolute is overridden by .glass-surface's position: relative
+<div className="glass-surface absolute inset-x-0 bottom-0">...</div>
+```

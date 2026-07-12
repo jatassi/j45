@@ -105,6 +105,16 @@ test.describe('exercises (chromium + webkit)', () => {
       await expect(page.getByTestId('exercise-list')).toBeVisible()
       await expect(exerciseRows(page)).toHaveCount(SEEDED_EXERCISE_COUNT)
 
+      // Domain labels render; raw vocabulary literals never appear as visible text.
+      // Seed catalog surfaces full-body / med-ball / jump-rope on filter chips + tags.
+      const libraryText = await page.getByTestId('exercise-library-screen').textContent()
+      expect(libraryText).toContain('Full body')
+      expect(libraryText).toContain('Med ball')
+      expect(libraryText).toContain('Jump rope')
+      expect(libraryText).not.toMatch(/\bfull-body\b/)
+      expect(libraryText).not.toMatch(/\bmed-ball\b/)
+      expect(libraryText).not.toMatch(/\bjump-rope\b/)
+
       // Narrow with a real proper-subset facet from the seed catalog.
       await page.getByTestId('filter-muscle-calves').click()
       await expect(exerciseRows(page)).toHaveCount(CALVES_SEEDED_COUNT)
@@ -136,18 +146,18 @@ test.describe('exercises (chromium + webkit)', () => {
       }
       const createdId = createdTestId.replace('exercise-row-', '')
       await expect(page.getByTestId(`exercise-name-${createdId}`)).toHaveText(createdName)
-      // tagsOf: modality, intensity, muscle groups, equipment (or bodyweight).
-      await expect(createdRow).toContainText('strength')
-      await expect(createdRow).toContainText('moderate')
-      await expect(createdRow).toContainText('quads')
-      await expect(createdRow).toContainText('med-ball')
+      // tagsOf: domain labels for modality, intensity, muscle groups, equipment.
+      await expect(createdRow).toContainText('Strength')
+      await expect(createdRow).toContainText('Moderate')
+      await expect(createdRow).toContainText('Quads')
+      await expect(createdRow).toContainText('Med ball')
 
       await page.reload()
       await expect(page.getByTestId('exercise-library-screen')).toBeVisible()
       await expect(page.getByTestId('exercise-list')).toBeVisible()
       await expect(page.getByTestId(`exercise-name-${createdId}`)).toHaveText(createdName)
-      await expect(page.getByTestId(`exercise-row-${createdId}`)).toContainText('quads')
-      await expect(page.getByTestId(`exercise-row-${createdId}`)).toContainText('med-ball')
+      await expect(page.getByTestId(`exercise-row-${createdId}`)).toContainText('Quads')
+      await expect(page.getByTestId(`exercise-row-${createdId}`)).toContainText('Med ball')
 
       // Real tag change: swap quads → chest (toggle chest on first so the
       // draft stays valid while quads is removed).
@@ -159,15 +169,15 @@ test.describe('exercises (chromium + webkit)', () => {
 
       await expect(page.getByTestId('exercise-dialog')).toHaveCount(0)
       const editedRow = page.getByTestId(`exercise-row-${createdId}`)
-      await expect(editedRow).toContainText('chest')
-      await expect(editedRow).not.toContainText('quads')
-      await expect(editedRow).toContainText('med-ball')
+      await expect(editedRow).toContainText('Chest')
+      await expect(editedRow).not.toContainText('Quads')
+      await expect(editedRow).toContainText('Med ball')
 
       await page.reload()
       await expect(page.getByTestId('exercise-library-screen')).toBeVisible()
-      await expect(page.getByTestId(`exercise-row-${createdId}`)).toContainText('chest')
-      await expect(page.getByTestId(`exercise-row-${createdId}`)).not.toContainText('quads')
-      await expect(page.getByTestId(`exercise-row-${createdId}`)).toContainText('med-ball')
+      await expect(page.getByTestId(`exercise-row-${createdId}`)).toContainText('Chest')
+      await expect(page.getByTestId(`exercise-row-${createdId}`)).not.toContainText('Quads')
+      await expect(page.getByTestId(`exercise-row-${createdId}`)).toContainText('Med ball')
       await expect(page.getByTestId(`exercise-name-${createdId}`)).toHaveText(createdName)
 
       await page.getByTestId(`delete-exercise-${createdId}`).click()

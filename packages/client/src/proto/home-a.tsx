@@ -37,7 +37,7 @@ const RECENT = WORKOUTS.slice(0, 4)
 function Wordmark(): JSX.Element {
   return (
     <span className="font-heading text-[24px] leading-none font-black tracking-tighter text-white italic">
-      J<span className="text-[var(--proto-orange)]">45</span>
+      J<span className="text-[var(--primary)]">45</span>
     </span>
   )
 }
@@ -129,7 +129,7 @@ function HeroJoin(): JSX.Element {
 
         <button
           type="button"
-          className="mt-5 flex min-h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-[var(--proto-orange)] text-[16px] font-bold text-black shadow-[0_12px_36px_-10px_var(--proto-orange)]"
+          className="mt-5 flex min-h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] text-[16px] font-bold text-black shadow-[0_12px_36px_-10px_var(--primary)]"
         >
           <Play className="size-5" fill="currentColor" />
           Join now

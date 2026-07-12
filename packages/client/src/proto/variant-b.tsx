@@ -53,7 +53,7 @@ export function VariantB(): JSX.Element {
       </div>
 
       <div className="relative z-10 px-5 pt-11 pb-3">
-        <p className="proto-eyebrow text-[10px] text-[var(--proto-orange)]">J45 · Studio</p>
+        <p className="proto-eyebrow text-[10px] text-[var(--primary)]">J45 · Studio</p>
         <h1 className="mt-1 font-heading text-[26px] leading-none font-extrabold tracking-[-0.02em] text-white">
           Library
         </h1>

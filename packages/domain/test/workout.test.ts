@@ -3,7 +3,17 @@ import * as Effect from 'effect/Effect'
 import * as Schema from 'effect/Schema'
 import { expect } from 'vitest'
 
-import { Flow, FlowType, Focus, Pod, Round, Station, Workout } from '../src/workout.js'
+import {
+  Flow,
+  FlowType,
+  flowTypeLabel,
+  Focus,
+  focusLabel,
+  Pod,
+  Round,
+  Station,
+  Workout,
+} from '../src/workout.js'
 
 const roundTrips = <A, I>(schema: Schema.Schema<A, I>, value: A) =>
   Effect.gen(function* () {
@@ -11,6 +21,20 @@ const roundTrips = <A, I>(schema: Schema.Schema<A, I>, value: A) =>
     const decoded = yield* Schema.decodeUnknown(schema)(encoded)
     expect(decoded).toStrictEqual(value)
   })
+
+describe('vocabulary labels', () => {
+  it('maps every focus literal to a non-empty label', () => {
+    for (const literal of Focus.literals) {
+      expect(focusLabel[literal].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('maps every flow type literal to a non-empty label', () => {
+    for (const literal of FlowType.literals) {
+      expect(flowTypeLabel[literal].length).toBeGreaterThan(0)
+    }
+  })
+})
 
 describe('Workout model', () => {
   const round = new Round({ workSeconds: 40, restSeconds: 20 })

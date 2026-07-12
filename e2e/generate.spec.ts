@@ -92,7 +92,8 @@ async function generatePreview(page: Page): Promise<void> {
   await expect(page.getByTestId('generate-screen')).toBeVisible()
 
   // Explicit knobs (defaults are already permissive; set them so the test
-  // documents the intended constraint surface).
+  // documents the intended constraint surface). Option values stay raw;
+  // visible labels are domain human text (asserted separately).
   await page.getByTestId('generate-focus').selectOption('hybrid')
   await page.getByTestId('generate-target-minutes').fill('30')
   await page.getByTestId('generate-emphasis').selectOption('')
@@ -100,6 +101,26 @@ async function generatePreview(page: Page): Promise<void> {
   await page.getByTestId('generate-button').click()
   await expect(page.getByTestId('generate-preview')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('generate-error')).toHaveCount(0)
+}
+
+/**
+ * Asserts domain label maps render on the generate form and that the raw
+ * vocabulary strings `full-body`, `med-ball`, and `jump-rope` never appear
+ * as visible text (equipment chips + emphasis options cover them).
+ */
+async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
+  await expect(page.getByTestId('generate-screen')).toBeVisible()
+  await expect(page.getByTestId('generate-equipment-med-ball')).toHaveText('Med ball')
+  await expect(page.getByTestId('generate-equipment-jump-rope')).toHaveText('Jump rope')
+  await expect(page.getByTestId('generate-emphasis')).toContainText('Full body')
+
+  const generateText = await page.getByTestId('generate-screen').textContent()
+  expect(generateText).toContain('Full body')
+  expect(generateText).toContain('Med ball')
+  expect(generateText).toContain('Jump rope')
+  expect(generateText).not.toMatch(/\bfull-body\b/)
+  expect(generateText).not.toMatch(/\bmed-ball\b/)
+  expect(generateText).not.toMatch(/\bjump-rope\b/)
 }
 
 /**
@@ -152,7 +173,18 @@ test.describe('generate (chromium + webkit)', () => {
 
       // --- 1. Generate preview via home nav + form knobs ---
       await page.goto(env.baseUrl)
-      await generatePreview(page)
+      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await page.getByTestId('generate-nav-link').click()
+      await expect(page).toHaveURL(/\/generate/)
+      await assertDomainLabelsOnGenerateScreen(page)
+
+      // Resume the generate flow after the label assertion (same knobs as generatePreview).
+      await page.getByTestId('generate-focus').selectOption('hybrid')
+      await page.getByTestId('generate-target-minutes').fill('30')
+      await page.getByTestId('generate-emphasis').selectOption('')
+      await page.getByTestId('generate-button').click()
+      await expect(page.getByTestId('generate-preview')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('generate-error')).toHaveCount(0)
 
       const preview = page.getByTestId('generate-preview')
       await expect(preview).toBeVisible()

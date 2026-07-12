@@ -59,15 +59,15 @@ function BadgeTreatments(): JSX.Element {
   return (
     <>
       <HeaderStrip label="8 · F45 construction — orange plate, white keyline">
-        <WordmarkBadge plate="var(--proto-orange)" line="#ffffff" />
+        <WordmarkBadge plate="var(--primary)" line="#ffffff" />
       </HeaderStrip>
 
       <HeaderStrip label="9 · F45 construction — orange plate, ground keyline">
-        <WordmarkBadge plate="var(--proto-orange)" line="#0b0d11" />
+        <WordmarkBadge plate="var(--primary)" line="#0b0d11" />
       </HeaderStrip>
 
       <HeaderStrip label="10 · F45 construction — slate plate, orange keyline">
-        <WordmarkBadge plate="#191d24" line="var(--proto-orange)" />
+        <WordmarkBadge plate="#191d24" line="var(--primary)" />
       </HeaderStrip>
     </>
   )
@@ -78,49 +78,49 @@ function Treatments(): JSX.Element {
     <>
       <HeaderStrip label="1 · Current — italic black, orange 45">
         <span className="font-heading text-[24px] leading-none font-black tracking-tighter text-white italic">
-          J<span className="text-[var(--proto-orange)]">45</span>
+          J<span className="text-[var(--primary)]">45</span>
         </span>
       </HeaderStrip>
 
       <HeaderStrip label="2 · Upright black, orange 45">
         <span className="font-heading text-[24px] leading-none font-black tracking-tighter text-white">
-          J<span className="text-[var(--proto-orange)]">45</span>
+          J<span className="text-[var(--primary)]">45</span>
         </span>
       </HeaderStrip>
 
       <HeaderStrip label="3 · Italic black, orange J">
         <span className="font-heading text-[24px] leading-none font-black tracking-tighter italic">
-          <span className="text-[var(--proto-orange)]">J</span>
+          <span className="text-[var(--primary)]">J</span>
           <span className="text-white">45</span>
         </span>
       </HeaderStrip>
 
       <HeaderStrip label="4 · All white + orange full stop">
         <span className="font-heading text-[24px] leading-none font-black tracking-tighter text-white">
-          J45<span className="text-[var(--proto-orange)]">.</span>
+          J45<span className="text-[var(--primary)]">.</span>
         </span>
       </HeaderStrip>
 
       <HeaderStrip label="5 · Orange slash divider">
         <span className="flex items-center gap-1 font-heading text-[24px] leading-none font-black tracking-tighter text-white">
           J
-          <span className="inline-block h-[22px] w-[3px] -skew-x-12 rounded-full bg-[var(--proto-orange)]" />
+          <span className="inline-block h-[22px] w-[3px] -skew-x-12 rounded-full bg-[var(--primary)]" />
           45
         </span>
       </HeaderStrip>
 
       <HeaderStrip label="6 · Eyebrow lockup">
         <span className="flex flex-col gap-0.5">
-          <span className="proto-eyebrow text-[8px] text-[var(--proto-orange)]">Team Atassi</span>
+          <span className="proto-eyebrow text-[8px] text-[var(--primary)]">Team Atassi</span>
           <span className="font-heading text-[20px] leading-none font-black tracking-tighter text-white">
-            J<span className="text-[var(--proto-orange)]">45</span>
+            J<span className="text-[var(--primary)]">45</span>
           </span>
         </span>
       </HeaderStrip>
 
       <HeaderStrip label="7 · Boxed badge">
         <span className="flex items-center">
-          <span className="rounded-md bg-[var(--proto-orange)] px-1.5 py-0.5 font-heading text-[18px] leading-none font-black tracking-tighter text-black italic">
+          <span className="rounded-md bg-[var(--primary)] px-1.5 py-0.5 font-heading text-[18px] leading-none font-black tracking-tighter text-black italic">
             J45
           </span>
         </span>

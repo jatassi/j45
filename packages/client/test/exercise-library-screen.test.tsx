@@ -108,8 +108,53 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.getByTestId(`exercise-name-${frontSquat.id}`).textContent).toBe(
       'Barbell front squat',
     )
-    // A tag badge for a distinctive facet value renders on the row.
-    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('rower')
+    // Tag badges use domain label maps, not raw vocabulary literals.
+    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Rower')
+    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Full body')
+    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Cardio')
+    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('High')
+    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).not.toContain('full-body')
+    expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Strength')
+    expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Moderate')
+    expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Quads')
+    expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Barbell')
+  })
+
+  it('filter chips render domain labels while testids stay keyed to raw literals', async () => {
+    renderScreen({ ListExercises: () => Effect.succeed([rower, frontSquat]) })
+
+    await screen.findByTestId('filter-bar')
+
+    // Testids stay on raw vocabulary values for stable selectors.
+    const fullBodyChip = screen.getByTestId('filter-muscle-full-body')
+    expect(fullBodyChip.textContent).toBe('Full body')
+    expect(fullBodyChip.textContent).not.toBe('full-body')
+
+    expect(screen.getByTestId('filter-modality-cardio').textContent).toBe('Cardio')
+    expect(screen.getByTestId('filter-modality-strength').textContent).toBe('Strength')
+    expect(screen.getByTestId('filter-muscle-quads').textContent).toBe('Quads')
+    expect(screen.getByTestId('filter-equipment-rower').textContent).toBe('Rower')
+    expect(screen.getByTestId('filter-equipment-barbell').textContent).toBe('Barbell')
+  })
+
+  it('empty equipment renders the Bodyweight pseudo-tag label on the row', async () => {
+    const pushup = new LibraryExercise({
+      id: Schema.decodeSync(ExerciseId)('ex-pushup'),
+      exercise: new Exercise({
+        name: 'Push-up',
+        modality: 'strength',
+        muscleGroups: ['chest'],
+        equipment: [],
+        intensity: 'moderate',
+      }),
+      createdAt: seededAt,
+      updatedAt: seededAt,
+    })
+    renderScreen({ ListExercises: () => Effect.succeed([pushup]) })
+
+    const row = await screen.findByTestId(`exercise-row-${pushup.id}`)
+    expect(row.textContent).toContain('Bodyweight')
+    expect(row.textContent).not.toContain('bodyweight')
   })
 
   it('narrows the list when a muscle-group filter chip is selected (AND across facets)', async () => {
@@ -117,7 +162,7 @@ describe('ExerciseLibraryScreen', () => {
 
     await screen.findByTestId(`exercise-row-${rower.id}`)
 
-    // `quads` is a facet of the front squat only.
+    // `quads` is a facet of the front squat only (testid stays on raw literal).
     fireEvent.click(screen.getByTestId('filter-muscle-quads'))
 
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`)).toBeTruthy()

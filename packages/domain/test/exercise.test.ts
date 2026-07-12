@@ -4,8 +4,54 @@ import * as Effect from 'effect/Effect'
 import * as Schema from 'effect/Schema'
 import { expect } from 'vitest'
 
-import { Exercise, ExerciseId, LibraryExercise } from '../src/exercise.js'
+import {
+  Equipment,
+  equipmentLabel,
+  Exercise,
+  ExerciseId,
+  Intensity,
+  intensityLabel,
+  LibraryExercise,
+  Modality,
+  modalityLabel,
+  MuscleGroup,
+  muscleGroupLabel,
+} from '../src/exercise.js'
 import { ExerciseRpcs } from '../src/rpc.js'
+
+describe('vocabulary labels', () => {
+  it('maps every modality literal to a non-empty label', () => {
+    for (const literal of Modality.literals) {
+      expect(modalityLabel[literal].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('maps every intensity literal to a non-empty label', () => {
+    for (const literal of Intensity.literals) {
+      expect(intensityLabel[literal].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('maps every muscle group literal to a non-empty label', () => {
+    for (const literal of MuscleGroup.literals) {
+      expect(muscleGroupLabel[literal].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('maps every equipment literal to a non-empty label', () => {
+    for (const literal of Equipment.literals) {
+      expect(equipmentLabel[literal].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('maps hyphenated ids to exact human text', () => {
+    expect(muscleGroupLabel['full-body']).toBe('Full body')
+    expect(equipmentLabel['jump-rope']).toBe('Jump rope')
+    expect(equipmentLabel['med-ball']).toBe('Med ball')
+    expect(equipmentLabel['pull-up-bar']).toBe('Pull-up bar')
+    expect(equipmentLabel['slam-ball']).toBe('Slam ball')
+  })
+})
 
 describe('LibraryExercise', () => {
   it.effect('round-trips through encode/decode', () =>

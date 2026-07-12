@@ -3,8 +3,12 @@ import * as React from 'react'
 import { Result, useAtom, useAtomRefresh, useAtomValue } from '@effect-atom/atom-react'
 import {
   Equipment,
+  equipmentLabel,
+  intensityLabel,
   Modality,
+  modalityLabel,
   MuscleGroup,
+  muscleGroupLabel,
   type Exercise,
   type ExerciseId,
   type LibraryExercise,
@@ -65,10 +69,22 @@ function matchesFilters(exercise: Exercise, filters: Filters): boolean {
   return muscleOk && equipmentOk && modalityOk
 }
 
-/** The tag labels shown as badges on a row (empty equipment reads as bodyweight). */
+/**
+ * The tag labels shown as badges on a row. Empty equipment is a client-side
+ * "bodyweight" pseudo-tag (not a domain literal) with hardcoded human text.
+ * Everything else comes from the domain label maps.
+ */
 function tagsOf(exercise: Exercise): readonly string[] {
-  const equipment = exercise.equipment.length === 0 ? ['bodyweight'] : exercise.equipment
-  return [exercise.modality, exercise.intensity, ...exercise.muscleGroups, ...equipment]
+  const equipment =
+    exercise.equipment.length === 0
+      ? (['Bodyweight'] as const)
+      : exercise.equipment.map((eq) => equipmentLabel[eq])
+  return [
+    modalityLabel[exercise.modality],
+    intensityLabel[exercise.intensity],
+    ...exercise.muscleGroups.map((group) => muscleGroupLabel[group]),
+    ...equipment,
+  ]
 }
 
 /** The state driving which dialog is open, and (for edit) over which entry. */
@@ -99,6 +115,7 @@ function FilterBar({ exercises, filters, setFilters }: FilterBarProps) {
         values={MODALITIES.filter((m) => modalities.has(m))}
         selected={filters.modalities}
         testIdPrefix="filter-modality"
+        labels={modalityLabel}
         onToggle={(m) =>
           setFilters((prev) => ({ ...prev, modalities: toggle(prev.modalities, m) }))
         }
@@ -107,6 +124,7 @@ function FilterBar({ exercises, filters, setFilters }: FilterBarProps) {
         values={MUSCLE_GROUPS.filter((g) => muscles.has(g))}
         selected={filters.muscleGroups}
         testIdPrefix="filter-muscle"
+        labels={muscleGroupLabel}
         onToggle={(g) =>
           setFilters((prev) => ({ ...prev, muscleGroups: toggle(prev.muscleGroups, g) }))
         }
@@ -115,6 +133,7 @@ function FilterBar({ exercises, filters, setFilters }: FilterBarProps) {
         values={EQUIPMENT.filter((eq) => equipment.has(eq))}
         selected={filters.equipment}
         testIdPrefix="filter-equipment"
+        labels={equipmentLabel}
         onToggle={(eq) =>
           setFilters((prev) => ({ ...prev, equipment: toggle(prev.equipment, eq) }))
         }

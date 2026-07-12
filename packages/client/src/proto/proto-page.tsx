@@ -74,7 +74,7 @@ function PillRow(props: {
             }}
             className={cn(
               'rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors',
-              active ? 'bg-[var(--proto-orange)] text-black' : 'text-white/60 hover:text-white',
+              active ? 'bg-[var(--primary)] text-black' : 'text-white/60 hover:text-white',
             )}
           >
             {item.label}

@@ -41,7 +41,7 @@ function GlassHeader(): JSX.Element {
   return (
     <div className="absolute inset-x-0 top-0 z-20">
       <div ref={ref} className="glass-surface rounded-none px-5 pt-11 pb-4">
-        <p className="proto-eyebrow text-[10px] text-[var(--proto-orange)]">J45 · Studio</p>
+        <p className="proto-eyebrow text-[10px] text-[var(--primary)]">J45 · Studio</p>
         <h1 className="mt-1 font-heading text-[26px] leading-none font-extrabold tracking-[-0.02em] text-white">
           Library
         </h1>

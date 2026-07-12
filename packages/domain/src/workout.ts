@@ -31,6 +31,8 @@ export class Pod extends Schema.Class<Pod>('Pod')({
 export const FlowType = Schema.Literal('laps', 'sets')
 export type FlowType = typeof FlowType.Type
 
+export const flowTypeLabel: Record<FlowType, string> = { laps: 'Laps', sets: 'Sets' }
+
 /**
  * The lap/set structure of a workout. `rounds.length` *is* the lap or set
  * count — there is no separate counter to keep in sync, and no distinction
@@ -43,6 +45,12 @@ export class Flow extends Schema.Class<Flow>('Flow')({
 
 export const Focus = Schema.Literal('cardio', 'strength', 'hybrid')
 export type Focus = typeof Focus.Type
+
+export const focusLabel: Record<Focus, string> = {
+  cardio: 'Cardio',
+  strength: 'Strength',
+  hybrid: 'Hybrid',
+}
 
 /**
  * A complete workout: its pods and the flow that sequences their stations.

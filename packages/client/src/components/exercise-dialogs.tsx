@@ -1,6 +1,16 @@
 import * as React from 'react'
 
-import { Equipment, Exercise, Intensity, Modality, MuscleGroup } from '@j45/domain'
+import {
+  Equipment,
+  equipmentLabel,
+  Exercise,
+  Intensity,
+  intensityLabel,
+  Modality,
+  modalityLabel,
+  MuscleGroup,
+  muscleGroupLabel,
+} from '@j45/domain'
 
 import { Button } from '@/components/ui/button'
 
@@ -39,6 +49,8 @@ type ChipRowProps<A extends string> = {
   readonly values: readonly A[]
   readonly selected: ReadonlySet<A>
   readonly testIdPrefix: string
+  /** Human labels for each value (domain maps). Testids stay keyed to raw `value`. */
+  readonly labels: Record<A, string>
   readonly onToggle: (value: A) => void
 }
 
@@ -47,6 +59,7 @@ export function ChipRow<A extends string>({
   values,
   selected,
   testIdPrefix,
+  labels,
   onToggle,
 }: ChipRowProps<A>) {
   return (
@@ -62,7 +75,7 @@ export function ChipRow<A extends string>({
           }}
           className={chipClass(selected.has(value))}
         >
-          {value}
+          {labels[value]}
         </button>
       ))}
     </div>
@@ -129,6 +142,7 @@ type SelectFieldProps<A extends string> = {
   readonly label: string
   readonly value: A
   readonly options: readonly A[]
+  readonly labels: Record<A, string>
   readonly testId: string
   readonly onChange: (value: A) => void
 }
@@ -138,6 +152,7 @@ function SelectField<A extends string>({
   label,
   value,
   options,
+  labels,
   testId,
   onChange,
 }: SelectFieldProps<A>) {
@@ -152,7 +167,7 @@ function SelectField<A extends string>({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {labels[option]}
           </option>
         ))}
       </select>
@@ -188,6 +203,34 @@ type FieldsProps = {
   readonly patch: (next: Partial<Draft>) => void
 }
 
+/** Muscle-group and equipment multi-select chip rows for the create/edit dialog. */
+function TagMultiSelects({ draft, patch }: FieldsProps) {
+  return (
+    <>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="text-xs text-muted-foreground">Muscle groups</legend>
+        <ChipRow
+          values={MUSCLE_GROUPS}
+          selected={draft.muscleGroups}
+          testIdPrefix="exercise-form-muscle"
+          labels={muscleGroupLabel}
+          onToggle={(group) => patch({ muscleGroups: toggle(draft.muscleGroups, group) })}
+        />
+      </fieldset>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="text-xs text-muted-foreground">Equipment (none = bodyweight)</legend>
+        <ChipRow
+          values={EQUIPMENT}
+          selected={draft.equipment}
+          testIdPrefix="exercise-form-equipment"
+          labels={equipmentLabel}
+          onToggle={(eq) => patch({ equipment: toggle(draft.equipment, eq) })}
+        />
+      </fieldset>
+    </>
+  )
+}
+
 /** The dialog's form fields, split out of `ExerciseDialog` to keep it small. */
 function ExerciseFields({ draft, patch }: FieldsProps) {
   return (
@@ -208,6 +251,7 @@ function ExerciseFields({ draft, patch }: FieldsProps) {
         label="Modality"
         value={draft.modality}
         options={MODALITIES}
+        labels={modalityLabel}
         testId="exercise-form-modality"
         onChange={(modality) => patch({ modality })}
       />
@@ -215,27 +259,11 @@ function ExerciseFields({ draft, patch }: FieldsProps) {
         label="Intensity"
         value={draft.intensity}
         options={INTENSITIES}
+        labels={intensityLabel}
         testId="exercise-form-intensity"
         onChange={(intensity) => patch({ intensity })}
       />
-      <fieldset className="flex flex-col gap-1">
-        <legend className="text-xs text-muted-foreground">Muscle groups</legend>
-        <ChipRow
-          values={MUSCLE_GROUPS}
-          selected={draft.muscleGroups}
-          testIdPrefix="exercise-form-muscle"
-          onToggle={(group) => patch({ muscleGroups: toggle(draft.muscleGroups, group) })}
-        />
-      </fieldset>
-      <fieldset className="flex flex-col gap-1">
-        <legend className="text-xs text-muted-foreground">Equipment (none = bodyweight)</legend>
-        <ChipRow
-          values={EQUIPMENT}
-          selected={draft.equipment}
-          testIdPrefix="exercise-form-equipment"
-          onToggle={(eq) => patch({ equipment: toggle(draft.equipment, eq) })}
-        />
-      </fieldset>
+      <TagMultiSelects draft={draft} patch={patch} />
     </>
   )
 }
