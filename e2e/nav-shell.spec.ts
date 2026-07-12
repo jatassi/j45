@@ -251,7 +251,7 @@ test.describe('nav-shell (chromium + webkit)', () => {
     await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
   })
 
-  test('home has timer/new-workout links + active-sessions-strip when live; glass tiers on chrome', async ({
+  test('home has hero + quick-start tiles when live; glass tiers on chrome', async ({
     page,
   }, testInfo) => {
     projectNameFrom(testInfo)
@@ -259,8 +259,11 @@ test.describe('nav-shell (chromium + webkit)', () => {
     await loginAsOwner(page, env.baseUrl, env.owner)
 
     await expect(page.getByTestId('home-screen')).toBeVisible()
+    await expect(page.getByTestId('home-hero')).toBeVisible()
     await expect(page.getByTestId('home-timer-link')).toBeVisible()
     await expect(page.getByTestId('home-timer-link')).toHaveAttribute('href', '/timer')
+    await expect(page.getByTestId('home-generate-link')).toBeVisible()
+    await expect(page.getByTestId('home-generate-link')).toHaveAttribute('href', '/generate')
     await expect(page.getByTestId('home-new-workout-link')).toBeVisible()
     await expect(page.getByTestId('home-new-workout-link')).toHaveAttribute('href', '/workouts/new')
 
@@ -275,14 +278,24 @@ test.describe('nav-shell (chromium + webkit)', () => {
     await expect(headerGlass).toHaveCount(1)
     await expect(headerGlass).toHaveAttribute('data-glass-tier', /^(css|refract)$/)
 
-    // Start a live session so the home strip has something to show.
+    // Start a live session so the home hero has a live pick to show.
     await page.getByTestId('tab-library').click()
     await expect(page.getByTestId('library-screen')).toBeVisible()
-    await startApexSession(page)
+    const sessionId = await startApexSession(page)
 
     await page.goto(env.baseUrl)
     await expect(page.getByTestId('home-screen')).toBeVisible()
-    // Strip polls ListActiveSessions every 5s — allow a couple of ticks.
-    await expect(page.getByTestId('active-sessions-strip')).toBeVisible({ timeout: 15_000 })
+    // ListActiveSessions poll is 5s — allow a couple of ticks.
+    await expect(page.getByTestId('home-hero')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByTestId(`session-card-${sessionId}`)).toBeVisible({ timeout: 15_000 })
+
+    // Re-enter and leave so we do not leave a server-wide live session for
+    // sibling specs (ListActiveSessions is not scoped; idle GC is 60s).
+    await page.getByTestId(`session-card-${sessionId}`).click()
+    await expect(page.getByTestId('session-screen')).toBeVisible()
+    await page.getByTestId('session-leave').evaluate((node: HTMLElement) => {
+      node.click()
+    })
+    await expect(page.getByTestId('home-screen')).toBeVisible()
   })
 })

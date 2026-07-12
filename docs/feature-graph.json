@@ -283,7 +283,7 @@
     {
       "id": "home-dashboard",
       "title": "Action-first Home — hero card (join live / start last / browse), quick-start tiles, recent list",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "nav-shell"
       ],
