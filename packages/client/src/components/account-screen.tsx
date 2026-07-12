@@ -6,6 +6,18 @@ import * as Effect from 'effect/Effect'
 
 import { PeopleInvites } from '@/components/people-invites'
 import { ServerInfoCard } from '@/components/server-info-card'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import * as AuthApi from '@/lib/auth-api'
@@ -13,7 +25,7 @@ import * as Passkeys from '@/lib/passkeys'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 /**
- * The `ListPasskeys` query, the enroll "fn" atom (runs the shared
+ * `ListPasskeys` query, the enroll "fn" atom (runs the shared
  * `Passkeys.enrollPasskey` helper through the rpc client's runtime, per that
  * helper's own doc comment), and the `DeletePasskey` mutation — hoisted to
  * module scope like `auth-gate.tsx`'s `meAtom`, so `useAtomValue`/`useAtom`
@@ -23,6 +35,27 @@ import { ServerRpcClient } from '@/lib/rpc-client'
 const listPasskeysAtom = ServerRpcClient.query('ListPasskeys', undefined)
 const enrollPasskeyAtom = ServerRpcClient.runtime.fn(() => Passkeys.enrollPasskey)
 const deletePasskeyAtom = ServerRpcClient.mutation('DeletePasskey')
+
+/**
+ * Initials from `displayName`: first letter of the first word + first letter
+ * of the last word, uppercased. Single-word names use just that one letter.
+ */
+function displayInitials(displayName: string): string {
+  const words = displayName
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
+  const first = words.at(0)
+  const last = words.at(-1)
+  if (first === undefined || last === undefined) {
+    return ''
+  }
+  const firstLetter = first.charAt(0).toUpperCase()
+  if (words.length === 1) {
+    return firstLetter
+  }
+  return `${firstLetter}${last.charAt(0).toUpperCase()}`
+}
 
 type AccountScreenProps = {
   readonly user: User
@@ -40,20 +73,45 @@ type PasskeyRowProps = {
   readonly onDelete: () => void
 }
 
-/** One row of the passkey list: the credential id and a delete button. */
+/** One row of the passkey list: the credential id and a delete control behind confirm. */
 function PasskeyRow({ id, onDelete }: PasskeyRowProps) {
   return (
     <li className="flex items-center justify-between gap-2 text-sm" data-testid={`passkey-${id}`}>
       <span className="truncate font-mono">{id}</span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        data-testid={`delete-passkey-${id}`}
-        onClick={onDelete}
-      >
-        Delete
-      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid={`delete-passkey-${id}`}
+            />
+          }
+        >
+          Delete
+        </AlertDialogTrigger>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this passkey?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You won&apos;t be able to sign in with this passkey anymore.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel size="sm">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              size="sm"
+              data-testid={`confirm-delete-passkey-${id}`}
+              onClick={onDelete}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </li>
   )
 }
@@ -138,12 +196,13 @@ function useLogout(onLoggedOut: () => void) {
 
 /**
  * The authenticated account surface `AuthGate` renders once `GET /auth/me`
- * succeeds: display name and username, the caller's passkeys (list, add,
- * delete), and logout. The e2e passkey-enrollment and logout flows drive
- * this screen directly. For `user.role === "owner"` it additionally renders
- * `PeopleInvites` — the owner-only "People & Invites" section; for a member
- * that section isn't mounted at all, so none of its UI renders and none of
- * its rpcs are ever called. Also mounts `ServerInfoCard`: the walking
+ * succeeds: identity card (avatar-initials, display name, username), the
+ * caller's passkeys (list, add, delete-with-alert-dialog), logout, and a
+ * demoted server-info footer. The e2e passkey-enrollment and logout flows
+ * drive this screen directly. For `user.role === "owner"` it additionally
+ * renders `PeopleInvites` — the owner-only "People & Invites" section; for a
+ * member that section isn't mounted at all, so none of its UI renders and
+ * none of its rpcs are ever called. Also mounts `ServerInfoCard`: the walking
  * skeleton's rpc round-trip proof lives behind the gate now that the app
  * content is auth-gated (`e2e/server-info.spec.ts` logs in to reach it).
  */
@@ -155,8 +214,15 @@ export function AccountScreen({ user, onLoggedOut }: AccountScreenProps) {
     <div className="flex min-h-svh flex-col items-center justify-center gap-4 p-6">
       <Card className="w-full max-w-sm" data-testid="account-screen">
         <CardHeader>
-          <CardTitle data-testid="account-display-name">{user.displayName}</CardTitle>
-          <CardDescription data-testid="account-username">@{user.username}</CardDescription>
+          <div className="flex items-center gap-3">
+            <Avatar size="lg" data-testid="account-avatar">
+              <AvatarFallback>{displayInitials(user.displayName)}</AvatarFallback>
+            </Avatar>
+            <div className="flex min-w-0 flex-col gap-1">
+              <CardTitle data-testid="account-display-name">{user.displayName}</CardTitle>
+              <CardDescription data-testid="account-username">@{user.username}</CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <PasskeyList />
@@ -175,7 +241,7 @@ export function AccountScreen({ user, onLoggedOut }: AccountScreenProps) {
           ) : null}
           <Button
             type="button"
-            variant="outline"
+            variant="destructive"
             onClick={logout.handleLogout}
             disabled={logout.submitting}
             data-testid="logout-button"

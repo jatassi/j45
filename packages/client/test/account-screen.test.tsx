@@ -67,18 +67,20 @@ function makeFakeRuntime(
 }
 
 describe('AccountScreen', () => {
-  it('shows the user, lists passkeys via ListPasskeys, adds one via the enroll helper, and deletes via DeletePasskey', async () => {
+  it('shows the identity card, lists passkeys via ListPasskeys, adds one via the enroll helper, and deletes via DeletePasskey only after alert-dialog confirm', async () => {
     let passkeys: readonly PasskeySummary[] = [
       new PasskeySummary({
         id: 'seed-1',
         createdAt: DateTime.unsafeMake('2026-01-01T00:00:00.000Z'),
       }),
     ]
+    let deleteCalls = 0
 
     const fakeRuntime = makeFakeRuntime({
       ServerInfo: serverInfoHandler,
       ListPasskeys: () => Effect.succeed(passkeys),
       DeletePasskey: (payload) => {
+        deleteCalls += 1
         const { id } = payload as { id: string }
         passkeys = passkeys.filter((passkey) => passkey.id !== id)
         return Effect.succeed(undefined)
@@ -101,6 +103,8 @@ describe('AccountScreen', () => {
     )
 
     expect(screen.getByTestId('account-screen')).toBeTruthy()
+    expect(screen.getByTestId('account-avatar')).toBeTruthy()
+    expect(screen.getByTestId('account-avatar').textContent).toBe('JO')
     expect(screen.getByTestId('account-display-name').textContent).toBe('Jill Owner')
     expect(screen.getByTestId('account-username').textContent).toBe('@jill')
 
@@ -109,10 +113,17 @@ describe('AccountScreen', () => {
     fireEvent.click(screen.getByTestId('add-passkey-button'))
     await screen.findByTestId('passkey-new-cred')
 
+    // Opening the delete dialog must not fire DeletePasskey on its own.
     fireEvent.click(screen.getByTestId('delete-passkey-seed-1'))
+    const confirm = await screen.findByTestId('confirm-delete-passkey-seed-1')
+    expect(deleteCalls).toBe(0)
+    expect(screen.getByTestId('passkey-seed-1')).toBeTruthy()
+
+    fireEvent.click(confirm)
     await waitFor(() => {
       expect(screen.queryByTestId('passkey-seed-1')).toBeNull()
     })
+    expect(deleteCalls).toBe(1)
     expect(screen.getByTestId('passkey-new-cred')).toBeTruthy()
   })
 })

@@ -380,7 +380,7 @@
     {
       "id": "secondary-screens",
       "title": "History and Account on the design system — completion cards with progress, accordion snapshots, account/invites drawers",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "nav-shell",
         "session-leave"

@@ -68,4 +68,49 @@ test.describe('passkey ceremony (chromium only — CDP virtual authenticator)', 
       await expect(page.getByTestId('account-display-name')).toHaveText(env.owner.displayName)
     },
   )
+
+  test('delete passkey opens an alert-dialog; confirm removes it from the list', async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName !== 'chromium',
+      'CDP WebAuthn.enable virtual authenticator is chromium-only (BrowserContext.newCDPSession ' +
+        'has no webkit equivalent) — see design.md’s Testing section.',
+    )
+
+    const env = readE2eEnv()
+    await addVirtualAuthenticator(page)
+
+    await page.goto(env.baseUrl)
+    await expect(page.getByTestId('login-screen')).toBeVisible()
+    await page.locator('#login-username').fill(env.owner.username)
+    await page.locator('#login-pin').fill(env.owner.pin)
+    await page.getByRole('button', { name: 'Sign in with PIN' }).click()
+
+    await expect(page.getByTestId('home-screen')).toBeVisible()
+    await page.goto(`${env.baseUrl}/account`)
+    await expect(page.getByTestId('account-screen')).toBeVisible()
+
+    // Enroll a fresh credential so this test always has a known row to delete
+    // (prior tests may have left passkeys on the shared owner account).
+    await page.getByTestId('add-passkey-button').click()
+    await expect(page.getByTestId('passkey-list')).toBeVisible()
+
+    const deleteTrigger = page.locator('[data-testid^="delete-passkey-"]').last()
+    const deleteTestId = await deleteTrigger.getAttribute('data-testid')
+    expect(deleteTestId).toMatch(/^delete-passkey-/)
+    if (deleteTestId === null) {
+      throw new Error('expected delete-passkey trigger to carry a data-testid')
+    }
+    const passkeyId = deleteTestId.replace('delete-passkey-', '')
+
+    // Trigger alone opens the dialog — passkey stays until confirm.
+    await deleteTrigger.click()
+    await expect(page.getByTestId(`confirm-delete-passkey-${passkeyId}`)).toBeVisible()
+    await expect(page.getByTestId(`passkey-${passkeyId}`)).toBeVisible()
+
+    await page.getByTestId(`confirm-delete-passkey-${passkeyId}`).click()
+    await expect(page.getByTestId(`passkey-${passkeyId}`)).toHaveCount(0)
+  })
 })

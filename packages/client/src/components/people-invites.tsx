@@ -2,7 +2,17 @@ import * as React from 'react'
 
 import { Result, useAtom, useAtomRefresh, useAtomValue } from '@effect-atom/atom-react'
 import type { Invite, User, UserId } from '@j45/domain'
+import { toast } from 'sonner'
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ServerRpcClient } from '@/lib/rpc-client'
@@ -18,6 +28,8 @@ const listUsersAtom = ServerRpcClient.query('ListUsers', undefined)
 const listInvitesAtom = ServerRpcClient.query('ListInvites', undefined)
 const createInviteAtom = ServerRpcClient.mutation('CreateInvite')
 const revokeInviteAtom = ServerRpcClient.mutation('RevokeInvite')
+
+const toastFailed = (d: string) => toast.error('Command failed', { description: d })
 
 /** Renders an 8-char invite/reset code as the design's grouped `XXXX-XXXX`. */
 function formatCode(code: string): string {
@@ -59,6 +71,9 @@ function useCreateInvite() {
       })
       .catch(() => {
         setOutcome({ ok: false })
+        toastFailed(
+          resetUserId === undefined ? 'Could not mint an invite.' : 'Could not issue a reset code.',
+        )
       })
       .finally(() => {
         setPending(false)
@@ -130,22 +145,59 @@ function UserList() {
   })
 }
 
+function RevokeDialog(p: {
+  readonly code: string
+  readonly open: boolean
+  readonly onCancel: () => void
+  readonly onConfirm: () => void
+}) {
+  return (
+    <AlertDialog open={p.open} onOpenChange={(n) => (n ? undefined : p.onCancel())}>
+      <AlertDialogContent data-testid={`revoke-invite-dialog-${p.code}`} size="sm">
+        <AlertDialogTitle>Revoke invite</AlertDialogTitle>
+        <AlertDialogDescription>
+          Revoke {formatCode(p.code)}? It can&apos;t be used to register after this.
+        </AlertDialogDescription>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid={`revoke-invite-cancel-${p.code}`} size="sm">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            type="button"
+            variant="destructive"
+            size="sm"
+            data-testid={`revoke-invite-confirm-${p.code}`}
+            onClick={p.onConfirm}
+          >
+            Revoke
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 type InviteRowProps = {
   readonly invite: Invite
   readonly onRevoked: () => void
 }
 
-/** One row of the unspent-invites list: the grouped code and a revoke button. */
+/**
+ * One row of the unspent-invites list: the grouped code and a revoke action
+ * gated behind an AlertDialog confirm (mirrors `workout-detail-screen`'s
+ * `DeleteDialog`).
+ */
 function InviteRow({ invite, onRevoked }: InviteRowProps) {
   const [, revoke] = useAtom(revokeInviteAtom, { mode: 'promise' })
+  const [confirmOpen, setConfirmOpen] = React.useState(false)
 
-  const handleRevoke = () => {
+  const confirmRevoke = () => {
     void revoke({ payload: { code: invite.code } })
-      .then(onRevoked)
-      .catch(() => {
-        // Revocation failing isn't shown per-row; the list simply keeps the
-        // (still-unspent) invite on the next render.
+      .then(() => {
+        setConfirmOpen(false)
+        onRevoked()
       })
+      .catch(() => toastFailed('Could not revoke the invite.'))
   }
 
   return (
@@ -161,10 +213,16 @@ function InviteRow({ invite, onRevoked }: InviteRowProps) {
         variant="outline"
         size="sm"
         data-testid={`revoke-invite-${invite.code}`}
-        onClick={handleRevoke}
+        onClick={() => setConfirmOpen(true)}
       >
         Revoke
       </Button>
+      <RevokeDialog
+        code={invite.code}
+        open={confirmOpen}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={confirmRevoke}
+      />
     </li>
   )
 }
@@ -203,24 +261,33 @@ type MintedInviteProps = {
   readonly invite: Invite
 }
 
-/** The just-minted invite's grouped code and its copy-link action. */
+/**
+ * The just-minted invite's grouped code, its shareable register link (visible,
+ * not only copied), and the copy-link action.
+ */
 function MintedInvite({ invite }: MintedInviteProps) {
+  const link = inviteLink(invite.code)
   return (
-    <div className="flex items-center justify-between gap-2 text-sm" data-testid="minted-invite">
-      <span className="font-mono" data-testid="minted-invite-code">
-        {formatCode(invite.code)}
-      </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        data-testid="copy-invite-link"
-        onClick={() => {
-          handleCopyLink(invite.code)
-        }}
-      >
-        Copy link
-      </Button>
+    <div className="flex flex-col gap-2 text-sm" data-testid="minted-invite">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono" data-testid="minted-invite-code">
+          {formatCode(invite.code)}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-testid="copy-invite-link"
+          onClick={() => {
+            handleCopyLink(invite.code)
+          }}
+        >
+          Copy link
+        </Button>
+      </div>
+      <p className="break-all text-muted-foreground" data-testid="minted-invite-register-link">
+        {link}
+      </p>
     </div>
   )
 }

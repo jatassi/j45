@@ -5,13 +5,19 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AccountScreen } from '@/components/account-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn() },
+}))
+
 afterEach(() => {
   cleanup()
+  vi.mocked(toast.error).mockClear()
 })
 
 /** Decodes through the branded `User` schema, as a real `/auth/me` body would. */
@@ -66,7 +72,7 @@ function renderAccountScreen(
 }
 
 describe('PeopleInvites (owner)', () => {
-  it('shows the user list, mints an invite with a copy-link action, lists and revokes unspent invites, and issues a per-user reset code', async () => {
+  it('shows the user list, mints an invite with a visible register link and copy-link action, lists and revokes unspent invites via confirm dialog, and issues a per-user reset code', async () => {
     const owner = makeUser({ id: 'u1', username: 'jill', displayName: 'Jill Owner', role: 'owner' })
     const member = makeUser({
       id: 'u2',
@@ -78,6 +84,7 @@ describe('PeopleInvites (owner)', () => {
     let invites: readonly Invite[] = []
     const mintedCodes = ['ABCD1234', 'WXYZ5678']
     let mintCount = 0
+    let revokeCalls = 0
 
     const clipboardWriteText = vi.fn(() => Promise.resolve(undefined))
     Object.defineProperty(globalThis.navigator, 'clipboard', {
@@ -99,6 +106,7 @@ describe('PeopleInvites (owner)', () => {
       },
       RevokeInvite: (payload) => {
         const { code } = payload as { code: string }
+        revokeCalls += 1
         invites = invites.filter((invite) => invite.code !== code)
         return Effect.succeed(undefined)
       },
@@ -113,6 +121,10 @@ describe('PeopleInvites (owner)', () => {
     await screen.findByTestId('minted-invite-code')
     expect(screen.getByTestId('minted-invite-code').textContent).toBe('ABCD-1234')
 
+    // The register link itself is rendered (not only copied silently).
+    const expectedLink = `${globalThis.location.origin}/register?invite=ABCD1234`
+    expect(screen.getByTestId('minted-invite-register-link').textContent).toBe(expectedLink)
+
     // It also shows up in the unspent-invites list, grouped the same way.
     await screen.findByTestId('invite-code-ABCD1234')
     expect(screen.getByTestId('invite-code-ABCD1234').textContent).toBe('ABCD-1234')
@@ -120,21 +132,51 @@ describe('PeopleInvites (owner)', () => {
     // Copy-link produces ${APP_ORIGIN}/register?invite=<code> (the app's own origin).
     fireEvent.click(screen.getByTestId('copy-invite-link'))
     await waitFor(() => {
-      expect(clipboardWriteText).toHaveBeenCalledWith(
-        `${globalThis.location.origin}/register?invite=ABCD1234`,
-      )
+      expect(clipboardWriteText).toHaveBeenCalledWith(expectedLink)
     })
 
-    // Revoking removes it from the unspent-invites list.
+    // Revoking is gated behind a confirm dialog — cancel does nothing.
     fireEvent.click(screen.getByTestId('revoke-invite-ABCD1234'))
+    await screen.findByTestId('revoke-invite-dialog-ABCD1234')
+    fireEvent.click(screen.getByTestId('revoke-invite-cancel-ABCD1234'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('revoke-invite-dialog-ABCD1234')).toBeNull()
+    })
+    expect(revokeCalls).toBe(0)
+    expect(screen.getByTestId('invite-ABCD1234')).toBeTruthy()
+
+    // Confirm calls RevokeInvite and removes the row.
+    fireEvent.click(screen.getByTestId('revoke-invite-ABCD1234'))
+    fireEvent.click(await screen.findByTestId('revoke-invite-confirm-ABCD1234'))
     await waitFor(() => {
       expect(screen.queryByTestId('invite-ABCD1234')).toBeNull()
     })
+    expect(revokeCalls).toBe(1)
 
     // Per-user issue-reset-code shows the code, grouped, to read aloud.
     fireEvent.click(screen.getByTestId('issue-reset-code-u2'))
     await screen.findByTestId('reset-code-u2')
     expect(screen.getByTestId('reset-code-u2').textContent).toBe('WXYZ-5678')
+  })
+
+  it('toasts when CreateInvite rejects', async () => {
+    const owner = makeUser({ id: 'u1', username: 'jill', displayName: 'Jill Owner', role: 'owner' })
+
+    renderAccountScreen(owner, {
+      ListPasskeys: () => Effect.succeed([]),
+      ListUsers: () => Effect.succeed([owner]),
+      ListInvites: () => Effect.succeed([]),
+      CreateInvite: () => Effect.fail(new Error('mint failed')),
+    })
+
+    await screen.findByTestId('mint-invite-button')
+    fireEvent.click(screen.getByTestId('mint-invite-button'))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Command failed', {
+        description: 'Could not mint an invite.',
+      })
+    })
   })
 })
 

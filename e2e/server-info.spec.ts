@@ -10,9 +10,9 @@ import { readE2eEnv } from './support/state.js'
  *
  * The app content is auth-gated, so the spec first signs in as the owner
  * `global-setup.ts` registers — `ServerInfoCard` is mounted on the account
- * screen behind the gate.
+ * screen behind the gate (as a quiet footer detail).
  */
-test('renders the rpc-delivered server SHA inside a shadcn/ui Card', async ({ page }) => {
+test('renders the rpc-delivered server SHA in the account footer detail', async ({ page }) => {
   const env = readE2eEnv()
 
   await page.goto(env.baseUrl)
@@ -27,7 +27,7 @@ test('renders the rpc-delivered server SHA inside a shadcn/ui Card', async ({ pa
   await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.goto(`${env.baseUrl}/account`)
 
-  // `ServerInfoCard` renders a shadcn/ui `Card` (packages/client/src/components/ui/card.tsx).
+  // `ServerInfoCard` is a demoted footer detail on the account screen.
   const card = page.getByTestId('server-info-card')
   await expect(card).toBeVisible()
 

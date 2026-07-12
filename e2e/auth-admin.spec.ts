@@ -80,8 +80,9 @@ async function callOwnerRpcAsMember(
 }
 
 /**
- * Owner mints an invite (task 2's e2e half) → a second browser context
- * registers with it → the resulting member sees no admin UI and gets
+ * Owner mints an invite (task 2's e2e half) → a second, unspent invite is
+ * revoked via the confirm dialog → a second browser context registers with
+ * the first invite → the resulting member sees no admin UI and gets
  * `Forbidden` calling an owner-only rpc directly (criterion 7, both halves).
  * Runs on chromium and webkit — nothing here is passkey/CDP-specific.
  */
@@ -114,6 +115,23 @@ test.describe('owner invites + owner-only rpc access (chromium + webkit)', () =>
         throw new Error('mint-invite-button click produced no minted-invite-code text')
       }
       const code = grouped.replaceAll('-', '')
+
+      // Mint a second, still-unspent invite and revoke it through the
+      // alert-dialog confirm flow (owner-only — before logging out).
+      await page.getByTestId('mint-invite-button').click()
+      await expect(page.getByTestId('minted-invite-code')).toBeVisible()
+      const secondGrouped = await page.getByTestId('minted-invite-code').textContent()
+      if (secondGrouped === null) {
+        throw new Error('second mint-invite-button click produced no minted-invite-code text')
+      }
+      const secondCode = secondGrouped.replaceAll('-', '')
+      // The second mint overwrote the "just minted" banner; the first code
+      // remains in the unspent list and is still redeemable below.
+      await expect(page.getByTestId(`invite-${secondCode}`)).toBeVisible()
+      await page.getByTestId(`revoke-invite-${secondCode}`).click()
+      await expect(page.getByTestId(`revoke-invite-dialog-${secondCode}`)).toBeVisible()
+      await page.getByTestId(`revoke-invite-confirm-${secondCode}`).click()
+      await expect(page.getByTestId(`invite-${secondCode}`)).toHaveCount(0)
 
       await page.getByTestId('logout-button').click()
       await expect(page.getByTestId('login-screen')).toBeVisible()

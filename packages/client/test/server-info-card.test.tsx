@@ -13,7 +13,7 @@ afterEach(() => {
 })
 
 describe('ServerInfoCard', () => {
-  it('renders sha, version, and serverTime from the ServerInfo rpc atom inside a shadcn Card', () => {
+  it('renders the release sha from the ServerInfo rpc atom as a quiet footer detail', () => {
     const serverInfo = new ServerInfo({
       sha: 'abc1234',
       version: '0.0.1',
@@ -32,9 +32,8 @@ describe('ServerInfoCard', () => {
 
     expect(screen.getByTestId('server-info-card')).toBeTruthy()
     expect(screen.getByTestId('server-info-sha').textContent).toBe('abc1234')
-    expect(screen.getByTestId('server-info-version').textContent).toBe('0.0.1')
-    expect(screen.getByTestId('server-info-server-time').textContent).toBe(
-      serverInfo.serverTime.toString(),
-    )
+    // Footer still surfaces version from the same rpc payload (no longer a
+    // Card/dl block — only sha keeps a dedicated testid).
+    expect(screen.getByTestId('server-info-card').textContent).toContain('0.0.1')
   })
 })

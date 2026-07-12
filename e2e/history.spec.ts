@@ -173,13 +173,23 @@ async function assertHistoryRow(
   return completionId
 }
 
-/** Parse `segmentsCompleted` from `history-progress-<id>` text like `"3/12"`. */
+/**
+ * Parse `segmentsCompleted` from `history-progress-<id>`. Prefers
+ * `data-segments-completed` (works for both partial N/M and Finished rows);
+ * falls back to parsing N/M text so older partial-only markup still works.
+ */
 async function readHistoryProgressNumerator(page: Page, completionId: string): Promise<number> {
   const progress = page.getByTestId(`history-progress-${completionId}`)
   await expect(progress).toBeVisible()
+
+  const attr = await progress.getAttribute('data-segments-completed')
+  if (attr !== null && attr.length > 0) {
+    return Number(attr)
+  }
+
   const rawText = await progress.textContent()
   const text = rawText?.trim() ?? ''
-  const match = /^(\d+)\/(\d+)$/.exec(text)
+  const match = /(\d+)\/(\d+)/.exec(text)
   if (match === null) {
     throw new Error(`history-progress-${completionId} text was not N/M: ${JSON.stringify(text)}`)
   }
@@ -262,12 +272,173 @@ test.describe('history (chromium + webkit)', () => {
           hostLabel: displayA,
         })
 
+        // Participant pills, asserted e2e on the one card with a deterministic
+        // roster. `recordLeaver` snapshots the roster *before* unrostering, so
+        // A's own completion — written when A left first, while B was still
+        // present — lists both the host (A) and the guest (B). (B's card, by
+        // contrast, is written after A departed and lists only B, which is why
+        // `assertHistoryRow` deliberately skips participants.) Scope to the
+        // `history-participants-<id>` container so the host badge (a sibling)
+        // can't satisfy the pill assertion on its own.
+        const participantsA = page.getByTestId(`history-participants-${completionIdA}`)
+        await expect(participantsA).toBeVisible()
+        await expect(participantsA.getByText(displayA, { exact: true })).toBeVisible()
+        await expect(participantsA.getByText(displayB, { exact: true })).toBeVisible()
+
+        // Mid-leaver shows a partial N/M fraction; finisher shows Finished.
+        const progressAEl = page.getByTestId(`history-progress-${completionIdA}`)
+        await expect(progressAEl).toBeVisible()
+        await expect(progressAEl).toContainText(/\d+\/\d+/)
+        await expect(progressAEl).not.toContainText('Finished')
+
+        const progressBEl = pageB.getByTestId(`history-progress-${completionIdB}`)
+        await expect(progressBEl).toBeVisible()
+        await expect(progressBEl).toHaveText('Finished')
+
         const progressA = await readHistoryProgressNumerator(page, completionIdA)
         const progressB = await readHistoryProgressNumerator(pageB, completionIdB)
         expect(progressA).toBeLessThan(progressB)
+
+        // Expanding a card reveals the as-run Apex pod/station snapshot.
+        await page.getByTestId(`history-expand-${completionIdA}`).click()
+        const snapshotA = page.getByTestId(`history-snapshot-${completionIdA}`)
+        await expect(snapshotA).toBeVisible()
+        await expect(snapshotA).toContainText('8 combo stations')
+        await expect(snapshotA).toContainText('Kettlebell swing')
+        await expect(snapshotA).toContainText('Rower')
+
+        await pageB.getByTestId(`history-expand-${completionIdB}`).click()
+        const snapshotB = pageB.getByTestId(`history-snapshot-${completionIdB}`)
+        await expect(snapshotB).toBeVisible()
+        await expect(snapshotB).toContainText('8 combo stations')
+        await expect(snapshotB).toContainText('Hand-release burpee')
       } finally {
         await contextB.close()
       }
+    },
+  )
+
+  test(
+    'a freshly registered account with no completions sees the empty state on /history — ' +
+      'query-boundary-empty with a Start a workout CTA that links to (and navigates to) /library',
+    async ({ page }, testInfo) => {
+      const projectName = testInfo.project.name
+      const env = readE2eEnv()
+      const [code] = await mintTwoInviteCodes(page, env.baseUrl, env.owner)
+
+      await registerAndReachHome(page, env.baseUrl, {
+        code,
+        username: `e2e-hist-e-${projectName}`,
+        displayName: `Hist Empty ${projectName}`,
+        pin: '246813',
+      })
+
+      // Via the tab bar (not `page.goto`), like `assertHistoryRow`.
+      await page.getByTestId('tab-history').click()
+      await expect(page).toHaveURL(/\/history/)
+      await expect(page.getByTestId('history-screen')).toBeVisible()
+
+      // No completions → the empty surface, not the list / loading / failure ones.
+      await expect(page.getByTestId('query-boundary-empty')).toBeVisible()
+      await expect(page.getByTestId('history-list')).toHaveCount(0)
+      await expect(page.getByTestId('query-boundary-loading')).toHaveCount(0)
+      await expect(page.getByTestId('query-boundary-error')).toHaveCount(0)
+
+      // CTA links to /library and actually gets there when clicked.
+      const cta = page.getByTestId('start-workout-empty-cta')
+      await expect(cta).toBeVisible()
+      await expect(cta).toHaveText(/Start a workout/i)
+      await expect(cta).toHaveAttribute('href', '/library')
+      await cta.click()
+      await expect(page).toHaveURL(/\/library/)
+      await expect(page.getByTestId('library-screen')).toBeVisible()
+    },
+  )
+
+  test(
+    'when the ListHistory query fails, /history shows query-boundary-error (a Retry control, ' +
+      'structurally distinct from query-boundary-loading); Retry recovers to real data once the ' +
+      'failure is lifted',
+    async ({ page }, testInfo) => {
+      const projectName = testInfo.project.name
+      const env = readE2eEnv()
+      const [code] = await mintTwoInviteCodes(page, env.baseUrl, env.owner)
+
+      await registerAndReachHome(page, env.baseUrl, {
+        code,
+        username: `e2e-hist-f-${projectName}`,
+        displayName: `Hist Fail ${projectName}`,
+        pin: '135790',
+      })
+
+      // The rpc transport is a WebSocket at /rpc (see `lib/rpc-client.ts`), so
+      // HTTP route interception can't touch a query. Instead intercept the
+      // socket the way `exercises.spec.ts` does: proxy every frame to the real
+      // server, except kill the socket on the *first* ListHistory request. That
+      // fails the in-flight query (the client protocol surfaces a
+      // ClientProtocolError → `query-boundary-error`). The client's socket layer
+      // then reconnects on its retry schedule with a fresh WebSocket, which
+      // re-enters this handler and — the once-only flag now set — proxies
+      // normally, so a later Retry re-runs ListHistory over a healthy transport.
+      // Auth rides on `GET /auth/me` (HTTP), not this socket, so killing it never
+      // unmounts /history or bounces to the login screen.
+      let listHistoryFailuresInjected = 0
+      let rpcConnections = 0
+      await page.routeWebSocket('**/rpc', (ws) => {
+        rpcConnections += 1
+        const server = ws.connectToServer()
+        ws.onMessage((message) => {
+          const text =
+            typeof message === 'string'
+              ? message
+              : Buffer.from(message as ArrayBuffer).toString('utf8')
+          if (listHistoryFailuresInjected === 0 && text.includes('ListHistory')) {
+            listHistoryFailuresInjected += 1
+            try {
+              void server.close({ code: 1011, reason: 'forced e2e failure' })
+            } catch {
+              // ignore
+            }
+            try {
+              void ws.close()
+            } catch {
+              // ignore
+            }
+            return
+          }
+          server.send(message)
+        })
+        server.onMessage((message) => {
+          ws.send(message)
+        })
+      })
+
+      // Reload so the app reconnects over the intercepted socket (the route only
+      // catches WebSockets opened after it is installed), then open History.
+      await page.reload()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await page.getByTestId('tab-history').click()
+      await expect(page).toHaveURL(/\/history/)
+      await expect(page.getByTestId('history-screen')).toBeVisible()
+
+      // Failure surface, structurally distinct from loading, with a Retry control.
+      await expect(page.getByTestId('query-boundary-error')).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
+      await expect(page.getByTestId('query-boundary-loading')).toHaveCount(0)
+      await expect(page.getByTestId('query-boundary-empty')).toHaveCount(0)
+
+      // The client's protocol keeps a `currentError` sticky until its socket
+      // reconnects (a fresh WebSocket clears it on open) — so a Retry fired
+      // during the ~500ms reconnect window would just re-fail. Wait for the
+      // second connection (the reconnect re-enters this route) before retrying;
+      // `expect.poll` is an auto-retrying expect, no fixed sleep.
+      await expect.poll(() => rpcConnections).toBeGreaterThanOrEqual(2)
+
+      // Retry re-runs ListHistory over the now-recovered socket; the failure
+      // clears and the account's real (empty) history renders as a success.
+      await page.getByRole('button', { name: 'Retry' }).click()
+      await expect(page.getByTestId('query-boundary-empty')).toBeVisible()
+      await expect(page.getByTestId('query-boundary-error')).toHaveCount(0)
     },
   )
 })
