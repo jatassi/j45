@@ -1,0 +1,128 @@
+{
+  "run": {
+    "prepared_at": "2026-07-12T07:09:21.204Z",
+    "target": "redesign",
+    "scope": [
+      "nav-shell"
+    ],
+    "tokens": {
+      "spent": 1110400,
+      "by_role": {
+        "plan": 0,
+        "build": 0,
+        "drive": 0,
+        "validate": 21155
+      },
+      "attribution": "serial"
+    },
+    "halted": null
+  },
+  "features": [
+    {
+      "id": "nav-shell",
+      "workflow_path": "standard",
+      "outcome": "blocked",
+      "reason": "Criterion 6 (bun run test:e2e exits 0): UNMET. The binding-contract suite exited code 1 on two consecutive full runs (4 failed, then 3 failed). Failing tests shift run-to-run (chromium timer.spec.ts:152/219, webkit nav-shell.spec.ts:183, webkit flow-control.spec.ts:152) but every failure has one signature: <div class=\"fixed inset-x-3 bottom-0 z-20 ...\"> (the TabBar) intercepts pointer events on the click target after 'scrolling into view'.; Layout defect (root cause): no tab-layout screen reserves bottom clearance for the floating glass tab bar. The only bottom padding in the codebase is the TabBar's own pb-[env(safe-area-inset-bottom)] in packages/client/src/components/shell/tab-bar.tsx:82. home-screen.tsx, library-screen.tsx, history/generate and workout-detail (which keeps the tab bar) all render content flush to bottom-0, so any interactive element that scrolls to the viewport bottom is covered by the tab bar and becomes unclickable.; Confirmed real, not flake: the two timer.spec.ts tests pass when run in isolation (bunx playwright test timer.spec.ts --project=chromium => 2 passed) but fail under the full fullyParallel suite. ListActiveSessions is server-wide, so live sessions started by sibling specs (live-session, nav-shell startApexSession, flow-control) populate the interim home's ActiveSessionsStrip for unrelated fresh accounts, inflating the page so home-timer-link / tab-library fall behind the tab bar. This deterministically breaks the home quick-action reachability that criteria 3 and 4 depend on.; Criteria 1, 2, 3 (partial), 4 (partial), 5 pass on the runs where the tab-bar overlap doesn't bite (67-68 passing e2e tests) and on code review, but the suite as a whole is red so I fail closed.",
+      "reslice": null,
+      "agents": {
+        "plan": 0,
+        "build": 0,
+        "drive": 0,
+        "validate": 1
+      },
+      "tasks": [
+        {
+          "id": "shell-components",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/shell/tab-bar.tsx",
+            "packages/client/src/components/shell/app-header.tsx",
+            "packages/client/src/components/shell/push-header.tsx"
+          ]
+        },
+        {
+          "id": "screen-moves",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/home-screen.tsx",
+            "packages/client/src/components/library-segments.tsx",
+            "packages/client/src/components/library-screen.tsx",
+            "packages/client/src/components/exercise-library-screen.tsx",
+            "packages/client/src/components/workout-detail-screen.tsx",
+            "packages/client/src/components/generate-screen.tsx",
+            "packages/client/test/home-screen.test.tsx",
+            "packages/client/test/library-screen.test.tsx",
+            "packages/client/test/exercise-library-screen.test.tsx",
+            "packages/client/test/workout-detail-screen.test.tsx",
+            "packages/client/test/generate-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "route-restructure",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/router.tsx",
+            "packages/client/test/router-fallback.test.tsx"
+          ]
+        },
+        {
+          "id": "route-fixups",
+          "size": "xs",
+          "judgment_level": "rote",
+          "footprint": [
+            "packages/client/src/components/workout-detail-screen.tsx",
+            "packages/client/src/components/workout-editor-screen.tsx",
+            "packages/client/src/components/session-screen.tsx",
+            "packages/client/test/account-screen.test.tsx",
+            "packages/client/test/timer-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "nav-shell-e2e",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/nav-shell.spec.ts"
+          ]
+        },
+        {
+          "id": "e2e-landing-swaps",
+          "size": "s",
+          "judgment_level": "rote",
+          "footprint": [
+            "e2e/auth-login.spec.ts",
+            "e2e/auth-passkey.spec.ts",
+            "e2e/auth-register.spec.ts",
+            "e2e/auth-admin.spec.ts",
+            "e2e/flow-control.spec.ts",
+            "e2e/live-session.spec.ts",
+            "e2e/server-info.spec.ts"
+          ]
+        },
+        {
+          "id": "e2e-ia-migration",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/library.spec.ts",
+            "e2e/exercises.spec.ts",
+            "e2e/generate.spec.ts",
+            "e2e/history.spec.ts",
+            "e2e/timer.spec.ts",
+            "e2e/plan-editing.spec.ts"
+          ]
+        }
+      ],
+      "actual": {
+        "files_touched": null,
+        "insertions": null,
+        "deletions": null,
+        "commits": null,
+        "duration_minutes": null
+      }
+    }
+  ]
+}

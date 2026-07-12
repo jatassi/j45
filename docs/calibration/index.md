@@ -2,16 +2,16 @@
 
 ## Digest
 
-_7 run(s), 10 feature(s) recorded._
+_8 run(s), 11 feature(s) recorded._
 
 ### Workflow paths
 | path | runs | median agents | median duration |
 | --- | --- | --- | --- |
 | small | 1 | 3 | 0 |
-| standard | 9 | 6 | 260.5 |
+| standard | 10 | 5 | 260.5 |
 
 ### Re-slices
-0 of 10 feature(s) re-sliced (0%).
+0 of 11 feature(s) re-sliced (0%).
 
 ### Footprint accuracy by size class
 | size | features | median planned files | median actual files |
@@ -20,6 +20,7 @@ _7 run(s), 10 feature(s) recorded._
 
 ### Top block reasons
 - 1× Blocker: `bun run test:e2e` (playwright fullyParallel, chromium+webkit, no worker cap, no retries — the exact criterion-6 command) does not exit 0 in this execution environment. Three default-parallel runs each failed with 3-4 non-deterministic failures, and the failing set differed every run (webkit timer.spec:152 and :219, nav-shell.spec:183 push-routes, flow-control.spec:152). Every one of those tests passes when run in isolation on webkit and in a full serial run. Root cause is CPU contention: load average 12.70 on a 10-core box (partly self-inflicted by repeated e2e builds), which starves the real-time countdown-timer specs so timer-phase never advances from 'Get ready' to 'Work' within the 8s sub-timeout, and starves push-route navigation under load. Evidence the suite content is sound: `bun run test:e2e -- --workers=1` gave 59 passed / 3 skipped / 0 failed, exit 0; nav-shell.spec.ts alone on webkit gave 4/4 passed; timer.spec and flow-control.spec alone on webkit passed (1.4s-24s each). No integrity violations found: no eslint/oxlint suppressions, no lint-config or test-config edits, no weakened tests. The removed history-screen 'LibraryScreen history nav' test and the trimmed library-screen tests covered the deleted LibraryNav navigation, now covered by the tab bar. The 3 skipped e2e tests are pre-existing conditional skips (live-session x2, auth-passkey WebAuthn), not added by this feature.
+- 1× Criterion 6 (bun run test:e2e exits 0): UNMET. The binding-contract suite exited code 1 on two consecutive full runs (4 failed, then 3 failed). Failing tests shift run-to-run (chromium timer.spec.ts:152/219, webkit nav-shell.spec.ts:183, webkit flow-control.spec.ts:152) but every failure has one signature: <div class="fixed inset-x-3 bottom-0 z-20 ..."> (the TabBar) intercepts pointer events on the click target after 'scrolling into view'.; Layout defect (root cause): no tab-layout screen reserves bottom clearance for the floating glass tab bar. The only bottom padding in the codebase is the TabBar's own pb-[env(safe-area-inset-bottom)] in packages/client/src/components/shell/tab-bar.tsx:82. home-screen.tsx, library-screen.tsx, history/generate and workout-detail (which keeps the tab bar) all render content flush to bottom-0, so any interactive element that scrolls to the viewport bottom is covered by the tab bar and becomes unclickable.; Confirmed real, not flake: the two timer.spec.ts tests pass when run in isolation (bunx playwright test timer.spec.ts --project=chromium => 2 passed) but fail under the full fullyParallel suite. ListActiveSessions is server-wide, so live sessions started by sibling specs (live-session, nav-shell startApexSession, flow-control) populate the interim home's ActiveSessionsStrip for unrelated fresh accounts, inflating the page so home-timer-link / tab-library fall behind the tab bar. This deterministically breaks the home quick-action reachability that criteria 3 and 4 depend on.; Criteria 1, 2, 3 (partial), 4 (partial), 5 pass on the runs where the tab-bar overlap doesn't bite (67-68 passing e2e tests) and on code review, but the suite as a whole is red so I fail closed.
 - 1× Turn/output budget exhausted while the judge executor (grok) was still running mid-verdict; work is intact and adoptable, not lost. Adopt as follows:
 
 WORKTREE: /Users/jatassi/Git/j45/.claude/worktrees/integrate--session-history (branch: integrate--session-history, created via `node "/Users/jatassi/Git/the-loop/plugin/bin/the-loop.js" worktree-create integrate--session-history --base-branch main`).
@@ -41,29 +42,11 @@ Additionally, `bun run test` (the full vitest unit suite) also fails on the clea
 
 Left in the worktree, uncommitted (diagnostic only, not part of the commit, documenting the exact fix a follow-up needs): packages/client/src/components/session-screen.tsx, workout-detail-screen.tsx, workout-editor-screen.tsx (useParams `from` -> `strict: false`), and packages/client/test/account-screen.test.tsx, timer-screen.test.tsx (landing assertion flipped to home-screen). A follow-up task with footprint covering those five files (likely owned by whatever task is responsible for route-restructure fixups, since the identical regression was independently hit by the sibling nav-shell-e2e and e2e-landing-swaps drives per this executor's own investigation) needs to land that fix; after that, this branch's criterion 3 becomes reproducible-green with no further change to the six e2e specs.
 - 1× Worktree-adoption note: worktree path /Users/jatassi/Git/j45/.claude/worktrees/loop-glass-live-refraction--e2e-live-refraction, branch loop/glass-live-refraction--e2e-live-refraction (base branch loop/glass-live-refraction--demo-perf-harness). Executor: grok (model grok-4.5), launched headless via `grok -m grok-4.5 --prompt-file <scratchpad>/prompt-glass-live-refraction-e2e-live-refraction.md --cwd <worktree> --always-approve --no-subagents --max-turns 500 --output-format plain`, backgrounded with nohup, pid 96538 — confirm with `ps -p 96538` whether it is still alive before deciding to wait vs relaunch; its stdout/stderr log is at /private/tmp/claude-501/-Users-jatassi-Git-j45/e90321ba-1945-4b4b-b1ab-6500446d198c/scratchpad/logs/grok-e2e-live-refraction.log (last seen: it had read the existing e2e/glass.spec.ts and glass-demo source, written e2e/glass-live.spec.ts, and was starting its own check/test/lint pass before e2e). Footprint touched so far: e2e/glass-live.spec.ts (new, untracked, git status showed only this file changed) — e2e/glass.spec.ts was not modified as of the last check. Full footprint lease for this task is limited to e2e/glass-live.spec.ts and (only if truly needed) e2e/glass.spec.ts — nothing else. Verification commands still owed, to run from the worktree root once the executor is confirmed done (dead pid + non-advancing diff): `bun run check`, `bun run test`, `bun run test:e2e`, `bun run lint` — all must exit 0, and bun run test:e2e must show the new e2e/glass-live.spec.ts tests passing under both chromium and webkit plus the pre-existing e2e/glass.spec.ts suite still green. The full task brief (acceptance criteria 1-7, footprint, wiring notes) is preserved verbatim in the prompt file above if the next drive needs it again. No auth/availability failure occurred — grok's smoke test (`grok -p "say PONG" --max-turns 1`) succeeded before launch; this is purely a turn/time-budget exhaustion on the driving side, not an environment defect. Commit has NOT happened — no commit exists on this branch yet from this task.
-- 1× Worktree: /Users/jatassi/Git/j45/.claude/worktrees/loop-glass-live-refraction--scheduler, branch loop/glass-live-refraction--scheduler (base loop/glass-live-refraction), created via `the-loop worktree-create`. Left intact and uncommitted (not removed) so a follow-up drive can adopt it once the plan/footprint gap below is resolved.
-
-Executor: grok / grok-4.5, run headless via the registry's `grok -m grok-4.5 --prompt-file ... --cwd ... --always-approve --no-subagents --max-turns 500 --output-format plain`, twice (initial pass + one retry), each backgrounded with a foreground PID-wait (no polling loop); both runs exited cleanly (pid 97496 then pid 7198, both confirmed exited before I read output — no stall/liveness concern).
-
-What was built (both attempts, footprint respected — only these two new, untracked files exist in `git status`):
-- packages/client/src/glass/scheduler.ts — exports GlassScheduler ({schedule, cancel}), createGlassScheduler(raf?, caf?), and glassScheduler singleton, matching the pinned shape exactly.
-- packages/client/test/glass-scheduler.test.ts — 6 tests with a fake raf/caf covering: N schedules for one key → last work runs once; distinct keys each run once same frame; cancel before frame prevents run; schedule-from-inside-work lands next frame; no open rAF held when idle; singleton shape check.
-
-Why blocked: the pinned shape requires `createGlassScheduler()` (used by the exported `glassScheduler` singleton) to default to the real browser `requestAnimationFrame`/`cancelAnimationFrame`. The executor's first pass satisfied this by looking up `globalThis['request' + 'AnimationFrame']` (string-concatenated to avoid the literal substring) — done explicitly to dodge an existing test I found: `packages/client/test/glass-css.test.ts`, describe block "glass module — static render contract", assertion at line 82: `expect(source).not.toContain('requestAnimationFrame')` over every file under `packages/client/src/glass/`. I judged that obfuscation to be test-gaming (functionally identical to weakening the test) and rejected it, sending one retry telling the executor to reference `globalThis.requestAnimationFrame`/`cancelAnimationFrame` honestly and, if that turned the pre-existing test red, to report it rather than route around it or edit that file (out of footprint).
-
-I independently verified the retry's result myself (not just trusting the executor's report):
-- `bun run check` → exit 0
-- `bun run lint` → exit 0
-- `bun run test` → exit 1 — 355/356 tests pass, 75/76 files pass; the sole failure is `packages/client/test/glass-css.test.ts:82`, the same static-contract assertion, now correctly failing because the honest scheduler legitimately contains the literal string `requestAnimationFrame`.
-
-This is a genuine plan/footprint gap, not an executor mistake: `docs/designs/glass-live-refraction/design.md` explicitly calls for "one rAF-coalesced scheduler (`glass/scheduler.ts`, new)" (line 86), superseding that same design doc's own note that the prior architecture was "no rAF loop, no scroll listener" (line 26). The `requestAnimationFrame`-forbidding test in glass-css.test.ts was added by the earlier `liquid-glass-ui` feature (commit a3381e6) under that old invariant and was never updated for this feature. I checked `docs/plans/glass-live-refraction/plan.json` for every task touching `glass-css.test.ts`: only `rim-tint-css`'s footprint includes it, and only to add `--rim-tint` color-mix assertions — no task's footprint (including this one, `scheduler`, and `hook-upgrade`, which is the one that will actually wire `glassScheduler` into the render path) is assigned to remove/update the stale "no requestAnimationFrame under src/glass" guard.
-
-Because this task's footprint is strictly `packages/client/src/glass/scheduler.ts` and `packages/client/test/glass-scheduler.test.ts`, I cannot fix `glass-css.test.ts` myself without violating the footprint I'm bound to enforce, and I will not accept a test-gaming workaround in its place. Resolution requires a plan-level decision: either extend this task's (or another task's) footprint to include removing/updating that obsolete assertion in `packages/client/test/glass-css.test.ts`, or explicitly assign that update to a task before `scheduler` can be re-verified to a fully green suite and committed. No commit was made.
 
 ### Token split (overhead vs build)
 Lifetime: 80% overhead / 20% build.
-Last-10 median: 90% overhead / 10% build.
-Attribution: 5 of 7 run(s) overlapped — the overhead/build split is approximate.
+Last-10 median: 95% overhead / 5% build.
+Attribution: 5 of 8 run(s) overlapped — the overhead/build split is approximate.
 
 ## Runs
 
@@ -74,3 +57,4 @@ Attribution: 5 of 7 run(s) overlapped — the overhead/build split is approximat
 - 2026-07-12T04:12:09.513Z · target redesign · [glass-live-refraction, nav-shell, auth-screens] · 1 validated, 2 blocked · 790218 tokens · overlapped
 - 2026-07-12T05:18:42.801Z · target redesign · [glass-live-refraction, nav-shell] · 2 stalled · 1024501 tokens · overlapped
 - 2026-07-12T06:49:54.400Z · target redesign · [glass-live-refraction] · 1 validated · 1064562 tokens · serial
+- 2026-07-12T07:09:21.204Z · target redesign · [nav-shell] · 1 blocked · 1110400 tokens · serial
