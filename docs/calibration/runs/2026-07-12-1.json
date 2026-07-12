@@ -1,208 +1,122 @@
 {
   "run": {
-    "prepared_at": "2026-07-12T02:59:20.061Z",
+    "prepared_at": "2026-07-12T06:49:54.400Z",
     "target": "redesign",
     "scope": [
-      "design-system",
-      "session-leave"
+      "glass-live-refraction"
     ],
     "tokens": {
-      "spent": 345803,
+      "spent": 1064562,
       "by_role": {
-        "plan": 143620,
-        "build": 176907,
-        "drive": 524010,
-        "validate": 36810
+        "plan": 0,
+        "build": 0,
+        "drive": 6971,
+        "validate": 17737
       },
-      "attribution": "overlapped"
+      "attribution": "serial"
     },
     "halted": null
   },
   "features": [
     {
-      "id": "design-system",
+      "id": "glass-live-refraction",
       "workflow_path": "standard",
       "outcome": "validated",
       "reason": null,
       "reslice": null,
       "agents": {
-        "plan": 1,
+        "plan": 0,
         "build": 0,
-        "drive": 6,
+        "drive": 1,
         "validate": 1
       },
       "tasks": [
         {
-          "id": "domain-labels",
-          "size": "xs",
-          "judgment_level": "rote",
-          "footprint": [
-            "packages/domain/src/exercise.ts",
-            "packages/domain/src/workout.ts",
-            "packages/domain/test/exercise.test.ts",
-            "packages/domain/test/workout.test.ts"
-          ]
-        },
-        {
-          "id": "tokens-wordmark",
-          "size": "s",
-          "judgment_level": "standard",
-          "footprint": [
-            "packages/client/src/index.css",
-            "packages/client/src/components/wordmark.tsx",
-            "packages/client/src/proto/proto.css",
-            "packages/client/test/index-css-tokens.test.ts"
-          ]
-        },
-        {
-          "id": "client-claude-md",
-          "size": "xs",
-          "judgment_level": "standard",
-          "footprint": [
-            "packages/client/CLAUDE.md"
-          ]
-        },
-        {
-          "id": "ui-kit",
+          "id": "scene-registry",
           "size": "m",
           "judgment_level": "standard",
           "footprint": [
-            "packages/client/src/components/ui/field.tsx",
-            "packages/client/src/components/ui/input.tsx",
-            "packages/client/src/components/ui/select.tsx",
-            "packages/client/src/components/ui/combobox.tsx",
-            "packages/client/src/components/ui/toggle-group.tsx",
-            "packages/client/src/components/ui/checkbox.tsx",
-            "packages/client/src/components/ui/label.tsx",
-            "packages/client/src/components/ui/spinner.tsx",
-            "packages/client/src/components/ui/drawer.tsx",
-            "packages/client/src/components/ui/dialog.tsx",
-            "packages/client/src/components/ui/alert-dialog.tsx",
-            "packages/client/src/components/ui/sonner.tsx",
-            "packages/client/src/components/ui/skeleton.tsx",
-            "packages/client/src/components/ui/empty.tsx",
-            "packages/client/src/components/ui/alert.tsx",
-            "packages/client/src/components/ui/progress.tsx",
-            "packages/client/src/components/ui/badge.tsx",
-            "packages/client/src/components/ui/tabs.tsx",
-            "packages/client/src/components/ui/avatar.tsx",
-            "packages/client/src/components/ui/accordion.tsx",
-            "packages/client/src/components/ui/separator.tsx",
-            "packages/client/src/components/query-boundary.tsx",
-            "packages/client/src/index.css",
-            "packages/client/package.json",
-            "bun.lock"
+            "packages/client/src/glass/scene.ts",
+            "packages/client/test/glass-scene.test.ts"
           ]
         },
         {
-          "id": "label-conversions",
-          "size": "s",
-          "judgment_level": "standard",
-          "footprint": [
-            "packages/client/src/components/exercise-library-screen.tsx",
-            "packages/client/src/components/exercise-dialogs.tsx",
-            "packages/client/src/components/generate-screen.tsx",
-            "packages/client/test/exercise-library-screen.test.tsx",
-            "packages/client/test/generate-screen.test.tsx",
-            "e2e/exercises.spec.ts",
-            "e2e/generate.spec.ts"
-          ]
-        },
-        {
-          "id": "design-gallery",
-          "size": "m",
-          "judgment_level": "standard",
-          "footprint": [
-            "packages/client/src/app.tsx",
-            "packages/client/src/components/design/design-page.tsx",
-            "packages/client/src/components/design/sections.tsx",
-            "e2e/design.spec.ts"
-          ]
-        }
-      ],
-      "actual": {
-        "files_touched": 58,
-        "insertions": 3888,
-        "deletions": 95,
-        "commits": 3,
-        "duration_minutes": 136
-      }
-    },
-    {
-      "id": "session-leave",
-      "workflow_path": "standard",
-      "outcome": "validated",
-      "reason": null,
-      "reslice": null,
-      "agents": {
-        "plan": 1,
-        "build": 1,
-        "drive": 4,
-        "validate": 1
-      },
-      "tasks": [
-        {
-          "id": "leave-core",
+          "id": "renderer-surface-textures",
           "size": "m",
           "judgment_level": "complex",
           "footprint": [
-            "packages/domain/src/session.ts",
-            "packages/domain/src/history.ts",
-            "packages/domain/src/rpc.ts",
-            "packages/server/src/session/live-sessions.ts",
-            "packages/server/src/session/handlers.ts",
-            "packages/server/src/session/completions-repo.ts",
-            "packages/client/src/lib/session.ts",
-            "packages/client/src/components/session-screen.tsx",
-            "packages/client/test/session-screen.test.tsx",
-            "packages/server/test/session/live-sessions.test.ts",
-            "packages/server/test/session/session-history.test.ts",
-            "packages/server/test/session/history-flow.test.ts"
+            "packages/client/src/glass/renderer.ts",
+            "packages/client/src/glass/glass.frag.glsl",
+            "packages/client/test/glass-renderer.test.ts"
           ]
         },
         {
-          "id": "progress-persistence",
-          "size": "s",
-          "judgment_level": "standard",
-          "footprint": [
-            "packages/server/migrations/0006_completion_progress.ts",
-            "packages/server/src/session/completions-repo.ts",
-            "packages/server/test/session/migration-0006.test.ts"
-          ]
-        },
-        {
-          "id": "leave-flow-tests",
-          "size": "s",
-          "judgment_level": "standard",
-          "footprint": [
-            "packages/server/test/session/leave-flow.test.ts"
-          ]
-        },
-        {
-          "id": "history-progress-ui",
+          "id": "scheduler",
           "size": "xs",
           "judgment_level": "rote",
           "footprint": [
-            "packages/client/src/components/history-screen.tsx",
-            "packages/client/test/history-screen.test.ts"
+            "packages/client/src/glass/scheduler.ts",
+            "packages/client/test/glass-scheduler.test.ts",
+            "packages/client/test/glass-css.test.ts"
           ]
         },
         {
-          "id": "leave-e2e",
+          "id": "rim-tint-css",
           "size": "s",
           "judgment_level": "standard",
           "footprint": [
-            "e2e/live-session.spec.ts",
-            "e2e/history.spec.ts"
+            "packages/client/src/glass/rim.ts",
+            "packages/client/src/glass/glass.css",
+            "packages/client/test/glass-rim.test.ts",
+            "packages/client/test/glass-css.test.ts"
+          ]
+        },
+        {
+          "id": "use-scene-surface",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/glass/use-scene-surface.ts",
+            "packages/client/test/use-scene-surface.test.tsx"
+          ]
+        },
+        {
+          "id": "hook-upgrade",
+          "size": "m",
+          "judgment_level": "complex",
+          "footprint": [
+            "packages/client/src/glass/use-liquid-glass.ts",
+            "packages/client/src/glass/glass-card.tsx",
+            "packages/client/test/use-liquid-glass.test.tsx"
+          ]
+        },
+        {
+          "id": "demo-perf-harness",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/glass-demo.tsx",
+            "packages/client/src/glass-demo/ticking-digit.tsx",
+            "packages/client/src/glass-demo/perf-scenario.tsx"
+          ]
+        },
+        {
+          "id": "e2e-live-refraction",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/glass-live.spec.ts",
+            "e2e/glass.spec.ts",
+            "packages/client/src/glass/use-liquid-glass.ts"
           ]
         }
       ],
       "actual": {
         "files_touched": 24,
-        "insertions": 1606,
-        "deletions": 323,
+        "insertions": 3814,
+        "deletions": 181,
         "commits": 1,
-        "duration_minutes": 7
+        "duration_minutes": 169
       }
     }
   ]

@@ -2,21 +2,21 @@
 
 ## Digest
 
-_7 run(s), 11 feature(s) recorded._
+_7 run(s), 10 feature(s) recorded._
 
 ### Workflow paths
 | path | runs | median agents | median duration |
 | --- | --- | --- | --- |
 | small | 1 | 3 | 0 |
-| standard | 10 | 6.5 | 136 |
+| standard | 9 | 6 | 260.5 |
 
 ### Re-slices
-0 of 11 feature(s) re-sliced (0%).
+0 of 10 feature(s) re-sliced (0%).
 
 ### Footprint accuracy by size class
 | size | features | median planned files | median actual files |
 | --- | --- | --- | --- |
-| m | 5 | 18 | 21 |
+| m | 4 | 17.5 | 21 |
 
 ### Top block reasons
 - 1× Blocker: `bun run test:e2e` (playwright fullyParallel, chromium+webkit, no worker cap, no retries — the exact criterion-6 command) does not exit 0 in this execution environment. Three default-parallel runs each failed with 3-4 non-deterministic failures, and the failing set differed every run (webkit timer.spec:152 and :219, nav-shell.spec:183 push-routes, flow-control.spec:152). Every one of those tests passes when run in isolation on webkit and in a full serial run. Root cause is CPU contention: load average 12.70 on a 10-core box (partly self-inflicted by repeated e2e builds), which starves the real-time countdown-timer specs so timer-phase never advances from 'Get ready' to 'Work' within the 8s sub-timeout, and starves push-route navigation under load. Evidence the suite content is sound: `bun run test:e2e -- --workers=1` gave 59 passed / 3 skipped / 0 failed, exit 0; nav-shell.spec.ts alone on webkit gave 4/4 passed; timer.spec and flow-control.spec alone on webkit passed (1.4s-24s each). No integrity violations found: no eslint/oxlint suppressions, no lint-config or test-config edits, no weakened tests. The removed history-screen 'LibraryScreen history nav' test and the trimmed library-screen tests covered the deleted LibraryNav navigation, now covered by the tab bar. The 3 skipped e2e tests are pre-existing conditional skips (live-session x2, auth-passkey WebAuthn), not added by this feature.
@@ -62,8 +62,8 @@ Because this task's footprint is strictly `packages/client/src/glass/scheduler.t
 
 ### Token split (overhead vs build)
 Lifetime: 80% overhead / 20% build.
-Last-10 median: 80% overhead / 20% build.
-Attribution: 6 of 7 run(s) overlapped — the overhead/build split is approximate.
+Last-10 median: 90% overhead / 10% build.
+Attribution: 5 of 7 run(s) overlapped — the overhead/build split is approximate.
 
 ## Runs
 
@@ -71,6 +71,6 @@ Attribution: 6 of 7 run(s) overlapped — the overhead/build split is approximat
 - 2026-07-10T05:54:46.840Z · target main · [flow-control] · 1 validated · 187228 tokens · overlapped
 - 2026-07-10T06:52:55.615Z · target main · [session-history] · 1 stalled · 519963 tokens · overlapped
 - 2026-07-10T08:20:48.589Z · target main · [workout-generation] · 1 validated · 663553 tokens · overlapped
-- 2026-07-12T02:59:20.061Z · target redesign · [design-system, session-leave] · 2 validated · 345803 tokens · overlapped
 - 2026-07-12T04:12:09.513Z · target redesign · [glass-live-refraction, nav-shell, auth-screens] · 1 validated, 2 blocked · 790218 tokens · overlapped
 - 2026-07-12T05:18:42.801Z · target redesign · [glass-live-refraction, nav-shell] · 2 stalled · 1024501 tokens · overlapped
+- 2026-07-12T06:49:54.400Z · target redesign · [glass-live-refraction] · 1 validated · 1064562 tokens · serial
