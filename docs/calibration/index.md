@@ -2,16 +2,16 @@
 
 ## Digest
 
-_5 run(s), 6 feature(s) recorded._
+_6 run(s), 9 feature(s) recorded._
 
 ### Workflow paths
 | path | runs | median agents | median duration |
 | --- | --- | --- | --- |
-| small | 0 | — | — |
-| standard | 6 | 7.5 | 136 |
+| small | 1 | 3 | 0 |
+| standard | 8 | 7 | 136 |
 
 ### Re-slices
-0 of 6 feature(s) re-sliced (0%).
+0 of 9 feature(s) re-sliced (0%).
 
 ### Footprint accuracy by size class
 | size | features | median planned files | median actual files |
@@ -32,11 +32,36 @@ JUDGE EXECUTOR STILL RUNNING: PID 98022, command `grok -m grok-4.5 --prompt-file
 NEXT STEPS FOR THE ADOPTING DRIVE: (1) check whether PID 98022 has exited and whether the output log has a trailing JSON verdict line; if the process is dead with no verdict, that's a genuine executor failure — re-launch the judge fresh with the same prompt file (do not relaunch if it's still alive/advancing). (2) if a verdict is present, gate it mechanically per agents/validate.md §3: re-run `bun run check`, `bun run test`, `bun run test:e2e`, `bun run lint` yourself, and confirm `git status --porcelain` in the worktree is still empty (any judge edit voids the verdict — if dirty, `git diff`/`git status` to see what changed, discard it, and re-run the judge once; a second dirty result is `blocked`, kind `feature`). (3) on a surviving `validated` verdict, perform agents/validate.md §3 landing: `the-loop set-status session-history validated`, collapse to one commit off target-tip-at-assembly-start (main's tip before this worktree was created), fast-forward publish to main, delete the loop/session-history* branches and the integrate--session-history branch, remove the worktree. (4) on `fail`, merge nothing, leave every loop/session-history* branch for inspection, remove only the worktree, and return the judge's findings/options unchanged as this feature's final `fail` result.
 
 Acceptance criteria (for reference, verbatim from the brief): (1) TestClock: a session that progressed past ready and is then quit writes one completion record per ever-participant (host + a second user who watched then unsubscribed), each seeing via ListHistory the workout name, as-run Workout snapshot, host, both participants, startedAt, endedAt. (2) TestClock: quit during ready writes nothing; progressed-then-GC'd-after-60-idle-seconds writes records. (3) a reflow-spec-started session records the reflowed Workout, not the stored plan's. (4) ListHistory is caller-scoped, newest-first by endedAt, Unauthorized without a valid cookie; a server-layer rebuild preserves completion rows while ListActiveSessions is empty. (5) migrating a DB through 0004 with an existing user, then 0005, creates session_completions and that user's ListHistory is empty. (6) e2e (chromium+webkit): two logged-in contexts run a short session (host quits after first work segment); /history via a home nav link shows workout name, date, host display name, both participant names for both users. (7) `bun run check`, `bun run test`, `bun run test:e2e` all exit 0.
+- 1× Worktree /Users/jatassi/Git/j45/.claude/worktrees/loop-nav-shell--e2e-ia-migration, branch loop/nav-shell--e2e-ia-migration, base loop/nav-shell--route-restructure. Executor grok (grok-4.5) ran twice (initial pass + one retry with the reproduced failure fed back); both runs and my own independent verification agree on the finding below. Commit 16cb22bdb9984fb5ea2818b5c4bbe34af956daa0 "nav-shell/e2e-ia-migration: migrate library/exercises/generate/history/timer/plan-editing e2e specs to the tab-bar IA (via grok)" touches only the six footprint files (e2e/library.spec.ts, e2e/exercises.spec.ts, e2e/generate.spec.ts, e2e/history.spec.ts, e2e/timer.spec.ts, e2e/plan-editing.spec.ts; +125/-83) and satisfies criteria 1 and 2: grepping the six files for the deleted LibraryNav testids (timer-nav-link, generate-nav-link, exercises-nav-link, history-nav-link, account-nav-link) and for /exercises deep links both return nothing; library.spec.ts now exercises the workout list/workout-card navigation at /library, exercises.spec.ts reaches the catalog via tab-library + library-segment-exercises at /library/exercises. bun run check and bun run lint pass on the committed tree.
+
+Criterion 3 fails and is not fixable within this footprint: I independently reproduced it by stashing out every uncommitted diagnostic edit (leaving only the committed six-file diff) and running `bun run test:e2e -- e2e/library.spec.ts --project=chromium`, which failed 2/2 tests that navigate to /workouts/<id> — `workout-detail-screen` never renders (getByTestId('workout-detail-screen') times out). Root cause: route-restructure nested every leaf under pathless `tab`/`push` layout groups, changing TanStack Router route ids (e.g. `/workouts/$workoutId` -> `/tab/workouts/$workoutId`), but packages/client/src/components/workout-detail-screen.tsx, workout-editor-screen.tsx (edit + reflow), and session-screen.tsx still call `useParams({ from: '<old flat route id>' })`, which now throws/fails to match on mount. This crashes workout-detail/edit/reflow/session for every e2e test that reaches them, regardless of which nav path (old or new IA) got them there — confirmed independent of this task's spec edits. The one-line-per-callsite fix (`useParams({ strict: false })`) is verified to work but touches only files outside this task's footprint (application component files, not e2e specs), so it cannot be committed here. A full `bun run test:e2e` run on the six committed specs (both browsers) came back 6 passed / 12 failed, all 12 failures the same root cause, spread across library.spec.ts, plan-editing.spec.ts, generate.spec.ts, and history.spec.ts (exercises.spec.ts and timer.spec.ts pass in full since they never route through the broken screens).
+
+Additionally, `bun run test` (the full vitest unit suite) also fails on the clean committed tree with 2 pre-existing failures unrelated to this commit: packages/client/test/account-screen.test.tsx and packages/client/test/timer-screen.test.tsx still `findByTestId('library-screen')` for the post-auth landing, which is now `home-screen` — another base-branch IA-lag defect not owned by any file this task can touch, confirmed on the clean tree with vitest run directly.
+
+Left in the worktree, uncommitted (diagnostic only, not part of the commit, documenting the exact fix a follow-up needs): packages/client/src/components/session-screen.tsx, workout-detail-screen.tsx, workout-editor-screen.tsx (useParams `from` -> `strict: false`), and packages/client/test/account-screen.test.tsx, timer-screen.test.tsx (landing assertion flipped to home-screen). A follow-up task with footprint covering those five files (likely owned by whatever task is responsible for route-restructure fixups, since the identical regression was independently hit by the sibling nav-shell-e2e and e2e-landing-swaps drives per this executor's own investigation) needs to land that fix; after that, this branch's criterion 3 becomes reproducible-green with no further change to the six e2e specs.
+- 1× Worktree: /Users/jatassi/Git/j45/.claude/worktrees/loop-glass-live-refraction--scheduler, branch loop/glass-live-refraction--scheduler (base loop/glass-live-refraction), created via `the-loop worktree-create`. Left intact and uncommitted (not removed) so a follow-up drive can adopt it once the plan/footprint gap below is resolved.
+
+Executor: grok / grok-4.5, run headless via the registry's `grok -m grok-4.5 --prompt-file ... --cwd ... --always-approve --no-subagents --max-turns 500 --output-format plain`, twice (initial pass + one retry), each backgrounded with a foreground PID-wait (no polling loop); both runs exited cleanly (pid 97496 then pid 7198, both confirmed exited before I read output — no stall/liveness concern).
+
+What was built (both attempts, footprint respected — only these two new, untracked files exist in `git status`):
+- packages/client/src/glass/scheduler.ts — exports GlassScheduler ({schedule, cancel}), createGlassScheduler(raf?, caf?), and glassScheduler singleton, matching the pinned shape exactly.
+- packages/client/test/glass-scheduler.test.ts — 6 tests with a fake raf/caf covering: N schedules for one key → last work runs once; distinct keys each run once same frame; cancel before frame prevents run; schedule-from-inside-work lands next frame; no open rAF held when idle; singleton shape check.
+
+Why blocked: the pinned shape requires `createGlassScheduler()` (used by the exported `glassScheduler` singleton) to default to the real browser `requestAnimationFrame`/`cancelAnimationFrame`. The executor's first pass satisfied this by looking up `globalThis['request' + 'AnimationFrame']` (string-concatenated to avoid the literal substring) — done explicitly to dodge an existing test I found: `packages/client/test/glass-css.test.ts`, describe block "glass module — static render contract", assertion at line 82: `expect(source).not.toContain('requestAnimationFrame')` over every file under `packages/client/src/glass/`. I judged that obfuscation to be test-gaming (functionally identical to weakening the test) and rejected it, sending one retry telling the executor to reference `globalThis.requestAnimationFrame`/`cancelAnimationFrame` honestly and, if that turned the pre-existing test red, to report it rather than route around it or edit that file (out of footprint).
+
+I independently verified the retry's result myself (not just trusting the executor's report):
+- `bun run check` → exit 0
+- `bun run lint` → exit 0
+- `bun run test` → exit 1 — 355/356 tests pass, 75/76 files pass; the sole failure is `packages/client/test/glass-css.test.ts:82`, the same static-contract assertion, now correctly failing because the honest scheduler legitimately contains the literal string `requestAnimationFrame`.
+
+This is a genuine plan/footprint gap, not an executor mistake: `docs/designs/glass-live-refraction/design.md` explicitly calls for "one rAF-coalesced scheduler (`glass/scheduler.ts`, new)" (line 86), superseding that same design doc's own note that the prior architecture was "no rAF loop, no scroll listener" (line 26). The `requestAnimationFrame`-forbidding test in glass-css.test.ts was added by the earlier `liquid-glass-ui` feature (commit a3381e6) under that old invariant and was never updated for this feature. I checked `docs/plans/glass-live-refraction/plan.json` for every task touching `glass-css.test.ts`: only `rim-tint-css`'s footprint includes it, and only to add `--rim-tint` color-mix assertions — no task's footprint (including this one, `scheduler`, and `hook-upgrade`, which is the one that will actually wire `glassScheduler` into the render path) is assigned to remove/update the stale "no requestAnimationFrame under src/glass" guard.
+
+Because this task's footprint is strictly `packages/client/src/glass/scheduler.ts` and `packages/client/test/glass-scheduler.test.ts`, I cannot fix `glass-css.test.ts` myself without violating the footprint I'm bound to enforce, and I will not accept a test-gaming workaround in its place. Resolution requires a plan-level decision: either extend this task's (or another task's) footprint to include removing/updating that obsolete assertion in `packages/client/test/glass-css.test.ts`, or explicitly assign that update to a task before `scheduler` can be re-verified to a fully green suite and committed. No commit was made.
 
 ### Token split (overhead vs build)
-Lifetime: 73% overhead / 27% build.
-Last-10 median: 80% overhead / 20% build.
-Attribution: 4 of 5 run(s) overlapped — the overhead/build split is approximate.
+Lifetime: 81% overhead / 19% build.
+Last-10 median: 85% overhead / 15% build.
+Attribution: 5 of 6 run(s) overlapped — the overhead/build split is approximate.
 
 ## Runs
 
@@ -45,3 +70,4 @@ Attribution: 4 of 5 run(s) overlapped — the overhead/build split is approximat
 - 2026-07-10T06:52:55.615Z · target main · [session-history] · 1 stalled · 519963 tokens · overlapped
 - 2026-07-10T08:20:48.589Z · target main · [workout-generation] · 1 validated · 663553 tokens · overlapped
 - 2026-07-12T02:59:20.061Z · target redesign · [design-system, session-leave] · 2 validated · 345803 tokens · overlapped
+- 2026-07-12T04:12:09.513Z · target redesign · [glass-live-refraction, nav-shell, auth-screens] · 1 validated, 2 blocked · 790218 tokens · overlapped
