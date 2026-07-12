@@ -1,0 +1,137 @@
+{
+  "run": {
+    "prepared_at": "2026-07-12T07:46:49.143Z",
+    "target": "redesign",
+    "scope": [
+      "nav-shell"
+    ],
+    "tokens": {
+      "spent": 1215858,
+      "by_role": {
+        "plan": 0,
+        "build": 0,
+        "drive": 14994,
+        "validate": 20076
+      },
+      "attribution": "serial"
+    },
+    "halted": null
+  },
+  "features": [
+    {
+      "id": "nav-shell",
+      "workflow_path": "standard",
+      "outcome": "validated",
+      "reason": null,
+      "reslice": null,
+      "agents": {
+        "plan": 0,
+        "build": 0,
+        "drive": 1,
+        "validate": 1
+      },
+      "tasks": [
+        {
+          "id": "shell-components",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/shell/tab-bar.tsx",
+            "packages/client/src/components/shell/app-header.tsx",
+            "packages/client/src/components/shell/push-header.tsx"
+          ]
+        },
+        {
+          "id": "screen-moves",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/home-screen.tsx",
+            "packages/client/src/components/library-segments.tsx",
+            "packages/client/src/components/library-screen.tsx",
+            "packages/client/src/components/exercise-library-screen.tsx",
+            "packages/client/src/components/workout-detail-screen.tsx",
+            "packages/client/src/components/generate-screen.tsx",
+            "packages/client/test/home-screen.test.tsx",
+            "packages/client/test/library-screen.test.tsx",
+            "packages/client/test/exercise-library-screen.test.tsx",
+            "packages/client/test/workout-detail-screen.test.tsx",
+            "packages/client/test/generate-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "route-restructure",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/router.tsx",
+            "packages/client/test/router-fallback.test.tsx"
+          ]
+        },
+        {
+          "id": "route-fixups",
+          "size": "xs",
+          "judgment_level": "rote",
+          "footprint": [
+            "packages/client/src/components/workout-detail-screen.tsx",
+            "packages/client/src/components/workout-editor-screen.tsx",
+            "packages/client/src/components/session-screen.tsx",
+            "packages/client/test/account-screen.test.tsx",
+            "packages/client/test/timer-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "nav-shell-e2e",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/nav-shell.spec.ts"
+          ]
+        },
+        {
+          "id": "e2e-landing-swaps",
+          "size": "s",
+          "judgment_level": "rote",
+          "footprint": [
+            "e2e/auth-login.spec.ts",
+            "e2e/auth-passkey.spec.ts",
+            "e2e/auth-register.spec.ts",
+            "e2e/auth-admin.spec.ts",
+            "e2e/flow-control.spec.ts",
+            "e2e/live-session.spec.ts",
+            "e2e/server-info.spec.ts"
+          ]
+        },
+        {
+          "id": "e2e-ia-migration",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/library.spec.ts",
+            "e2e/exercises.spec.ts",
+            "e2e/generate.spec.ts",
+            "e2e/history.spec.ts",
+            "e2e/timer.spec.ts",
+            "e2e/plan-editing.spec.ts"
+          ]
+        },
+        {
+          "id": "tab-clearance",
+          "size": "xs",
+          "judgment_level": "rote",
+          "footprint": [
+            "packages/client/src/router.tsx",
+            "packages/client/test/router-tab-clearance.test.tsx"
+          ]
+        }
+      ],
+      "actual": {
+        "files_touched": 41,
+        "insertions": 1785,
+        "deletions": 445,
+        "commits": 1,
+        "duration_minutes": 61
+      }
+    }
+  ]
+}
