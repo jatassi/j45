@@ -12,12 +12,6 @@
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "--filter", "@j45/client", "dev"],
       "port": 5173
-    },
-    {
-      "name": "j45-redesign",
-      "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "--cwd", ".claude/worktrees/redesign/packages/client", "dev"],
-      "port": 5173
     }
   ]
 }
