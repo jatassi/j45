@@ -2,21 +2,21 @@
 
 ## Digest
 
-_14 run(s), 20 feature(s) recorded._
+_15 run(s), 21 feature(s) recorded._
 
 ### Workflow paths
 | path | runs | median agents | median duration |
 | --- | --- | --- | --- |
 | small | 3 | 3 | 0 |
-| standard | 17 | 5 | 61 |
+| standard | 18 | 4.5 | 52 |
 
 ### Re-slices
-0 of 20 feature(s) re-sliced (0%).
+0 of 21 feature(s) re-sliced (0%).
 
 ### Footprint accuracy by size class
 | size | features | median planned files | median actual files |
 | --- | --- | --- | --- |
-| m | 8 | 16.5 | 20.5 |
+| m | 9 | 16 | 20 |
 
 ### Top block reasons
 - 1× Blocker: `bun run test:e2e` (playwright fullyParallel, chromium+webkit, no worker cap, no retries — the exact criterion-6 command) does not exit 0 in this execution environment. Three default-parallel runs each failed with 3-4 non-deterministic failures, and the failing set differed every run (webkit timer.spec:152 and :219, nav-shell.spec:183 push-routes, flow-control.spec:152). Every one of those tests passes when run in isolation on webkit and in a full serial run. Root cause is CPU contention: load average 12.70 on a 10-core box (partly self-inflicted by repeated e2e builds), which starves the real-time countdown-timer specs so timer-phase never advances from 'Get ready' to 'Work' within the 8s sub-timeout, and starves push-route navigation under load. Evidence the suite content is sound: `bun run test:e2e -- --workers=1` gave 59 passed / 3 skipped / 0 failed, exit 0; nav-shell.spec.ts alone on webkit gave 4/4 passed; timer.spec and flow-control.spec alone on webkit passed (1.4s-24s each). No integrity violations found: no eslint/oxlint suppressions, no lint-config or test-config edits, no weakened tests. The removed history-screen 'LibraryScreen history nav' test and the trimmed library-screen tests covered the deleted LibraryNav navigation, now covered by the tab bar. The 3 skipped e2e tests are pre-existing conditional skips (live-session x2, auth-passkey WebAuthn), not added by this feature.
@@ -28,7 +28,7 @@ _14 run(s), 20 feature(s) recorded._
 ### Token split (overhead vs build)
 Lifetime: 82% overhead / 18% build.
 Last-10 median: 100% overhead / 0% build.
-Attribution: 9 of 14 run(s) overlapped — the overhead/build split is approximate.
+Attribution: 9 of 15 run(s) overlapped — the overhead/build split is approximate.
 
 ## Runs
 
@@ -46,3 +46,4 @@ Attribution: 9 of 14 run(s) overlapped — the overhead/build split is approxima
 - 2026-07-12T09:39:22.529Z · target redesign · [player-screens, generate-screen] · 2 blocked · 1768429 tokens · overlapped
 - 2026-07-12T10:53:53.065Z · target redesign · [player-screens, generate-screen] · 2 validated · 1855739 tokens · overlapped
 - 2026-07-12T11:08:31.656Z · target redesign · [secondary-screens] · 1 blocked · 1969584 tokens · overlapped
+- 2026-07-12T12:01:16.943Z · target redesign · [secondary-screens] · 1 validated · 2047738 tokens · serial

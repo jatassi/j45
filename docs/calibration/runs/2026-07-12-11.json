@@ -1,0 +1,77 @@
+{
+  "run": {
+    "prepared_at": "2026-07-12T12:01:16.943Z",
+    "target": "redesign",
+    "scope": [
+      "secondary-screens"
+    ],
+    "tokens": {
+      "spent": 2047738,
+      "by_role": {
+        "plan": 0,
+        "build": 0,
+        "drive": 0,
+        "validate": 13546
+      },
+      "attribution": "serial"
+    },
+    "halted": null
+  },
+  "features": [
+    {
+      "id": "secondary-screens",
+      "workflow_path": "standard",
+      "outcome": "validated",
+      "reason": null,
+      "reslice": null,
+      "agents": {
+        "plan": 0,
+        "build": 0,
+        "drive": 0,
+        "validate": 1
+      },
+      "tasks": [
+        {
+          "id": "history-cards",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/history-screen.tsx",
+            "packages/client/test/history-screen.test.ts",
+            "e2e/history.spec.ts"
+          ]
+        },
+        {
+          "id": "account-shell",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/account-screen.tsx",
+            "packages/client/src/components/server-info-card.tsx",
+            "packages/client/test/account-screen.test.tsx",
+            "packages/client/test/server-info-card.test.tsx",
+            "e2e/auth-passkey.spec.ts",
+            "e2e/server-info.spec.ts"
+          ]
+        },
+        {
+          "id": "people-invites",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/people-invites.tsx",
+            "packages/client/test/people-invites.test.tsx",
+            "e2e/auth-admin.spec.ts"
+          ]
+        }
+      ],
+      "actual": {
+        "files_touched": 14,
+        "insertions": 973,
+        "deletions": 177,
+        "commits": 1,
+        "duration_minutes": 26
+      }
+    }
+  ]
+}
