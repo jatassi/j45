@@ -231,7 +231,7 @@
     {
       "id": "glass-live-refraction",
       "title": "Glass material upgrade — scene-registry live refraction, sub-texture invalidation, rim reflection, tier-capped surfaces",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "design-system"
       ],

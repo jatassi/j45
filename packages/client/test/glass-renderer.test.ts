@@ -11,14 +11,20 @@ import {
 
 // ── Fakes ──────────────────────────────────────────────────────────────────
 // jsdom has no OffscreenCanvas and no WebGL, so the renderer's context is faked.
-// The fake GL records the draws we assert on and returns success for compile
-// and link so the "available" path can be exercised without a GPU.
+// The fake GL records the draws and texture calls we assert on and returns
+// success for compile and link so the "available" path can be exercised without
+// a GPU. Each createTexture returns a fresh identity so per-surface persistence
+// is observable.
 
 function createFakeGl(options: { compileOk?: boolean; linkOk?: boolean } = {}) {
   const { compileOk = true, linkOk = true } = options
-  const texImage2D = vi.fn()
-  const drawArrays = vi.fn()
+  const texImage2D = vi.fn<(...args: unknown[]) => void>()
+  const texSubImage2D = vi.fn<(...args: unknown[]) => void>()
+  const drawArrays = vi.fn<(...args: unknown[]) => void>()
   const restoreContext = vi.fn()
+  const createTexture = vi.fn<() => WebGLTexture>(() => ({}))
+  const deleteTexture = vi.fn<(texture: unknown) => void>()
+  const pixelStorei = vi.fn()
   const explicit: Record<string, unknown> = {
     createShader: () => ({}),
     getShaderParameter: () => compileOk,
@@ -27,11 +33,14 @@ function createFakeGl(options: { compileOk?: boolean; linkOk?: boolean } = {}) {
     getProgramParameter: () => linkOk,
     getProgramInfoLog: () => '',
     createBuffer: () => ({}),
-    createTexture: () => ({}),
+    createTexture,
+    deleteTexture,
     getUniformLocation: () => ({}),
     getExtension: (name: string) =>
       name === 'WEBGL_lose_context' ? { restoreContext, loseContext: vi.fn() } : null,
     texImage2D,
+    texSubImage2D,
+    pixelStorei,
     drawArrays,
   }
   const cache = new Map<string, () => undefined>()
@@ -51,7 +60,16 @@ function createFakeGl(options: { compileOk?: boolean; linkOk?: boolean } = {}) {
       return fallback
     },
   }) as unknown as WebGL2RenderingContext
-  return { gl, texImage2D, drawArrays, restoreContext }
+  return {
+    gl,
+    texImage2D,
+    texSubImage2D,
+    drawArrays,
+    restoreContext,
+    createTexture,
+    deleteTexture,
+    pixelStorei,
+  }
 }
 
 type FakeCanvas = EventTarget & { width: number; height: number }
@@ -93,6 +111,12 @@ const PARAMS: RefractionParams = {
   strength: 11,
   curvature: 3,
   chroma: 0.24,
+  reflect: 0.5,
+}
+
+// A stand-in TexImageSource with the pixel dimensions the renderer reads.
+function fakeSource(width: number, height: number): TexImageSource {
+  return { width, height } as unknown as TexImageSource
 }
 
 afterEach(() => {
@@ -101,11 +125,11 @@ afterEach(() => {
 })
 
 describe('glass.frag.glsl', () => {
-  it('declares exactly the design-doc uniform set with the uField path removed', () => {
+  it('declares the design-doc uniform set with uScene/uReflect and no uGradient', () => {
     const declared = [...fragmentSource.matchAll(/uniform\s+\w+\s+(u\w+)\s*;/g)].map((m) => m[1])
     expect(new Set(declared)).toEqual(
       new Set([
-        'uGradient',
+        'uScene',
         'uResolution',
         'uDpr',
         'uRadius',
@@ -113,12 +137,22 @@ describe('glass.frag.glsl', () => {
         'uStrength',
         'uCurvature',
         'uChroma',
+        'uReflect',
       ]),
     )
-    // The contour-field texture and its mapping uniforms are gone entirely...
+    // uGradient is fully renamed away and the contour-field uniforms stay gone.
+    expect(fragmentSource).not.toContain('uGradient')
     expect(fragmentSource).not.toContain('uField')
-    // ...and backdrop() reduces to a straight uGradient sample.
-    expect(fragmentSource).toMatch(/vec3 backdrop\([^)]*\)\s*\{\s*return texture2D\(uGradient/)
+    // backdrop() reduces to a straight uScene sample.
+    expect(fragmentSource).toMatch(/vec3 backdrop\([^)]*\)\s*\{\s*return texture2D\(uScene/)
+  })
+
+  it('mixes an outward rim scene sample weighted by uReflect so 0 keeps the refracted output', () => {
+    // The reflection is a scene sample offset along the rim normal, then mixed
+    // into the refracted colour with `uReflect * rimWeight` as the mix factor —
+    // so uReflect = 0.0 reproduces the refracted (previous) rim output exactly.
+    expect(fragmentSource).toMatch(/reflection\s*=\s*backdrop\(vUv\s*\+\s*rimNormal/)
+    expect(fragmentSource).toMatch(/mix\(refracted,\s*reflection,\s*uReflect\s*\*\s*rimWeight\)/)
   })
 })
 
@@ -132,6 +166,14 @@ describe('createRefractionRenderer — unavailable paths', () => {
 
     expect(renderer.available).toBe(false)
     expect(renderer.render(gradient, PARAMS)).toBeNull()
+    // The surface provider is inert but never throws when unavailable.
+    const surface = renderer.surface('s')
+    expect(() => {
+      surface.upload(fakeSource(4, 4))
+      surface.uploadRegion(fakeSource(2, 2), 0, 0)
+      surface.dispose()
+    }).not.toThrow()
+    expect(surface.render(PARAMS)).toBeNull()
     expect(console_.error).not.toHaveBeenCalled()
     expect(console_.warn).not.toHaveBeenCalled()
   })
@@ -167,6 +209,111 @@ describe('createRefractionRenderer — render path', () => {
     expect(texImage2D.mock.calls[0]).toContain(gradient)
     expect(drawArrays).toHaveBeenCalledTimes(1)
     expect(result).toBe(bitmap)
+  })
+})
+
+describe('refractionRenderer.surface — per-surface textures', () => {
+  it('pins one persistent texture per id: the same id shares it, a new id gets its own', () => {
+    const { gl, createTexture } = createFakeGl()
+    installFakeOffscreen(gl)
+    const renderer = createRefractionRenderer()
+    // The shared scene texture is created once at init; count only surface textures.
+    const baseTextures = createTexture.mock.results.length
+
+    const a1 = renderer.surface('a')
+    const a2 = renderer.surface('a')
+    a1.upload(fakeSource(64, 40))
+    // A second full upload through the other handle for the same id must not
+    // allocate a new texture — it addresses the same one.
+    a2.upload(fakeSource(64, 40))
+    expect(createTexture.mock.results.length - baseTextures).toBe(1)
+
+    renderer.surface('b').upload(fakeSource(10, 10))
+    expect(createTexture.mock.results.length - baseTextures).toBe(2)
+  })
+
+  it('frees the surface texture on dispose', () => {
+    const { gl, createTexture, deleteTexture } = createFakeGl()
+    installFakeOffscreen(gl)
+    const renderer = createRefractionRenderer()
+
+    const surface = renderer.surface('a')
+    surface.upload(fakeSource(64, 40))
+    const created: unknown = createTexture.mock.results.at(-1)?.value
+    surface.dispose()
+
+    expect(deleteTexture).toHaveBeenCalledTimes(1)
+    expect(deleteTexture.mock.calls[0][0]).toBe(created)
+  })
+
+  it('renders from the surface texture only after a full upload', () => {
+    const { gl, drawArrays } = createFakeGl()
+    const { bitmap } = installFakeOffscreen(gl)
+    const renderer = createRefractionRenderer()
+
+    const surface = renderer.surface('a')
+    // No upload yet: nothing to sample, so no draw and a null result.
+    expect(surface.render(PARAMS)).toBeNull()
+    expect(drawArrays).not.toHaveBeenCalled()
+
+    surface.upload(fakeSource(64, 40))
+    expect(surface.render(PARAMS)).toBe(bitmap)
+    expect(drawArrays).toHaveBeenCalledTimes(1)
+  })
+
+  it('invalidates surface textures on context loss and re-uploads after restore', () => {
+    const { gl, createTexture, texImage2D } = createFakeGl()
+    const { instances } = installFakeOffscreen(gl)
+    const renderer = createRefractionRenderer()
+    const baseTextures = createTexture.mock.results.length
+
+    const surface = renderer.surface('a')
+    surface.upload(fakeSource(64, 40))
+    expect(createTexture.mock.results.length - baseTextures).toBe(1)
+    const uploadsBeforeLoss = texImage2D.mock.calls.length
+
+    const canvas = instances[0]
+    canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true }))
+    canvas.dispatchEvent(new Event('webglcontextrestored'))
+
+    // A re-upload after restore allocates a fresh surface texture and issues a
+    // new full texImage2D — the invalidated one does not silently linger.
+    // (Restore also re-creates the shared scene texture, so count from just
+    // before the re-upload to isolate the surface's allocation.)
+    const beforeReupload = createTexture.mock.results.length
+    surface.upload(fakeSource(64, 40))
+    expect(createTexture.mock.results.length - beforeReupload).toBe(1)
+    expect(texImage2D.mock.calls.length).toBe(uploadsBeforeLoss + 1)
+  })
+})
+
+describe('refractionRenderer.surface — upload discipline', () => {
+  it('does a full texImage2D on upload and a flipped-y texSubImage2D only on uploadRegion', () => {
+    const { gl, texImage2D, texSubImage2D } = createFakeGl()
+    installFakeOffscreen(gl)
+    const renderer = createRefractionRenderer()
+
+    const surface = renderer.surface('a')
+    const textureHeight = 40
+    surface.upload(fakeSource(64, textureHeight))
+    expect(texImage2D).toHaveBeenCalledTimes(1)
+    expect(texSubImage2D).not.toHaveBeenCalled()
+
+    // Patch a 12-wide × 10-tall region whose top-left is (x=5, y=8) in the
+    // top-down source. Full uploads flip Y, so its destination y must flip
+    // against the texture height: 40 - 8 - 10 = 22.
+    const regionHeight = 10
+    surface.uploadRegion(fakeSource(12, regionHeight), 5, 8)
+
+    // texSubImage2D only — never a second full texImage2D during a region patch.
+    expect(texImage2D).toHaveBeenCalledTimes(1)
+    expect(texSubImage2D).toHaveBeenCalledTimes(1)
+    const [, level, xoffset, yoffset] = texSubImage2D.mock.calls[0]
+    expect(level).toBe(0)
+    expect(xoffset).toBe(5)
+    expect(yoffset).toBe(textureHeight - 8 - regionHeight)
+    // The region source is forwarded as the pixel payload (last argument).
+    expect(texSubImage2D.mock.calls[0].at(-1)).toMatchObject({ width: 12, height: regionHeight })
   })
 })
 

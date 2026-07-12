@@ -57,7 +57,9 @@
 
 /* Specular rim: a bright top-left edge fading around the corner with a fainter
    opposite glint, drawn as a gradient-filled border via a mask so it traces the
-   rounded corners exactly. */
+   rounded corners exactly. `--rim-tint` (set at composite time from the
+   slice's border-band average) tints the stops; fallback `transparent` keeps
+   the pre-tint look when the property is unset. */
 .glass-surface::after {
   content: '';
   position: absolute;
@@ -68,12 +70,12 @@
   pointer-events: none;
   background: linear-gradient(
     135deg,
-    color-mix(in oklab, var(--foreground) 50%, transparent) 0%,
-    color-mix(in oklab, var(--foreground) 9%, transparent) 18%,
+    color-mix(in oklab, var(--foreground) 50%, var(--rim-tint, transparent)) 0%,
+    color-mix(in oklab, var(--foreground) 9%, var(--rim-tint, transparent)) 18%,
     transparent 40%,
     transparent 60%,
-    color-mix(in oklab, var(--foreground) 4.5%, transparent) 82%,
-    color-mix(in oklab, var(--foreground) 16%, transparent) 100%
+    color-mix(in oklab, var(--foreground) 4.5%, var(--rim-tint, transparent)) 82%,
+    color-mix(in oklab, var(--foreground) 16%, var(--rim-tint, transparent)) 100%
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -108,12 +110,14 @@
   filter: blur(var(--glass-blur, 1.5px)) saturate(var(--glass-saturate, 1.5));
 }
 
-/* Reduced transparency: opaque cards, rim only. */
+/* Reduced transparency: opaque cards, rim only. Pin --rim-tint so tier 3
+   ignores ambient rim color entirely. */
 @media (prefers-reduced-transparency: reduce) {
   .glass-surface {
     background-color: var(--card);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+    --rim-tint: transparent;
   }
 
   .glass-surface::before {

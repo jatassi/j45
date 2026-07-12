@@ -33,6 +33,16 @@ describe('glass.css — baseline tier', () => {
     expect(rim).toMatch(/mask-composite:\s*exclude/)
   })
 
+  it('mixes var(--rim-tint, transparent) into the specular rim gradient stops', () => {
+    const rim = ruleBody(glassCss, /\.glass-surface::after/)
+    // Fallback is transparent so an unset --rim-tint leaves today's stops unchanged
+    // (the original mix partner was hard-coded transparent).
+    expect(rim).toMatch(
+      /color-mix\(\s*in\s+oklab\s*,\s*var\(--foreground\)[^,]+,\s*var\(--rim-tint,\s*transparent\)\s*\)/,
+    )
+    expect(rim).toMatch(/var\(--rim-tint,\s*transparent\)/)
+  })
+
   it('cuts its colours from the J45 dark tokens, not hard-coded whites', () => {
     expect(glassCode).toMatch(/var\(--foreground\)/)
     expect(glassCode).toMatch(/var\(--card\)/)
@@ -64,6 +74,13 @@ describe('glass.css — reduced transparency', () => {
     expect(query?.[1]).toMatch(/\.glass-layer[\s\S]*?display:\s*none/)
     expect(query?.[1]).toMatch(/background-color:\s*var\(--card\)/)
   })
+
+  it('pins --rim-tint: transparent so tier 3 ignores rim tint', () => {
+    const query = /@media\s*\(prefers-reduced-transparency:\s*reduce\)\s*\{([\s\S]*)\}\s*$/.exec(
+      glassCode,
+    )
+    expect(query?.[1]).toMatch(/--rim-tint:\s*transparent/)
+  })
 })
 
 describe('index.css', () => {
@@ -73,9 +90,12 @@ describe('index.css', () => {
 })
 
 describe('glass module — static render contract', () => {
-  it('contains no requestAnimationFrame anywhere under src/glass', () => {
+  // scheduler.ts is the intentional rAF home; every other glass module must
+  // stay free of direct requestAnimationFrame references.
+  it('contains no requestAnimationFrame under src/glass except scheduler.ts', () => {
     const sources = readdirSync(glassDir)
       .filter((name) => /\.(ts|tsx)$/.test(name))
+      .filter((name) => name !== 'scheduler.ts')
       .map((name) => readFileSync(new URL(name, glassDir), 'utf8'))
     expect(sources.length).toBeGreaterThan(0)
     for (const source of sources) {
