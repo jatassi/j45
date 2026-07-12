@@ -1,0 +1,110 @@
+{
+  "run": {
+    "prepared_at": "2026-07-12T10:53:53.065Z",
+    "target": "redesign",
+    "scope": [
+      "player-screens",
+      "generate-screen"
+    ],
+    "tokens": {
+      "spent": 1855739,
+      "by_role": {
+        "plan": 6478,
+        "build": 0,
+        "drive": 11980,
+        "validate": 38727
+      },
+      "attribution": "overlapped"
+    },
+    "halted": null
+  },
+  "features": [
+    {
+      "id": "player-screens",
+      "workflow_path": "standard",
+      "outcome": "validated",
+      "reason": null,
+      "reslice": null,
+      "agents": {
+        "plan": 0,
+        "build": 0,
+        "drive": 0,
+        "validate": 1
+      },
+      "tasks": [
+        {
+          "id": "visual-kit",
+          "size": "m",
+          "judgment_level": "complex",
+          "footprint": [
+            "packages/client/src/components/player/phase.ts",
+            "packages/client/src/components/player/phase-backdrop.tsx",
+            "packages/client/src/components/player/progress-ring.tsx",
+            "packages/client/src/components/player/control-dock.tsx",
+            "packages/client/src/index.css",
+            "packages/client/test/player-phase-backdrop.test.tsx",
+            "packages/client/test/player-progress-ring.test.tsx",
+            "packages/client/test/player-control-dock.test.tsx"
+          ]
+        },
+        {
+          "id": "session-player",
+          "size": "m",
+          "judgment_level": "complex",
+          "footprint": [
+            "packages/client/src/components/session-screen.tsx",
+            "packages/client/src/lib/session.ts",
+            "packages/client/test/session-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "timer-immersive",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/timer-screen.tsx",
+            "packages/client/test/timer-screen.test.tsx",
+            "e2e/timer.spec.ts"
+          ]
+        },
+        {
+          "id": "live-session-e2e",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/live-session.spec.ts",
+            "e2e/history.spec.ts"
+          ]
+        }
+      ],
+      "actual": {
+        "files_touched": 19,
+        "insertions": 1667,
+        "deletions": 681,
+        "commits": null,
+        "duration_minutes": null
+      }
+    },
+    {
+      "id": "generate-screen",
+      "workflow_path": "small",
+      "outcome": "validated",
+      "reason": null,
+      "reslice": null,
+      "agents": {
+        "plan": 1,
+        "build": 0,
+        "drive": 1,
+        "validate": 1
+      },
+      "tasks": [],
+      "actual": {
+        "files_touched": 13,
+        "insertions": 692,
+        "deletions": 339,
+        "commits": null,
+        "duration_minutes": null
+      }
+    }
+  ]
+}
