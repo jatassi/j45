@@ -350,7 +350,7 @@
     {
       "id": "generate-screen",
       "title": "Generate tab rebuilt on the kit — constraint form with labeled controls, preview card, inline infeasibility",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "nav-shell"
       ],

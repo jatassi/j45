@@ -20,7 +20,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
@@ -140,6 +140,19 @@ function renderApp(handlers: Handlers, initialPath: string) {
   )
 }
 
+const pressed = (testId: string): string | null =>
+  screen.getByTestId(testId).getAttribute('aria-pressed')
+
+const fieldValue = (testId: string): string => {
+  const el = screen.getByTestId(testId)
+  return el instanceof HTMLInputElement ? el.value : ''
+}
+
+const isDisabled = (testId: string): boolean => {
+  const el = screen.getByTestId(testId)
+  return el instanceof HTMLButtonElement && el.disabled
+}
+
 describe('GenerateScreen', () => {
   it('renders at /generate with library-nav-link pointing to /library', async () => {
     renderApp(
@@ -151,6 +164,21 @@ describe('GenerateScreen', () => {
 
     await screen.findByTestId('generate-screen')
     expect(screen.getByTestId('library-nav-link').getAttribute('href')).toBe('/library')
+  })
+
+  it('contains no native <select> and no bare <input> outside ui/ components', async () => {
+    renderApp({}, '/generate')
+    const root = await screen.findByTestId('generate-screen')
+
+    expect(root.querySelector('select')).toBeNull()
+
+    // Steppers use ui/Input (`data-slot=input`). base-ui Select injects an
+    // aria-hidden form input from the kit control — not a bare authored field.
+    for (const input of root.querySelectorAll('input')) {
+      const fromUiInput = input.dataset.slot === 'input'
+      const fromUiSelect = input.getAttribute('aria-hidden') === 'true'
+      expect(fromUiInput || fromUiSelect).toBe(true)
+    }
   })
 
   it('renders a preview with codename, works·duration chip matching compile, and data-seed; Regenerate changes seed while constraints stay put', async () => {
@@ -180,9 +208,10 @@ describe('GenerateScreen', () => {
     await screen.findByTestId('generate-screen')
 
     // Capture form constraints before Generate/Regenerate.
-    const focusBefore = screen.getByTestId<HTMLSelectElement>('generate-focus').value
-    const minutesBefore = screen.getByTestId<HTMLInputElement>('generate-target-minutes').value
-    const noRepeatBefore = screen.getByTestId<HTMLInputElement>('generate-no-repeat').value
+    const focusBefore = pressed('generate-focus-hybrid')
+    const minutesBefore = fieldValue('generate-target-minutes')
+    const noRepeatBefore = fieldValue('generate-no-repeat')
+    expect(focusBefore).toBe('true')
 
     fireEvent.click(screen.getByTestId('generate-button'))
 
@@ -203,11 +232,9 @@ describe('GenerateScreen', () => {
     expect(seeds[0]).not.toBe(seeds[1])
 
     // Constraint fields untouched by Regenerate.
-    expect(screen.getByTestId<HTMLSelectElement>('generate-focus').value).toBe(focusBefore)
-    expect(screen.getByTestId<HTMLInputElement>('generate-target-minutes').value).toBe(
-      minutesBefore,
-    )
-    expect(screen.getByTestId<HTMLInputElement>('generate-no-repeat').value).toBe(noRepeatBefore)
+    expect(pressed('generate-focus-hybrid')).toBe(focusBefore)
+    expect(fieldValue('generate-target-minutes')).toBe(minutesBefore)
+    expect(fieldValue('generate-no-repeat')).toBe(noRepeatBefore)
   })
 
   it('Save issues CreateWorkout with the previewed workout and navigates to its detail; Edit sets the initial draft and navigates to /workouts/new', async () => {
@@ -260,7 +287,7 @@ describe('GenerateScreen', () => {
     expect(takeInitialDraft()).toBeUndefined()
   })
 
-  it('GenerationInfeasible renders its reason in the form error state and never blanks a prior preview', async () => {
+  it('GenerationInfeasible renders its reason in an inline alert and never blanks a prior preview', async () => {
     let call = 0
     renderApp(
       {
@@ -285,13 +312,18 @@ describe('GenerateScreen', () => {
     fireEvent.click(screen.getByTestId('generate-regenerate'))
 
     const error = await screen.findByTestId('generate-error')
+    expect(error.getAttribute('role')).toBe('alert')
     expect(error.textContent).toContain('No template fits the target duration')
     // Prior preview stays put — never blanked.
     expect(screen.getByTestId('generate-preview')).toBeTruthy()
     expect(screen.getByTestId('generate-codename').textContent).toBe('Iron Falcon')
+    // Form stays editable while the alert is showing.
+    expect(isDisabled('generate-focus-cardio')).toBe(false)
+    fireEvent.click(screen.getByTestId('generate-focus-cardio'))
+    expect(pressed('generate-focus-cardio')).toBe('true')
   })
 
-  it('equipment chips default to all literals selected; no-repeat stepper defaults to 3 and allows 0', async () => {
+  it('equipment chips default to all literals selected; duration stepper is 15–45×5; no-repeat defaults to 3 and allows 0', async () => {
     renderApp({}, '/generate')
     await screen.findByTestId('generate-screen')
 
@@ -300,42 +332,56 @@ describe('GenerateScreen', () => {
       expect(chip.getAttribute('aria-pressed')).toBe('true')
     }
 
-    const noRepeat = screen.getByTestId<HTMLInputElement>('generate-no-repeat')
-    expect(noRepeat.value).toBe('3')
+    expect(fieldValue('generate-target-minutes')).toBe('30')
+    fireEvent.click(screen.getByTestId('generate-target-minutes-dec'))
+    expect(fieldValue('generate-target-minutes')).toBe('25')
+    // Floor at 15.
+    for (let i = 0; i < 10; i++) {
+      fireEvent.click(screen.getByTestId('generate-target-minutes-dec'))
+    }
+    expect(fieldValue('generate-target-minutes')).toBe('15')
+    expect(isDisabled('generate-target-minutes-dec')).toBe(true)
+    // Ceiling at 45.
+    for (let i = 0; i < 20; i++) {
+      fireEvent.click(screen.getByTestId('generate-target-minutes-inc'))
+    }
+    expect(fieldValue('generate-target-minutes')).toBe('45')
+    expect(isDisabled('generate-target-minutes-inc')).toBe(true)
+
+    expect(fieldValue('generate-no-repeat')).toBe('3')
 
     // Decrement to 0 is allowed.
     fireEvent.click(screen.getByTestId('generate-no-repeat-dec'))
-    expect(noRepeat.value).toBe('2')
+    expect(fieldValue('generate-no-repeat')).toBe('2')
     fireEvent.click(screen.getByTestId('generate-no-repeat-dec'))
-    expect(noRepeat.value).toBe('1')
+    expect(fieldValue('generate-no-repeat')).toBe('1')
     fireEvent.click(screen.getByTestId('generate-no-repeat-dec'))
-    expect(noRepeat.value).toBe('0')
+    expect(fieldValue('generate-no-repeat')).toBe('0')
     // Cannot go below 0.
     fireEvent.click(screen.getByTestId('generate-no-repeat-dec'))
-    expect(noRepeat.value).toBe('0')
+    expect(fieldValue('generate-no-repeat')).toBe('0')
   })
 
   it('focus, emphasis, and equipment options render domain labels (not raw vocabulary literals)', async () => {
     renderApp({}, '/generate')
     await screen.findByTestId('generate-screen')
 
-    // Focus select: option values stay raw; visible text is the domain label.
-    const focus = screen.getByTestId<HTMLSelectElement>('generate-focus')
-    const focusTexts = [...focus.options].map((o) => o.textContent)
-    expect(focusTexts).toContain('Hybrid')
-    expect(focusTexts).toContain('Cardio')
-    expect(focusTexts).toContain('Strength')
-    expect(focusTexts).not.toContain('hybrid')
-    expect(focusTexts).not.toContain('cardio')
-    expect(focusTexts).not.toContain('strength')
-    expect([...focus.options].map((o) => o.value)).toEqual(['cardio', 'strength', 'hybrid'])
+    // Focus toggle-group: visible text is the domain label; raw values stay off-screen.
+    expect(screen.getByTestId('generate-focus-hybrid').textContent).toBe('Hybrid')
+    expect(screen.getByTestId('generate-focus-cardio').textContent).toBe('Cardio')
+    expect(screen.getByTestId('generate-focus-strength').textContent).toBe('Strength')
+    const focusRoot = screen.getByTestId('generate-focus')
+    expect(focusRoot.textContent).not.toMatch(/\bhybrid\b/)
+    expect(focusRoot.textContent).not.toMatch(/\bcardio\b/)
+    expect(focusRoot.textContent).not.toMatch(/\bstrength\b/)
 
-    // Emphasis select includes muscle-group labels.
-    const emphasis = screen.getByTestId<HTMLSelectElement>('generate-emphasis')
-    const emphasisTexts = [...emphasis.options].map((o) => o.textContent)
-    expect(emphasisTexts).toContain('Full body')
-    expect(emphasisTexts).not.toContain('full-body')
-    expect([...emphasis.options].map((o) => o.value)).toContain('full-body')
+    // Emphasis select: open the popup and assert option labels.
+    fireEvent.click(screen.getByTestId('generate-emphasis'))
+    const fullBody = await screen.findByRole('option', { name: 'Full body' })
+    expect(fullBody).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'full-body' })).toBeNull()
+    // Trigger shows the selected "None" domain label, not a raw empty value.
+    expect(within(screen.getByTestId('generate-emphasis')).getByText('None')).toBeTruthy()
 
     // Equipment chips: testids stay raw; chip text is the domain label.
     expect(screen.getByTestId('generate-equipment-med-ball').textContent).toBe('Med ball')

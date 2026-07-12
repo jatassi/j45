@@ -81,6 +81,12 @@ function workoutCards(page: Page) {
 /** Compile chip shape: `N works · MM:SS` (or `M:SS` for short totals). */
 const SUMMARY_SHAPE = /^\d+ works · \d{1,2}:\d{2}$/
 
+/** Opens a base-ui Select by its trigger testid and picks the option with the given label. */
+async function pickSelectOption(page: Page, testId: string, optionLabel: string): Promise<void> {
+  await page.getByTestId(testId).click()
+  await page.getByRole('option', { name: optionLabel }).click()
+}
+
 /**
  * Opens `/generate` from the tab bar, applies permissive constraints
  * (hybrid / 30 min / all equipment default / no emphasis / default no-repeat),
@@ -91,12 +97,14 @@ async function generatePreview(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/generate/)
   await expect(page.getByTestId('generate-screen')).toBeVisible()
 
-  // Explicit knobs (defaults are already permissive; set them so the test
-  // documents the intended constraint surface). Option values stay raw;
-  // visible labels are domain human text (asserted separately).
-  await page.getByTestId('generate-focus').selectOption('hybrid')
-  await page.getByTestId('generate-target-minutes').fill('30')
-  await page.getByTestId('generate-emphasis').selectOption('')
+  // Explicit knobs via kit controls (defaults are already permissive; set them
+  // so the test documents the intended constraint surface).
+  await page.getByTestId('generate-focus-hybrid').click()
+  // Duration defaults to 30; step once down and back up so the stepper is exercised.
+  await page.getByTestId('generate-target-minutes-dec').click()
+  await page.getByTestId('generate-target-minutes-inc').click()
+  await expect(page.getByTestId('generate-target-minutes')).toHaveValue('30')
+  await pickSelectOption(page, 'generate-emphasis', 'None')
 
   await page.getByTestId('generate-button').click()
   await expect(page.getByTestId('generate-preview')).toBeVisible({ timeout: 30_000 })
@@ -105,22 +113,38 @@ async function generatePreview(page: Page): Promise<void> {
 
 /**
  * Asserts domain label maps render on the generate form and that the raw
- * vocabulary strings `full-body`, `med-ball`, and `jump-rope` never appear
- * as visible text (equipment chips + emphasis options cover them).
+ * vocabulary strings `full-body`, `med-ball`, `jump-rope`, and focus literals
+ * never appear as visible text.
  */
 async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
   await expect(page.getByTestId('generate-screen')).toBeVisible()
+  await expect(page.getByTestId('generate-focus-cardio')).toHaveText('Cardio')
+  await expect(page.getByTestId('generate-focus-strength')).toHaveText('Strength')
+  await expect(page.getByTestId('generate-focus-hybrid')).toHaveText('Hybrid')
   await expect(page.getByTestId('generate-equipment-med-ball')).toHaveText('Med ball')
   await expect(page.getByTestId('generate-equipment-jump-rope')).toHaveText('Jump rope')
-  await expect(page.getByTestId('generate-emphasis')).toContainText('Full body')
+
+  // Emphasis options live in the base-ui Select popup — open, assert, dismiss.
+  await page.getByTestId('generate-emphasis').click()
+  await expect(page.getByRole('option', { name: 'Full body' })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'full-body' })).toHaveCount(0)
+  // Pick None so the popup closes without changing the default.
+  await page.getByRole('option', { name: 'None' }).click()
 
   const generateText = await page.getByTestId('generate-screen').textContent()
-  expect(generateText).toContain('Full body')
+  expect(generateText).toContain('Cardio')
+  expect(generateText).toContain('Strength')
+  expect(generateText).toContain('Hybrid')
   expect(generateText).toContain('Med ball')
   expect(generateText).toContain('Jump rope')
   expect(generateText).not.toMatch(/\bfull-body\b/)
   expect(generateText).not.toMatch(/\bmed-ball\b/)
   expect(generateText).not.toMatch(/\bjump-rope\b/)
+  // Focus toggle visible text is labels only — raw focus literals stay off-screen.
+  const focusText = await page.getByTestId('generate-focus').textContent()
+  expect(focusText).not.toMatch(/\bcardio\b/)
+  expect(focusText).not.toMatch(/\bstrength\b/)
+  expect(focusText).not.toMatch(/\bhybrid\b/)
 }
 
 /**
@@ -179,9 +203,9 @@ test.describe('generate (chromium + webkit)', () => {
       await assertDomainLabelsOnGenerateScreen(page)
 
       // Resume the generate flow after the label assertion (same knobs as generatePreview).
-      await page.getByTestId('generate-focus').selectOption('hybrid')
-      await page.getByTestId('generate-target-minutes').fill('30')
-      await page.getByTestId('generate-emphasis').selectOption('')
+      await page.getByTestId('generate-focus-hybrid').click()
+      await expect(page.getByTestId('generate-target-minutes')).toHaveValue('30')
+      await pickSelectOption(page, 'generate-emphasis', 'None')
       await page.getByTestId('generate-button').click()
       await expect(page.getByTestId('generate-preview')).toBeVisible({ timeout: 30_000 })
       await expect(page.getByTestId('generate-error')).toHaveCount(0)
@@ -234,6 +258,58 @@ test.describe('generate (chromium + webkit)', () => {
       await page.reload()
       await expect(page.getByTestId('library-screen')).toBeVisible()
       await expect(workoutCards(page).filter({ hasText: saveCodename })).toHaveCount(1)
+    },
+  )
+
+  test(
+    'starved constraints render GenerationInfeasible as an inline alert naming the constraint; ' +
+      'form stays editable and a prior preview is not blanked',
+    async ({ page }, testInfo) => {
+      test.setTimeout(90_000)
+
+      const env = readE2eEnv()
+      const projectName = projectNameFrom(testInfo)
+      // Separate username so this test does not collide with the happy-path account.
+      const code = await mintOneInviteCode(page, env.baseUrl, env.owner)
+
+      await registerAndReachHome(page, env.baseUrl, {
+        code,
+        username: `e2e-gen-inf-${projectName}`,
+        displayName: `Generate Infeasible (${projectName})`,
+        pin: '517391',
+      })
+
+      await page.goto(env.baseUrl)
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await generatePreview(page)
+
+      const priorCodename = await page.getByTestId('generate-codename').textContent()
+      expect(priorCodename?.trim().length ?? 0).toBeGreaterThan(0)
+
+      // Strength + Calves starves the seed catalog (one calves-tagged strength
+      // exercise) while keeping the form knobs on the real kit controls.
+      await page.getByTestId('generate-focus-strength').click()
+      await pickSelectOption(page, 'generate-emphasis', 'Calves')
+      await page.getByTestId('generate-button').click()
+
+      const error = page.getByTestId('generate-error')
+      await expect(error).toBeVisible({ timeout: 30_000 })
+      await expect(error).toHaveAttribute('role', 'alert')
+      // Typed reason names the starved constraint (pool / equipment / stations).
+      await expect(error).toContainText(/exercise|equipment|station|pool/i)
+
+      // Prior preview stays put — never blanked by the infeasible response.
+      await expect(page.getByTestId('generate-preview')).toBeVisible()
+      await expect(page.getByTestId('generate-codename')).toHaveText(priorCodename?.trim() ?? '')
+
+      // Form remains editable: flip focus back to Hybrid.
+      await page.getByTestId('generate-focus-hybrid').click()
+      await expect(page.getByTestId('generate-focus-hybrid')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      await expect(page.getByTestId('generate-target-minutes')).toBeEnabled()
+      await expect(page.getByTestId('generate-emphasis')).toBeEnabled()
     },
   )
 })
