@@ -8,7 +8,7 @@ it may build.
 ## Feature graph
 
 ```yaml
-design_version: 7
+design_version: 8
 features:
   - id: walking-skeleton
     title: Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy
@@ -154,6 +154,129 @@ features:
       - Given /glass with all demo surfaces active, an e2e instrument wrapping `HTMLCanvasElement.prototype.getContext` counts exactly one "webgl2" context acquisition for the whole page.
       - The client is dark-only — the dark palette is `:root` in packages/client/src/index.css, theme-provider.tsx is deleted, and no light token block remains; the walking-skeleton e2e suite still passes unchanged.
       - Vitest unit tests cover the backdrop slice mapping (card rect ⨯ scroll ⨯ dpr → texture offset/scale) and geometry-key stability, passing as part of `bun run test`.
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: design-system
+    title: Design-system foundation — evolved tokens, ui/ kit on Base UI, domain vocabulary labels, /design gallery, client CLAUDE.md
+    status: designed
+    depends_on: [liquid-glass-ui, exercise-library, workout-generation]
+    acceptance:
+      - "Each of the six domain vocabularies (Modality, Intensity, MuscleGroup, Equipment, Focus, FlowType) exports an exhaustive Record<Literal, string> label map co-located with its union in @j45/domain; vitest asserts every literal yields a non-empty label and that hyphenated ids (full-body, jump-rope, med-ball, pull-up-bar, slam-ball) map to human text."
+      - "e2e (chromium + webkit): the exercise catalog's filter chips and tag badges and the generate screen's focus/emphasis/equipment options render domain labels — the raw literal strings full-body, med-ball, and jump-rope appear nowhere in either screen's rendered text."
+      - "packages/client/src/components/ui/ contains field, input, select, combobox, toggle-group, checkbox, label, drawer, dialog, alert-dialog, sonner, skeleton, empty, alert, progress, badge, tabs, avatar, accordion, and separator; a grep for 'radix' across packages/client/src is empty."
+      - "e2e (chromium + webkit): /design renders without authentication and logs no console errors: swatches for every color token including the five sport hues, type-scale specimens, the Wordmark lockup, every ui/ component listed above, and at least one glass-variant surface that reaches data-glass-tier=\"refract\" (and \"css\" under the WebGL2-disabled init script)."
+      - "index.css defines --hue-cardio, --hue-strength, --hue-hybrid, --hue-work, --hue-rest and the signature-orange --primary; the existing unit tests still pass unchanged: --background equals backdrop.ts BACKDROP_BASE and no .dark block exists."
+      - "packages/client/CLAUDE.md exists and covers the domain-label rule, Base-UI-not-Radix, token/variant conventions with the feedback-state standard, and the glass positioned-wrapper gotcha."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: glass-live-refraction
+    title: Glass material upgrade — scene-registry live refraction, sub-texture invalidation, rim reflection, tier-capped surfaces
+    status: designed
+    depends_on: [design-system]
+    acceptance:
+      - "Vitest covers the scene registry's pure math — proxy/slice intersection, dirty-region to sub-rect mapping, and paint-order (z) — passing in `bun run test`."
+      - "e2e (chromium + webkit): on the glass demo route, mutating a registered proxy behind a refract-tier surface increases that surface's data-glass-renders within 1s, while DOM mutation not represented by any proxy leaves the count unchanged over a 2s watch."
+      - "e2e (init script wrapping texImage2D/texSubImage2D): after a surface's initial upload, ten 1 Hz dirty-region updates from a ticking-digit proxy produce texSubImage2D calls and zero full-canvas texImage2D calls, and the scenario publishes its per-update composite+upload duration as a data attribute for the QA record."
+      - "e2e: while scrolling a page with a position-fixed glass bar over registered content, the bar's data-glass-renders increases and a static glass card's does not; within 2s of scroll stopping, neither increases further."
+      - "e2e: with WebGL2 disabled, every glass surface carries a --rim-tint custom property derived from its composited slice, and it changes when the dominant proxy color behind the surface changes; the refract tier's shader declares and sets a uReflect uniform mixing a scene-texture rim sample into the specular rim."
+      - "e2e: a surface mounted with maxTier: 'css' stays at data-glass-tier=\"css\" while WebGL2 is available and other surfaces reach refract."
+      - "The existing glass e2e suite passes: at least three surfaces reach refract within 5s, the WebGL2-disabled path yields css tier with blur, no refraction canvas and no console errors, and exactly one webgl2 context is acquired per page."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: nav-shell
+    title: Navigation shell — glass bottom tab bar, sticky headers, avatar chip, route restructure with push layouts
+    status: designed
+    depends_on: [design-system]
+    acceptance:
+      - "e2e (chromium + webkit): logged in, the glass bottom tab bar shows Home, Library, Generate, History; tapping each lands on /, /library, /generate, /history with the active tab marked (aria-current or data-active); the header avatar chip opens /account."
+      - "e2e: /library lists the caller's workouts (moved off /); /library/exercises renders the exercise catalog via the Library segment control; a visit to /exercises redirects to /library/exercises; an authenticated visit to an unmatched path still redirects to /."
+      - "e2e: /session/<id>, /timer, /workouts/new, /workouts/<id>/edit, /workouts/<id>/reflow, and /account render with no tab bar and a working back affordance; /workouts/<id> keeps the tab bar with Library active."
+      - "e2e: / renders the interim home — the active-sessions strip plus links to /timer and /workouts/new — and the tab bar and app header are glass surfaces exposing data-glass-tier."
+      - "The AppHeader renders the upright J45 wordmark (white J, orange 45); LibraryNav is deleted from the codebase."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0 with navigation-dependent specs updated to the tab-bar IA."
+  - id: session-leave
+    title: Per-participant leave — LeaveSession rpc, per-stint completion rows with progress, session ends when the last participant leaves
+    status: designed
+    depends_on: [live-session, session-history]
+    acceptance:
+      - "The SessionCommand literal is exactly pause/resume/skip/prev (quit removed); SessionRpcs gains LeaveSession { id } failing SessionNotFound; SessionCompletion carries an optional progress { segmentsCompleted, totalSegments }; `bun run check` exits 0 across the repo with the client compiled against the shrunk literal."
+      - "Integration (TestClock): in a progressed two-participant session, LeaveSession from the non-host writes exactly one completion row for the leaver — personal endedAt at leave time and progress matching the timer position — removes them from the published participants, and leaves the other participant's stream running."
+      - "Integration (TestClock): when the last present participant leaves and every roster member has departed, the session ends immediately — watcher streams complete, ListActiveSessions is empty — and no participant receives a duplicate row; a participant whose connection dropped without LeaveSession still receives a row at session end (GC or last-leave) carrying the session's endedAt and final progress."
+      - "Integration (TestClock): LeaveSession before the session progresses writes no row for the leaver; a leave-then-rejoin participant is restored to participants and roster, and a session that then ends progressed yields them one additional row for the second stint."
+      - "Integration: given a database migrated through 0005 with existing completion rows, migration 0006 adds the nullable progress columns and old rows decode with progress absent; ListHistory returns rows with and without progress."
+      - "e2e (chromium, two logged-in contexts): mid-workout, A invokes leave and lands home while B's player keeps running with A gone from participants; B then leaves and the session is gone from B's home within the poll interval; /history shows a row for each with A's progress fraction lower than B's."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: home-dashboard
+    title: Action-first Home — hero card (join live / start last / browse), quick-start tiles, recent list
+    status: designed
+    depends_on: [nav-shell]
+    acceptance:
+      - "e2e (chromium, two logged-in contexts): while A's session runs, B's Home hero names the workout and A as host within 10 seconds, and one tap lands B on /session/<id> showing the same segment."
+      - "e2e (chromium + webkit): with no live session and at least one completion in history, the hero shows Start last with that workout's name and its Start tap lands on /session/<id> running it; a fresh account with no history renders the browse-fallback hero and a recent list padded from the library — the fold is never empty."
+      - "e2e: the three quick-start tiles navigate to /timer, /generate, and /workouts/new."
+      - "e2e: a failed StartSession surfaces a toast while the dashboard remains interactive; the hero and recent list render skeletons before their queries resolve."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: library-screens
+    title: Library tab interiors — workout list, exercises segment with drawer editing, workout detail
+    status: designed
+    depends_on: [nav-shell]
+    acceptance:
+      - "e2e (chromium + webkit): /library lists the 12 seed workouts as cards with name, focus label badge, and works · MM:SS; tapping a card opens its detail."
+      - "e2e: /library/exercises — filter chips narrow by muscle group with domain labels; creating an exercise via the bottom drawer shows it in the list and persists a reload; editing its tags persists; deleting via alert-dialog removes it; command failures surface as toasts."
+      - "e2e: workout detail — Start is the primary action and Start with reflow is present; rename via dialog persists a reload; Duplicate creates a copy; Delete behind an alert-dialog removes it and returns to /library; opening Athletica shows 3 pods, 9 stations, and 26:45."
+      - "e2e: a logged-out visit to /workouts/<seed id> shows the login screen and completing PIN login lands on that detail without further navigation."
+      - "The library, exercises, and detail screens contain no native <select> or bare <input> — form controls compose from ui/; the hand-rolled exercise-dialogs overlay is deleted."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: editor-screens
+    title: Workout editor rebuilt on the kit — new/edit/launch modes, drawers for structural moves, per-field validation
+    status: designed
+    depends_on: [library-screens]
+    acceptance:
+      - "e2e (chromium + webkit): New workout — name, focus via toggle-group, a pod with two stations, sets flow with 3 uniform rounds of 30″/10″, Save from the header → detail shows the workout and it persists a reload."
+      - "e2e: editing a seed copy — flow laps→sets via toggle-group, station rename, and a cross-pod move via the drawer — persists all three through Save and a reload."
+      - "e2e: an unmodified Athletica draft's sticky summary chip reads exactly 27 works · 26:45; clearing a station name disables Save and shows a validation message at the field."
+      - "e2e: launch mode offers no content edits (station names read-only, no add-station); regrouping into one pod and flipping sets→laps updates the chip; Start lands on /session/<id> running the reflowed structure with the stored workout unchanged after reload; Save to plan persists the same changes."
+      - "e2e: backing out of a dirty draft raises an alert-dialog confirm; discarding returns without persisting."
+      - "The editor and reflow screens contain no native <select>, <input>, or <checkbox> outside ui/ components."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: player-screens
+    title: Immersive session player and manual timer — ring countdown on phase-tinted ground, glass control dock, leave UX
+    status: designed
+    depends_on: [glass-live-refraction, session-leave, nav-shell]
+    acceptance:
+      - "e2e (chromium, two logged-in contexts): both players show the same segment with the countdown inside the progress ring; the player root's data-phase matches the segment type as it advances (ready/work/rest); B's pause shows Paused on A's screen; the next-up line names the following work segment."
+      - "e2e: the Leave control opens an alert-dialog; confirming lands the leaver home while the other participant keeps running with the leaver gone from the participant pills; the done state offers Finish without a confirm and both participants' /history records the session."
+      - "e2e: the join/start tap itself unlocks audio (data-audio=\"on\"), at least one beep fires on a segment transition, and the wake lock is held while running and released on pause — the existing instrumented assertions preserved."
+      - "e2e: the exercise-demo slot element is present on the session player (data-slot=\"exercise-demo\") and renders acceptably when empty — the reserved slot for future animations."
+      - "e2e (chromium + webkit): /timer idle state composes from ui/ fields (no native inputs); a 5″/0/2 run advances ready → work → work → Done with the round indicator; Pause freezes the displayed count, Resume continues, Reset returns to idle; the Start tap unlocks audio."
+      - "The session and timer screens keep the player kit contracts: no imports from session code into src/player/, and no new rpc or migration beyond what session-leave added."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: generate-screen
+    title: Generate tab rebuilt on the kit — constraint form with labeled controls, preview card, inline infeasibility
+    status: designed
+    depends_on: [nav-shell]
+    acceptance:
+      - "e2e (chromium + webkit): choosing focus, duration, equipment, and emphasis through kit controls then Generate shows the preview with the workout codename and a works · MM:SS chip; Regenerate changes data-seed; Save lands the workout in the library surviving a reload; Edit opens it in the editor."
+      - "e2e: constraints that starve the pool render the typed GenerationInfeasible reason as an inline alert naming the constraint while the form stays editable — never a bare toast or a blank preview."
+      - "e2e: equipment, emphasis, and focus options render domain labels — no raw vocabulary literals in the screen's text."
+      - "The generate screen contains no native <select> or bare <input> outside ui/ components."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: auth-screens
+    title: Auth surfaces on the design system — passkey-hero login, invite registration, enroll prompt
+    status: designed
+    depends_on: [design-system]
+    acceptance:
+      - "e2e (chromium + webkit): the login screen renders the J45 wordmark with Sign in with passkey as the primary action and the PIN form as fallback; PIN login succeeds with the correct PIN and shows the typed InvalidCredentials inline on a wrong one."
+      - "e2e: /register?invite=<code> prefills the invite field; completing the form lands the user authenticated at the library with the enroll-passkey prompt flow intact; a spent or unknown invite shows the typed error inline and creates no account."
+      - "e2e (chromium, CDP virtual authenticator): passkey enroll and sign-in-with-passkey-alone still pass; context.cookies() still shows j45_session httpOnly and sameSite Lax — every existing auth assertion is preserved, none weakened or removed."
+      - "The login, register, and enroll screens contain no bare <input> outside ui/ components."
+      - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
+  - id: secondary-screens
+    title: History and Account on the design system — completion cards with progress, accordion snapshots, account/invites drawers
+    status: designed
+    depends_on: [nav-shell, session-leave]
+    acceptance:
+      - "e2e (chromium + webkit): /history shows completion cards with workout name, date, host, and participant pills; a record carrying progress shows Finished when complete and a fraction when partial; expanding a card reveals the as-run pod/station summary from the snapshot."
+      - "e2e: an account with no history sees the empty state with a CTA into the library; a query failure renders an inline alert with a retry control, distinct from the loading skeleton."
+      - "e2e: /account — passkey add and delete (delete behind an alert-dialog) work; the owner mints an invite whose code a second context redeems, and revokes one behind a confirm; a member sees no people/invites section; logout returns to the login screen."
+      - "The history and account screens contain no native form elements outside ui/ components."
       - "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
   - id: exercise-animations
     title: Per-exercise animations during workouts (dropped at intake — revive via licensed source, e.g. Gymvisual ~$0.90/GIF)

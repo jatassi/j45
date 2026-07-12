@@ -32,3 +32,15 @@ unrecorded wherever they fit.
   clock, participants), synced to all joined phones. Ephemeral; only its
   completion record persists. (Login state is never called a "session" bare —
   code and schema say `AuthSession` / `auth_sessions`.)
+- **Glass chrome** — persistent UI furniture rendered in the liquid-glass
+  material: the bottom tab bar, sticky headers, overlays, and control docks.
+  Content cards stay opaque — chrome is one half of glass's decided role.
+- **Hero glass** — the other half: at most one star glass surface on a
+  screen that earns it (live-player elements, workout-complete). Never both
+  roles diluted across everything.
+- **Scene registry** — the document-anchored registry of scene proxies that
+  the glass refraction texture is composited from. Glass refracts the
+  registry's proxies, never DOM snapshots.
+- **Scene proxy** — a component's cheap paintable stand-in in the scene
+  registry: rounded rect + token color, a rasterize-once sprite, or a small
+  owner-invalidated dirty-region canvas (the timer digits).

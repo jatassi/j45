@@ -4,40 +4,80 @@ import { useEffect, useState } from 'react'
 import { installBackdrop } from '@/glass/backdrop'
 import { cn } from '@/lib/utils'
 
+import { HomeA } from './home-a'
+import { HomeB } from './home-b'
+import { PlayerA } from './player-a'
+import { PlayerB } from './player-b'
 import { VariantA } from './variant-a'
 import { VariantB } from './variant-b'
 import { VariantC } from './variant-c'
+import { Wordmarks } from './wordmarks'
 
 import './proto.css'
 
-type VariantId = 'a' | 'b' | 'c'
+type StudyId = 'roles' | 'home' | 'player' | 'wordmark'
+type VariantKey = `${StudyId}:${string}`
 
-const VARIANTS: readonly { id: VariantId; label: string; role: string }[] = [
-  { id: 'a', label: 'A', role: 'Glass chrome' },
-  { id: 'b', label: 'B', role: 'Glass content' },
-  { id: 'c', label: 'C', role: 'Glass hero' },
+const STUDIES: readonly {
+  id: StudyId
+  label: string
+  variants: readonly { id: string; label: string; render: () => JSX.Element }[]
+}[] = [
+  {
+    id: 'roles',
+    label: 'Roles',
+    variants: [
+      { id: 'a', label: 'Chrome', render: () => <VariantA /> },
+      { id: 'b', label: 'Content', render: () => <VariantB /> },
+      { id: 'c', label: 'Hero', render: () => <VariantC /> },
+    ],
+  },
+  {
+    id: 'home',
+    label: 'Home',
+    variants: [
+      { id: 'a', label: 'Hero-first', render: () => <HomeA /> },
+      { id: 'b', label: 'Launcher grid', render: () => <HomeB /> },
+    ],
+  },
+  {
+    id: 'player',
+    label: 'Player',
+    variants: [
+      { id: 'a', label: 'Hero card', render: () => <PlayerA /> },
+      { id: 'b', label: 'Immersive', render: () => <PlayerB /> },
+    ],
+  },
+  {
+    id: 'wordmark',
+    label: 'Wordmark',
+    variants: [{ id: 'a', label: 'All treatments', render: () => <Wordmarks /> }],
+  },
 ]
 
-/** Segmented switch across the three glass-role variants. */
-function Segmented(props: { value: VariantId; onChange: (id: VariantId) => void }): JSX.Element {
+/** One row of pill buttons — reused for the study switch and its variants. */
+function PillRow(props: {
+  items: readonly { key: string; label: string }[]
+  value: string
+  onChange: (key: string) => void
+}): JSX.Element {
   return (
     <div className="flex items-center gap-1 rounded-full bg-white/5 p-1 ring-1 ring-white/10">
-      {VARIANTS.map((v) => {
-        const active = v.id === props.value
+      {props.items.map((item) => {
+        const active = item.key === props.value
         return (
           <button
-            key={v.id}
+            key={item.key}
             type="button"
             onClick={() => {
-              props.onChange(v.id)
+              props.onChange(item.key)
             }}
             className={cn(
-              'flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors',
+              'rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors',
               active ? 'bg-[var(--proto-orange)] text-black' : 'text-white/60 hover:text-white',
             )}
           >
-            <span className="proto-eyebrow text-[11px]">{v.label}</span>
-            <span className="hidden sm:inline">{v.role}</span>
+            {item.label}
           </button>
         )
       })}
@@ -46,27 +86,52 @@ function Segmented(props: { value: VariantId; onChange: (id: VariantId) => void 
 }
 
 /**
- * `/proto` — throwaway comparison of three roles for the liquid-glass
- * material. Installs the shared document backdrop (so the real refract tier
+ * `/proto` — throwaway design studies: the original liquid-glass role
+ * comparison plus the overhaul's home-dashboard and session-player layout
+ * variants. Installs the shared document backdrop (so the real refract tier
  * has its gradient to sample) and lets the owner flip between variants.
  */
 export function ProtoPage(): JSX.Element {
-  const [variant, setVariant] = useState<VariantId>('a')
+  const [study, setStudy] = useState<StudyId>('home')
+  const [picked, setPicked] = useState<Record<StudyId, string>>({
+    roles: 'a',
+    home: 'a',
+    player: 'a',
+    wordmark: 'a',
+  })
 
   useEffect(() => {
     installBackdrop()
   }, [])
 
+  const current = STUDIES.find((s) => s.id === study) ?? STUDIES[0]
+  const variantId = picked[current.id]
+  const variant = current.variants.find((v) => v.id === variantId) ?? current.variants[0]
+  const key: VariantKey = `${current.id}:${variant.id}`
+
   return (
     <div className="proto-scope flex h-svh flex-col items-center overflow-hidden bg-[var(--proto-ground)] px-4 py-5">
-      <div className="mb-5 flex w-full max-w-[390px] flex-col items-center gap-3">
-        <p className="proto-eyebrow text-[10px] text-white/35">Liquid glass · role study</p>
-        <Segmented value={variant} onChange={setVariant} />
+      <div className="mb-5 flex w-full max-w-[390px] flex-col items-center gap-2">
+        <p className="proto-eyebrow text-[10px] text-white/35">Design studies · judged by eye</p>
+        <PillRow
+          items={STUDIES.map((s) => ({ key: s.id, label: s.label }))}
+          value={current.id}
+          onChange={(id) => {
+            setStudy(id as StudyId)
+          }}
+        />
+        <PillRow
+          items={current.variants.map((v) => ({ key: v.id, label: v.label }))}
+          value={variant.id}
+          onChange={(id) => {
+            setPicked((prev) => ({ ...prev, [current.id]: id }))
+          }}
+        />
       </div>
 
-      {variant === 'a' && <VariantA />}
-      {variant === 'b' && <VariantB />}
-      {variant === 'c' && <VariantC />}
+      <div key={key} className="contents">
+        {variant.render()}
+      </div>
     </div>
   )
 }

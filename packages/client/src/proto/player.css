@@ -1,0 +1,71 @@
+/*
+ * Extra styling for PlayerA (the hero-card session-player prototype). Imported
+ * from `player-a.tsx` only — PlayerB is self-contained on proto.css. Everything
+ * here is CSS-only and silenced under `prefers-reduced-motion`, the same cheap
+ * contract as proto.css.
+ */
+
+/* Reserved media slot: a demo-animation placeholder that reads as intentional
+   framed space (never "broken/empty"), with a faint phase-tinted shimmer sweep
+   so the slot feels live even with no asset loaded. */
+.player-media-slot {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.01));
+}
+.player-media-slot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklab, var(--proto-work) 22%, transparent) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  animation: player-shimmer 3.4s ease-in-out infinite;
+}
+@keyframes player-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* The countdown breathes with the phase — a slow glow swell, GPU-cheap. */
+.player-count-breathe {
+  animation: player-breathe 4s ease-in-out infinite alternate;
+}
+@keyframes player-breathe {
+  from {
+    text-shadow: 0 0 30px color-mix(in oklab, var(--proto-work) 28%, transparent);
+  }
+  to {
+    text-shadow: 0 0 54px color-mix(in oklab, var(--proto-work) 55%, transparent);
+  }
+}
+
+/* Active progress dot: a soft phase-tinted throb so the current station reads. */
+.player-dot-active {
+  animation: player-dot 1.6s ease-in-out infinite alternate;
+}
+@keyframes player-dot {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--proto-work) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--proto-work) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-media-slot::after,
+  .player-count-breathe,
+  .player-dot-active {
+    animation: none;
+  }
+}

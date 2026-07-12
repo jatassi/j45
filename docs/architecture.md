@@ -32,16 +32,23 @@ features: `public/workouts.json` in the legacy repo, merged with
   forward-only migrations via `@effect/sql` Migrator (TypeScript migration files
   in-repo, run at server startup). Tests provide `@effect/sql-sqlite-node`
   (in-memory) against the same `SqlClient` tag.
-- **Client:** React + Vite, shadcn/ui (initialized from the owner's preset:
-  `bunx --bun shadcn@latest init --preset b7BYO1Ags --template vite`), Effect
-  state via `@effect-atom/atom-react` with `AtomRpc` deriving atoms from the
-  shared `RpcGroup`. Routing via `@tanstack/react-router` (code-based route
-  tree, introduced by plan-library); the auth screens are `AuthGate` states
-  outside the router, and `/glass` stays a pre-gate pathname switch. The UI is **dark-only** (single palette, no theme
-  switching). Liquid-glass visual layer per the brief (WebGL refraction over a
-  static document-anchored backdrop, one shared GL context, rendered on layout
-  change only — never per frame; CSS frost+rim fallback; must work on iOS
-  Safari; see `docs/designs/liquid-glass-ui/design.md`).
+- **Client:** React + Vite, shadcn/ui v4 on `@base-ui/react` (Base UI, never
+  Radix), Effect state via `@effect-atom/atom-react` with `AtomRpc` deriving
+  atoms from the shared `RpcGroup`. Routing via `@tanstack/react-router`
+  (code-based route tree); the IA is a persistent glass bottom tab bar —
+  **Home · Library · Generate · History** — with account behind a header
+  avatar chip, and player/editor/account screens pushing over the tabs (see
+  `docs/designs/nav-shell/design.md`). The auth screens are `AuthGate` states
+  outside the router, and `/glass` stays a pre-gate pathname switch. The UI
+  is **dark-only** (single palette, no theme switching), built from the
+  design-system tokens and `ui/` kit (`docs/design-system.md`, established by
+  `docs/designs/design-system/design.md`). Liquid-glass visual layer in the
+  chrome+hero role (glass chrome and star surfaces; content cards opaque):
+  WebGL refraction over a document-anchored **scene registry** of component
+  proxies, one shared GL context, rendered on invalidation only — never per
+  frame; CSS frost+rim fallback; must work on iOS Safari (see
+  `docs/designs/liquid-glass-ui/design.md` and
+  `docs/designs/glass-live-refraction/design.md`).
 - **Testing:** `@effect/vitest` running under Node vitest (not `bun test` — it
   is incompatible with @effect/vitest), `TestClock` for all timer logic;
   Playwright for the browser e2e suite.
@@ -85,7 +92,11 @@ not contradict them.
   mutated only through serialized updates, plus a ticker fiber
   (`Effect.forkScoped`) owned by the session's `Scope`. Subscribers consume
   `subscriptionRef.changes`: current snapshot first, then every change — that
-  stream is wired directly into a streaming rpc. Session end closes the scope,
+  stream is wired directly into a streaming rpc. Exit is **per-participant
+  leave** (`LeaveSession`, identity-bearing): leaving records that
+  participant's completion (with their progress) and the session ends when
+  the last participant leaves — there is no end-for-everyone command (see
+  `docs/designs/session-leave/design.md`). Session end closes the scope,
   killing the fiber and completing subscriber streams. Sessions are not
   persisted mid-flight; a server restart drops live sessions (acceptable — a
   workout is minutes long) but never durable data.
@@ -122,10 +133,18 @@ not contradict them.
 - **Domain purity:** segment compilation, flow/reflow transforms, timer math,
   and generation rules are pure functions in `domain`, unit-tested exhaustively.
   Server features orchestrate them; they do not reimplement them.
+- **Vocabulary labels live in the domain.** Every `Schema.Literal` vocabulary
+  (`Modality`, `Intensity`, `MuscleGroup`, `Equipment`, `Focus`, `FlowType`)
+  carries an exhaustive `Record<Literal, string>` label map co-located with
+  the union in `@j45/domain`; a literal without a label is a compile error.
+  The client never renders a vocabulary literal raw and there is no generic
+  humanizer fallback.
 - **Errors:** expected failures are `Schema.TaggedError` types in the rpc
   contract, rendered by the client from typed `Result` failures. Unexpected
   errors are defects: crash the fiber, log loudly, never swallow. No stringly
-  error codes.
+  error codes. On screens this follows the recorded feedback standard
+  (skeleton / empty-with-CTA / inline-alert-with-retry / toast-on-command-
+  failure / destructive confirms — `docs/designs/design-system/design.md`).
 
 ## Non-goals
 
