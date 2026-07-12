@@ -238,10 +238,13 @@ test.describe('generate (chromium + webkit)', () => {
       await expect(page.getByTestId('editor-summary')).toHaveText(editSummary)
 
       // --- 4. Save lands the workout in the library and survives reload ---
-      // Cancel back to Home, then generate a fresh preview to Save (Edit
-      // navigated away from the generate screen).
-      await page.getByTestId('editor-cancel').click()
-      await expect(page.getByTestId('home-screen')).toBeVisible()
+      // Back out of the pristine handoff draft (mount-time initial already
+      // holds the preview — no dirty confirm), then generate a fresh preview
+      // to Save (Edit navigated away from the generate form knobs).
+      await page.getByTestId('back-button').click()
+      await expect(page.getByTestId('editor-discard-dialog')).toHaveCount(0)
+      // history.back returns to Generate; regenerate from there.
+      await expect(page.getByTestId('generate-screen')).toBeVisible()
       await generatePreview(page)
 
       const { codename: saveCodename } = await capturePreviewIdentity(page)

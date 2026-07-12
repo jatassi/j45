@@ -42,6 +42,36 @@ async function registerAccount(
 }
 
 /**
+ * Opens a station's New/Edit actions drawer and clicks a structural action by
+ * testid (add station / move to pod / delete). Mirrors plan-editing.spec.ts.
+ */
+async function stationDrawerAction(
+  page: Page,
+  stationActions: ReturnType<Page['getByTestId']>,
+  actionTestId: string,
+): Promise<void> {
+  await stationActions.click()
+  await expect(page.getByTestId('editor-station-drawer')).toBeVisible()
+  await page.getByTestId(actionTestId).click()
+  await expect(page.getByTestId('editor-station-drawer')).toHaveCount(0)
+}
+
+/**
+ * Opens a station's launch-mode (reflow) actions drawer and clicks a structural
+ * action by testid (move to pod / remove station).
+ */
+async function reflowStationDrawerAction(
+  page: Page,
+  stationActions: ReturnType<Page['getByTestId']>,
+  actionTestId: string,
+): Promise<void> {
+  await stationActions.click()
+  await expect(page.getByTestId('reflow-station-drawer')).toBeVisible()
+  await page.getByTestId(actionTestId).click()
+  await expect(page.getByTestId('reflow-station-drawer')).toHaveCount(0)
+}
+
+/**
  * Builds a fresh two-pod, sets-flow source workout through the real editor and
  * lands on its detail screen; returns the new workout's id (read off the URL).
  * Pod "Alpha": Alpha Push, Alpha Pull. Pod "Bravo": Bravo Squat. Flattened
@@ -55,12 +85,17 @@ async function createSource(page: Page, baseUrl: string, name: string): Promise<
   await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
 
   await page.getByTestId('editor-name').fill(name)
-  await page.getByTestId('editor-focus').selectOption('strength')
+  await page.getByTestId('editor-focus-strength').click()
 
   const alpha = page.getByTestId('pod-editor').first()
   await alpha.getByTestId('pod-name-input').fill('Alpha')
   await alpha.getByTestId('station-name-input').first().fill('Alpha Push')
-  await alpha.getByTestId('add-station').click()
+  // Add a second station via the per-station actions drawer (no inline add).
+  await stationDrawerAction(
+    page,
+    alpha.getByTestId('editor-station-actions').first(),
+    'editor-add-station',
+  )
   await alpha.getByTestId('station-name-input').nth(1).fill('Alpha Pull')
 
   await page.getByTestId('add-pod').click()
@@ -68,7 +103,7 @@ async function createSource(page: Page, baseUrl: string, name: string): Promise<
   await bravo.getByTestId('pod-name-input').fill('Bravo')
   await bravo.getByTestId('station-name-input').first().fill('Bravo Squat')
 
-  await page.getByTestId('editor-flow-type').selectOption('sets')
+  await page.getByTestId('editor-flow-sets').click()
   await page.getByTestId('editor-round-count').fill('2')
   await page.getByTestId('editor-uniform-work').fill('20')
   await page.getByTestId('editor-uniform-rest').fill('10')
@@ -84,7 +119,11 @@ async function createSource(page: Page, baseUrl: string, name: string): Promise<
 /** Moves Bravo's single station into Alpha, then removes the now-empty Bravo pod. */
 async function regroupIntoAlpha(page: Page): Promise<void> {
   const bravo = page.getByTestId('reflow-pod-editor').nth(1)
-  await bravo.getByTestId('reflow-station-move-to-pod').selectOption({ label: 'Alpha' })
+  await reflowStationDrawerAction(
+    page,
+    bravo.getByTestId('reflow-station-actions').first(),
+    'reflow-move-to-pod-0',
+  )
   await bravo.getByTestId('reflow-remove-pod').click()
   await expect(page.getByTestId('reflow-pod-editor')).toHaveCount(1)
 }
@@ -121,8 +160,12 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
 
       await regroupIntoAlpha(page)
       // Drop Alpha Pull (now the second station of the single pod), then flip to laps.
-      await page.getByTestId('reflow-station').nth(1).getByTestId('reflow-remove-station').click()
-      await page.getByTestId('reflow-flow-type').selectOption('laps')
+      await reflowStationDrawerAction(
+        page,
+        page.getByTestId('reflow-station').nth(1).getByTestId('reflow-station-actions'),
+        'reflow-remove-station',
+      )
+      await page.getByTestId('reflow-flow-laps').click()
 
       await expect(page.getByTestId('reflow-summary')).toHaveText('4 works · 1:55')
 
@@ -169,7 +212,7 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
       await expect(page.getByTestId('reflow-editor-screen')).toBeVisible()
 
       await regroupIntoAlpha(page)
-      await page.getByTestId('reflow-flow-type').selectOption('laps')
+      await page.getByTestId('reflow-flow-laps').click()
 
       await expect(page.getByTestId('reflow-save')).toBeEnabled()
       await page.getByTestId('reflow-save').click()

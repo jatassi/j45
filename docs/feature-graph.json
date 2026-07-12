@@ -314,7 +314,7 @@
     {
       "id": "editor-screens",
       "title": "Workout editor rebuilt on the kit — new/edit/launch modes, drawers for structural moves, per-field validation",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "library-screens"
       ],

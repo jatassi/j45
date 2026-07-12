@@ -47,6 +47,39 @@ async function registerAccount(
   await expect(page.getByTestId('account-screen')).toBeVisible()
 }
 
+/**
+ * PIN-login as the shared owner, mint one fresh invite code via the real
+ * People & Invites UI, then log out back to `login-screen`. Used for the
+ * dirty-back test which needs a third account beyond the pre-minted pair.
+ */
+async function mintOneInviteCode(
+  page: Page,
+  baseUrl: string,
+  owner: { readonly username: string; readonly pin: string },
+): Promise<string> {
+  await page.goto(baseUrl)
+  await page.locator('#login-username').fill(owner.username)
+  await page.locator('#login-pin').fill(owner.pin)
+  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
+  await page.getByTestId('avatar-chip').click()
+  await expect(page.getByTestId('account-screen')).toBeVisible()
+  await expect(page.getByTestId('people-invites')).toBeVisible()
+
+  await page.getByTestId('mint-invite-button').click()
+  const minted = page.getByTestId('minted-invite-code')
+  await expect(minted).toBeVisible()
+  const grouped = await minted.textContent()
+  if (grouped === null) {
+    throw new Error('mint produced no minted-invite-code text')
+  }
+  const code = grouped.replaceAll('-', '')
+
+  await page.getByTestId('logout-button').click()
+  await expect(page.getByTestId('login-screen')).toBeVisible()
+  return code
+}
+
 /** Every `workout-card-<id>` `Link` currently rendered on the library list. */
 function workoutCards(page: Page) {
   return page.locator('a[data-testid^="workout-card-"]')
@@ -63,14 +96,29 @@ async function openLibraryTab(page: Page): Promise<void> {
 }
 
 /**
+ * Opens a station's actions drawer and clicks a structural action by testid
+ * (add station / move to pod / delete). Prefer testid clicks over coordinates
+ * so bottom-pinned drawer buttons stay stable under CPU contention.
+ */
+async function stationDrawerAction(
+  page: Page,
+  stationActions: ReturnType<Page['getByTestId']>,
+  actionTestId: string,
+): Promise<void> {
+  await stationActions.click()
+  await expect(page.getByTestId('editor-station-drawer')).toBeVisible()
+  await page.getByTestId(actionTestId).click()
+  await expect(page.getByTestId('editor-station-drawer')).toHaveCount(0)
+}
+
+/**
  * Exercises the whole plan-editing stack: create-from-scratch via
  * `/workouts/new`, and structural edit of an existing workout (flow type,
  * station rename, station reorder, validation) via `/workouts/<id>/edit`.
- * Each test registers its own per-project account from
- * `plan-editing.spec.ts`'s own pre-minted invite pair
- * (`readE2eEnv().planEditingInvitesByProject`) so `fullyParallel`
- * chromium+webkit runs never share accounts with each other or with
- * `library.spec.ts` / `auth-register.spec.ts`.
+ * Create + edit tests register from `planEditingInvitesByProject` (one
+ * invite each) so `fullyParallel` chromium+webkit runs never share
+ * accounts with each other or with other specs. The dirty-back test mints
+ * a third invite on the fly via the owner UI (username ≤ 20 chars).
  */
 test.describe('plan-editing (chromium + webkit)', () => {
   test(
@@ -95,15 +143,20 @@ test.describe('plan-editing (chromium + webkit)', () => {
       await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
 
       await page.getByTestId('editor-name').fill(workoutName)
-      await page.getByTestId('editor-focus').selectOption('strength')
+      await page.getByTestId('editor-focus-strength').click()
 
       const pod = page.getByTestId('pod-editor').first()
       await pod.getByTestId('pod-name-input').fill('Main Pod')
       await pod.getByTestId('station-name-input').first().fill('Wall Balls')
-      await pod.getByTestId('add-station').click()
+      // Add a second station via the per-station actions drawer (no inline add).
+      await stationDrawerAction(
+        page,
+        pod.getByTestId('editor-station-actions').first(),
+        'editor-add-station',
+      )
       await pod.getByTestId('station-name-input').nth(1).fill('Box Jumps')
 
-      await page.getByTestId('editor-flow-type').selectOption('sets')
+      await page.getByTestId('editor-flow-sets').click()
       await page.getByTestId('editor-round-count').fill('3')
       await page.getByTestId('editor-uniform-work').fill('30')
       await page.getByTestId('editor-uniform-rest').fill('10')
@@ -168,18 +221,21 @@ test.describe('plan-editing (chromium + webkit)', () => {
       await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
       await expect(page.getByTestId('editor-summary')).toHaveText('27 works · 26:45')
 
-      await page.getByTestId('editor-flow-type').selectOption('sets')
+      await page.getByTestId('editor-flow-sets').click()
 
       const pod1 = page.getByTestId('pod-editor').first()
-      const stationEditors = pod1.getByTestId('station-editor')
-      await stationEditors.nth(0).getByTestId('station-name-input').fill(renamedStation)
-      await stationEditors.nth(1).getByTestId('station-down').click()
+      const stationNames = pod1.getByTestId('station-name-input')
+      await stationNames.nth(0).fill(renamedStation)
+      // Reorder: move Dumbbell (index 1) down past Burpee.
+      await pod1.getByTestId('station-down').nth(1).click()
 
-      // After reorder: renamed, Burpee, Dumbbell. Move Dumbbell (last) to Pod 2.
-      await stationEditors
-        .nth(2)
-        .getByTestId('station-move-to-pod')
-        .selectOption({ label: 'Pod 2' })
+      // After reorder: renamed, Burpee, Dumbbell. Move Dumbbell (last) to Pod 2
+      // via the station actions drawer (no inline select).
+      await stationDrawerAction(
+        page,
+        pod1.getByTestId('editor-station-actions').nth(2),
+        'editor-move-to-pod-1',
+      )
 
       await expect(pod1.getByTestId('station-name-input')).toHaveCount(2)
       await expect(pod1.getByTestId('station-name-input').nth(0)).toHaveValue(renamedStation)
@@ -217,21 +273,96 @@ test.describe('plan-editing (chromium + webkit)', () => {
 
       await page.getByTestId('edit-button').click()
       await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
-      await expect(page.getByTestId('editor-flow-type')).toHaveValue('sets')
+      await expect(page.getByTestId('editor-flow-sets')).toHaveAttribute('aria-pressed', 'true')
 
       await page.reload()
       await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
-      await expect(page.getByTestId('editor-flow-type')).toHaveValue('sets')
+      await expect(page.getByTestId('editor-flow-sets')).toHaveAttribute('aria-pressed', 'true')
 
       const reloadedPod1 = page.getByTestId('pod-editor').first()
-      await reloadedPod1
-        .getByTestId('station-editor')
-        .nth(0)
-        .getByTestId('station-name-input')
-        .fill('')
+      await reloadedPod1.getByTestId('station-name-input').nth(0).fill('')
       await expect(page.getByTestId('editor-save')).toBeDisabled()
-      await expect(page.getByTestId('editor-error')).toBeVisible()
-      await expect(page.getByTestId('editor-error')).not.toHaveText('')
+      // Field-level validation pins next to the station — no page-level banner.
+      const stationError = page.getByTestId('station-name-error')
+      await expect(stationError).toBeVisible()
+      await expect(stationError).not.toHaveText('')
+    },
+  )
+
+  test(
+    'dirty draft backs out only after discard confirm; pristine draft backs out with no dialog ' +
+      'and nothing is persisted',
+    async ({ page }, testInfo) => {
+      test.setTimeout(90_000)
+
+      const env = readE2eEnv()
+      const projectName = projectNameFrom(testInfo)
+      const code = await mintOneInviteCode(page, env.baseUrl, env.owner)
+      // Username schema is 3–20 chars (`^[a-z0-9][a-z0-9._-]{2,19}$/i`).
+      const username = `e2e-pdisc-${projectName}`
+      const displayName = `Plan Discard (${projectName})`
+      const pin = '135790'
+      const originalTitle = 'Athletica (copy)'
+      const dirtyName = 'Should Not Persist'
+
+      await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
+
+      await page.goto(env.baseUrl)
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
+
+      const athleticaLink = workoutCards(page).filter({ hasText: 'Athletica' })
+      await expect(athleticaLink).toHaveCount(1)
+      await athleticaLink.click()
+
+      await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
+      await page.getByTestId('duplicate-button').click()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
+      const copyLink = workoutCards(page).filter({ hasText: originalTitle })
+      await expect(copyLink).toHaveCount(1)
+      await copyLink.click()
+
+      await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
+      await expect(page.getByTestId('workout-title')).toHaveText(originalTitle)
+      await page.getByTestId('edit-button').click()
+      await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
+
+      // --- Pristine: back chevron leaves straight away, no discard dialog ---
+      await page.getByTestId('back-button').click()
+      await expect(page.getByTestId('editor-discard-dialog')).toHaveCount(0)
+      await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
+      await expect(page.getByTestId('workout-title')).toHaveText(originalTitle)
+
+      // --- Dirty: edit then back raises the discard confirm ---
+      await page.getByTestId('edit-button').click()
+      await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
+      await page.getByTestId('editor-name').fill(dirtyName)
+      await page.getByTestId('back-button').click()
+      await expect(page.getByTestId('editor-discard-dialog')).toBeVisible()
+
+      // Keep editing cancels the dialog and stays on the editor with the edit.
+      await page.getByTestId('editor-discard-cancel').click()
+      await expect(page.getByTestId('editor-discard-dialog')).toHaveCount(0)
+      await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
+      await expect(page.getByTestId('editor-name')).toHaveValue(dirtyName)
+
+      // Discard confirms and returns to detail without persisting the rename.
+      await page.getByTestId('back-button').click()
+      await expect(page.getByTestId('editor-discard-dialog')).toBeVisible()
+      await page.getByTestId('editor-discard-confirm').click()
+      await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
+      await expect(page.getByTestId('workout-title')).toHaveText(originalTitle)
+
+      // Survives reload — the dirty name never hit the server.
+      await page.reload()
+      await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
+      await expect(page.getByTestId('workout-title')).toHaveText(originalTitle)
+
+      // Re-open edit: name is still the original, not the discarded dirty value.
+      await page.getByTestId('edit-button').click()
+      await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
+      await expect(page.getByTestId('editor-name')).toHaveValue(originalTitle)
     },
   )
 })

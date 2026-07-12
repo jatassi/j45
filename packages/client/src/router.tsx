@@ -80,14 +80,16 @@ const tabLayoutRoute = createRoute({
  * in this module (oxlint's `rules-of-hooks` rejects hooks in anonymous
  * route components, and a PascalCase layout component would trip
  * `only-export-components` against this file's non-component exports).
- * Editors keep their own internal save controls — `PushHeader`'s optional
- * `action` slot is left unset.
+ * Editor leaves no longer sit under this layout; headed push leaves leave
+ * `PushHeader`'s optional `action` slot unset.
  */
 let pushTitle = ''
 
 /**
  * Pathless push-layout group: sticky `PushHeader` + page `Outlet`, no
- * `TabBar`. Full-screen / editor / account surfaces that leave the tab IA.
+ * `TabBar`. Full-screen / account surfaces that leave the tab IA.
+ * Editor leaves live under `pushHeaderlessRoute` so they can own their
+ * own header (or stay interim-headerless) without the shared chrome.
  */
 const pushLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -98,6 +100,19 @@ const pushLayoutRoute = createRoute({
       <Outlet />
     </>
   ),
+})
+
+/**
+ * Pathless headerless group for editor leaves (`/workouts/new`, edit,
+ * reflow). Renders only an `Outlet` — no shared `PushHeader`. A later
+ * task mounts per-screen headers with Save/Start and a dirty-confirm
+ * `onBack`; this commit only strips the shared chrome so those screens
+ * can take over without double headers.
+ */
+const pushHeaderlessRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'push-headerless',
+  component: Outlet,
 })
 
 /** Sets the push layout title before the leaf paints; returns nothing. */
@@ -187,24 +202,22 @@ const timerRoute = createRoute({
 /**
  * `/workouts/new` — the editor on a blank draft. A static segment, so it
  * outranks `/workouts/$workoutId` (which would otherwise capture `new` as an
- * id) in TanStack Router's specificity ordering.
+ * id) in TanStack Router's specificity ordering. Headerless: the screen
+ * keeps its internal Cancel/Save footer until a later kit rebuild.
  */
 const workoutNewRoute = createRoute({
-  getParentRoute: () => pushLayoutRoute,
+  getParentRoute: () => pushHeaderlessRoute,
   path: '/workouts/new',
-  beforeLoad: () => {
-    setPushTitle('New workout')
-  },
   component: NewWorkoutScreen,
 })
 
-/** `/workouts/$workoutId/edit` — the editor on the draft loaded from `GetWorkout`. */
+/**
+ * `/workouts/$workoutId/edit` — the editor on the draft loaded from
+ * `GetWorkout`. Headerless under `pushHeaderlessRoute` (same interim as new).
+ */
 const workoutEditRoute = createRoute({
-  getParentRoute: () => pushLayoutRoute,
+  getParentRoute: () => pushHeaderlessRoute,
   path: '/workouts/$workoutId/edit',
-  beforeLoad: () => {
-    setPushTitle('Edit workout')
-  },
   component: EditWorkoutScreen,
 })
 
@@ -212,13 +225,11 @@ const workoutEditRoute = createRoute({
  * `/workouts/$workoutId/reflow` — launch mode: the reflow editor on the
  * workout loaded from `GetWorkout`. A static `reflow` suffix like `edit`
  * above, so it never collides with the `$workoutId` detail route.
+ * Headerless under `pushHeaderlessRoute`.
  */
 const workoutReflowRoute = createRoute({
-  getParentRoute: () => pushLayoutRoute,
+  getParentRoute: () => pushHeaderlessRoute,
   path: '/workouts/$workoutId/reflow',
-  beforeLoad: () => {
-    setPushTitle('Reflow')
-  },
   component: ReflowWorkoutScreen,
 })
 
@@ -290,19 +301,13 @@ const routeTree = rootRoute.addChildren([
     libraryExercisesRoute,
     generateRoute,
     historyRoute,
-    // Static `/workouts/new` lives under the push group; the parametric
-    // detail route stays here. TanStack ranks the static segment higher, so
-    // `new` is never captured as a `$workoutId`.
+    // Static `/workouts/new` lives under the headerless push group; the
+    // parametric detail route stays here. TanStack ranks the static segment
+    // higher, so `new` is never captured as a `$workoutId`.
     workoutDetailRoute,
   ]),
-  pushLayoutRoute.addChildren([
-    sessionRoute,
-    timerRoute,
-    workoutNewRoute,
-    workoutEditRoute,
-    workoutReflowRoute,
-    accountRoute,
-  ]),
+  pushLayoutRoute.addChildren([sessionRoute, timerRoute, accountRoute]),
+  pushHeaderlessRoute.addChildren([workoutNewRoute, workoutEditRoute, workoutReflowRoute]),
   exercisesRedirectRoute,
   notFoundRedirectRoute,
 ])

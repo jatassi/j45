@@ -163,12 +163,38 @@ const firstErrorMessage = (error: ParseError): string => {
 }
 
 /**
+ * Per-field decode error: `path` is the ParseResult issue path dot-joined
+ * (numeric indices kept), e.g. `"pods.0.stations.1.name"`. Root issues use `""`.
+ */
+export type DraftFieldError = {
+  readonly path: string
+  readonly message: string
+}
+
+const toFieldErrors = (error: ParseError): readonly DraftFieldError[] =>
+  ParseResult.ArrayFormatter.formatErrorSync(error).map((issue) => ({
+    path: issue.path.map(String).join('.'),
+    message: issue.message,
+  }))
+
+/**
  * Convert draft string fields → numbers, then `Schema.decodeUnknown(Workout)`.
  * Success: Right(Workout). Failure: Left(first schema-error message).
  */
 export function decodeDraft(draft: DraftWorkout): Either.Either<Workout, string> {
   const result = Schema.decodeUnknownEither(Workout)(draftToEncoded(draft))
   return Either.mapLeft(result, firstErrorMessage)
+}
+
+/**
+ * Same decode as `decodeDraft`, but failures are all field errors with
+ * pin-able paths for editor UI slots.
+ */
+export function decodeDraftDetailed(
+  draft: DraftWorkout,
+): Either.Either<Workout, readonly DraftFieldError[]> {
+  const result = Schema.decodeUnknownEither(Workout)(draftToEncoded(draft))
+  return Either.mapLeft(result, toFieldErrors)
 }
 
 // ── Summary chip ─────────────────────────────────────────────────────────

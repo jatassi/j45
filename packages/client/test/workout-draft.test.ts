@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   collapseUniform,
   decodeDraft,
+  decodeDraftDetailed,
   expandUniform,
   setRoundCount,
   summarizeDraft,
@@ -233,6 +234,61 @@ describe('decodeDraft', () => {
     expect(Either.isLeft(result)).toBe(true)
     if (Either.isLeft(result)) {
       expect(result.left.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('decodeDraftDetailed', () => {
+  it('reports a cleared station name at pods.<p>.stations.<s>.name', () => {
+    const result = decodeDraftDetailed(
+      validDraft({
+        pods: [
+          {
+            name: 'Pod 1',
+            stations: [{ name: 'Burpee' }, { name: '' }],
+          },
+        ],
+      }),
+    )
+    expect(Either.isLeft(result)).toBe(true)
+    if (Either.isLeft(result)) {
+      const paths = result.left.map((e) => e.path)
+      expect(paths).toContain('pods.0.stations.1.name')
+      const stationError = result.left.find((e) => e.path === 'pods.0.stations.1.name')
+      expect(stationError?.message.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('reports an empty work-seconds string at flow.rounds.<i>.workSeconds', () => {
+    const result = decodeDraftDetailed(
+      validDraft({
+        flow: {
+          type: 'laps',
+          rounds: [
+            { workSeconds: '40', restSeconds: '20' },
+            { workSeconds: '30', restSeconds: '10' },
+            { workSeconds: '', restSeconds: '5' },
+          ],
+        },
+      }),
+    )
+    expect(Either.isLeft(result)).toBe(true)
+    if (Either.isLeft(result)) {
+      const paths = result.left.map((e) => e.path)
+      expect(paths).toContain('flow.rounds.2.workSeconds')
+      const workError = result.left.find((e) => e.path === 'flow.rounds.2.workSeconds')
+      expect(workError?.message.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('returns Right(Workout) for a valid draft with no errors', () => {
+    const result = decodeDraftDetailed(validDraft())
+    expect(Either.isRight(result)).toBe(true)
+    if (Either.isRight(result)) {
+      expect(result.right.name).toBe('Athletica')
+      expect(result.right.focus).toBe('cardio')
+      expect(result.right.pods[0].stations[0].name).toBe('Burpee')
+      expect(result.right.flow.rounds[0].workSeconds).toBe(40)
     }
   })
 })

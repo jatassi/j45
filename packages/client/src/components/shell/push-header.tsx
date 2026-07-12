@@ -6,21 +6,31 @@ import { ChevronLeft } from 'lucide-react'
 type PushHeaderProps = {
   readonly title: string
   readonly action?: ReactNode
+  /**
+   * When set, the back chevron calls this instead of the default
+   * canGoBack/history-back-else-`/` behavior. Editor screens pass a dirty-
+   * confirm gate here; omit for standard push navigation.
+   */
+  readonly onBack?: () => void
 }
 
 /**
  * Sticky header for pushed screens: back affordance, title, optional action.
  * Back uses `history.back()` when the in-app stack allows it, otherwise
- * navigates to `/`.
+ * navigates to `/` — unless `onBack` is provided, in which case that wins.
  *
  * The global `Register` step is deliberately skipped in this app (see
  * `router.tsx`), so `useRouter()` types `history` as `any` — assert the
  * real `RouterHistory` surface before calling it.
  */
-function PushHeader({ title, action }: PushHeaderProps) {
+function PushHeader({ title, action, onBack }: PushHeaderProps) {
   const router = useRouter()
 
-  const onBack = () => {
+  const handleBack = () => {
+    if (onBack !== undefined) {
+      onBack()
+      return
+    }
     const history = router.history as RouterHistory
     if (history.canGoBack()) {
       history.back()
@@ -35,7 +45,7 @@ function PushHeader({ title, action }: PushHeaderProps) {
         <button
           type="button"
           data-testid="back-button"
-          onClick={onBack}
+          onClick={handleBack}
           className="flex size-11 items-center justify-center rounded-full text-foreground hover:bg-muted/50"
           aria-label="Go back"
         >

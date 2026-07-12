@@ -14,6 +14,7 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LibraryScreen } from '@/components/library-screen'
@@ -22,9 +23,14 @@ import { EditWorkoutScreen, NewWorkoutScreen } from '@/components/workout-editor
 import { setInitialDraft, takeInitialDraft } from '@/lib/editor-draft'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn() },
+}))
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.mocked(toast.error).mockClear()
   // Drain any leftover one-shot handoff so tests stay isolated.
   takeInitialDraft()
 })
@@ -100,6 +106,8 @@ const libraryWorkoutOf = (id: string, workout: Workout) =>
     updatedAt: seededAt,
   })
 
+const pressed = (testId: string) => screen.getByTestId(testId).getAttribute('aria-pressed')
+
 /** A full route tree (library, detail, new, edit) over memory history. */
 function renderApp(handlers: Handlers, initialPath: string) {
   const fakeRuntime = makeFakeRuntime(handlers)
@@ -136,7 +144,7 @@ function renderApp(handlers: Handlers, initialPath: string) {
 }
 
 describe('WorkoutEditorScreen', () => {
-  it('builds a workout through the editor controls (meta, pods, stations, move, flow, uniform rounds) and CreateWorkout receives the exact body, then opens its detail', async () => {
+  it('builds a workout through the kit controls (name, focus toggle-group, a station added via the drawer, sets flow with 3 uniform rounds) and CreateWorkout receives the exact body, then opens its detail via the header Save', async () => {
     let created: Workout | undefined
     renderApp(
       {
@@ -153,19 +161,21 @@ describe('WorkoutEditorScreen', () => {
     await screen.findByTestId('workout-editor-screen')
 
     fireEvent.change(screen.getByTestId('editor-name'), { target: { value: 'Grinder' } })
-    fireEvent.change(screen.getByTestId('editor-focus'), { target: { value: 'strength' } })
+    fireEvent.click(screen.getByTestId('editor-focus-strength'))
     fireEvent.change(screen.getByTestId('editor-note'), { target: { value: 'go hard' } })
     fireEvent.change(screen.getByTestId('pod-name-input'), { target: { value: 'Circuit' } })
 
-    // First station, then add a second and move it above the first.
+    // First station, then add a second via the actions drawer and move it above the first.
     fireEvent.change(screen.getByTestId('station-name-input'), { target: { value: 'Rower' } })
-    fireEvent.click(screen.getByTestId('add-station'))
+    fireEvent.click(screen.getByTestId('editor-station-actions'))
+    await screen.findByTestId('editor-station-drawer')
+    fireEvent.click(screen.getByTestId('editor-add-station'))
     const names = screen.getAllByTestId('station-name-input')
     fireEvent.change(names[1], { target: { value: 'Burpee' } })
     fireEvent.click(screen.getAllByTestId('station-up')[1])
 
-    // Flow: sets, 3 uniform rounds of 30″/10″.
-    fireEvent.change(screen.getByTestId('editor-flow-type'), { target: { value: 'sets' } })
+    // Flow: sets via toggle-group, 3 uniform rounds of 30″/10″.
+    fireEvent.click(screen.getByTestId('editor-flow-sets'))
     fireEvent.change(screen.getByTestId('editor-round-count'), { target: { value: '3' } })
     fireEvent.change(screen.getByTestId('editor-uniform-work'), { target: { value: '30' } })
     fireEvent.change(screen.getByTestId('editor-uniform-rest'), { target: { value: '10' } })
@@ -187,7 +197,7 @@ describe('WorkoutEditorScreen', () => {
     )
   })
 
-  it('summary chip reads exactly "27 works · 26:45" for the untouched Athletica draft; clearing a station name disables Save and shows an error', async () => {
+  it('sticky chip reads exactly "27 works · 26:45" for the untouched Athletica draft; clearing a station name shows a per-field error at that station and disables Save with no page-level banner', async () => {
     renderApp({ GetWorkout: () => Effect.succeed(athletica) }, `/workouts/${athletica.id}/edit`)
 
     await screen.findByTestId('workout-editor-screen')
@@ -196,12 +206,15 @@ describe('WorkoutEditorScreen', () => {
 
     fireEvent.change(screen.getAllByTestId('station-name-input')[0], { target: { value: '' } })
 
-    await screen.findByTestId('editor-error')
+    const stationError = await screen.findByTestId('station-name-error')
+    expect(stationError.textContent).not.toBe('')
+    // The error pins to the first station's field, not a shared page banner.
+    expect(screen.getAllByTestId('station-name-error')).toHaveLength(1)
     expect(screen.queryByTestId('editor-summary')).toBeNull()
     expect(screen.getByTestId<HTMLButtonElement>('editor-save').disabled).toBe(true)
   })
 
-  it('edit: switches laps→sets, renames a station and reorders it, and UpdateWorkout receives the changed body while the list + GetWorkout atoms refresh', async () => {
+  it('edit: switches laps→sets via the toggle-group, renames a station and reorders it, and UpdateWorkout receives the changed body while the list + GetWorkout atoms refresh', async () => {
     let current = athletica
     let updatePayload: { id: WorkoutId; workout: Workout } | undefined
     let getCalls = 0
@@ -224,7 +237,7 @@ describe('WorkoutEditorScreen', () => {
     await screen.findByTestId('workout-editor-screen')
     const callsAtLoad = getCalls
 
-    fireEvent.change(screen.getByTestId('editor-flow-type'), { target: { value: 'sets' } })
+    fireEvent.click(screen.getByTestId('editor-flow-sets'))
     fireEvent.change(screen.getAllByTestId('station-name-input')[0], {
       target: { value: 'Ski erg' },
     })
@@ -244,6 +257,44 @@ describe('WorkoutEditorScreen', () => {
     await waitFor(() => {
       expect(getCalls).toBeGreaterThan(callsAtLoad)
     })
+  })
+
+  it('moves a station across pods through the actions drawer (no inline select)', async () => {
+    let updatePayload: { id: WorkoutId; workout: Workout } | undefined
+    renderApp(
+      {
+        GetWorkout: () => Effect.succeed(athletica),
+        ListWorkouts: () => Effect.succeed([athletica]),
+        UpdateWorkout: (payload) => {
+          updatePayload = payload as { id: WorkoutId; workout: Workout }
+          return Effect.succeed(libraryWorkoutOf(athletica.id, updatePayload.workout))
+        },
+      },
+      `/workouts/${athletica.id}/edit`,
+    )
+
+    await screen.findByTestId('workout-editor-screen')
+    // No native select anywhere in the rebuilt editor.
+    expect(document.querySelector('select')).toBeNull()
+
+    // Open the first station's actions and move it to Pod 2 (index 1).
+    fireEvent.click(screen.getAllByTestId('editor-station-actions')[0])
+    await screen.findByTestId('editor-station-drawer')
+    fireEvent.click(screen.getByTestId('editor-move-to-pod-1'))
+
+    fireEvent.click(screen.getByTestId('editor-save'))
+
+    await screen.findByTestId('workout-detail-screen')
+    expect(updatePayload?.workout.pods[0].stations.map((s) => s.name)).toEqual([
+      'Squat press',
+      'Burpee',
+    ])
+    expect(updatePayload?.workout.pods[1].stations.map((s) => s.name)).toEqual([
+      'Bike',
+      'Swing',
+      'Climbers',
+      'Rower',
+    ])
   })
 
   it("the library's New workout button opens the blank editor; the detail's Edit action opens the editor loaded from GetWorkout", async () => {
@@ -268,18 +319,55 @@ describe('WorkoutEditorScreen', () => {
     expect(screen.getByTestId<HTMLInputElement>('editor-name').value).toBe('Athletica')
   })
 
-  it('Cancel navigates away without calling any mutation', async () => {
+  it('a pristine draft backs out with no confirm; an edited draft raises the discard dialog and discarding leaves without persisting', async () => {
     renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
     await screen.findByTestId('workout-editor-screen')
 
-    fireEvent.click(screen.getByTestId('editor-cancel'))
-
+    // Pristine: the back chevron leaves straight away, no dialog.
+    fireEvent.click(screen.getByTestId('back-button'))
+    expect(screen.queryByTestId('editor-discard-dialog')).toBeNull()
     await screen.findByTestId('library-screen')
-    // The fake runtime throws on any unexpected rpc; reaching the library with
-    // only ListWorkouts registered proves no CreateWorkout fired.
+
+    cleanup()
+
+    // Dirty: editing then backing out raises the alert-dialog confirm.
+    renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
+    await screen.findByTestId('workout-editor-screen')
+    fireEvent.change(screen.getByTestId('editor-name'), { target: { value: 'WIP' } })
+    fireEvent.click(screen.getByTestId('back-button'))
+    await screen.findByTestId('editor-discard-dialog')
+
+    // Discarding returns to the library without any CreateWorkout call (the
+    // fake runtime throws on unexpected rpcs, so reaching library proves it).
+    fireEvent.click(screen.getByTestId('editor-discard-confirm'))
+    await screen.findByTestId('library-screen')
   })
 
-  it('with a pending draft, NewWorkoutScreen seeds name, pods, stations, and flow; without one, the blank editor renders', async () => {
+  it('surfaces a sonner toast when CreateWorkout rejects and stays on the editor', async () => {
+    renderApp(
+      {
+        CreateWorkout: () => Effect.fail(new Error('save failed')),
+      },
+      '/workouts/new',
+    )
+    await screen.findByTestId('workout-editor-screen')
+
+    fireEvent.change(screen.getByTestId('editor-name'), { target: { value: 'Grinder' } })
+    fireEvent.change(screen.getByTestId('station-name-input'), { target: { value: 'Rower' } })
+    fireEvent.change(screen.getByTestId('editor-uniform-work'), { target: { value: '30' } })
+    fireEvent.change(screen.getByTestId('editor-uniform-rest'), { target: { value: '10' } })
+
+    fireEvent.click(screen.getByTestId('editor-save'))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Command failed', {
+        description: 'Could not save the workout.',
+      })
+    })
+    expect(screen.getByTestId('workout-editor-screen')).toBeTruthy()
+  })
+
+  it('with a pending draft, NewWorkoutScreen seeds name, pods, stations, and flow controls, and consuming it is one-shot — a remount yields the blank editor', async () => {
     setInitialDraft(athleticaWorkout)
     renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
 
@@ -301,7 +389,7 @@ describe('WorkoutEditorScreen', () => {
       'Step-ups',
       'Slam ball',
     ])
-    expect(screen.getByTestId<HTMLSelectElement>('editor-flow-type').value).toBe('laps')
+    expect(pressed('editor-flow-laps')).toBe('true')
     expect(screen.getByTestId<HTMLInputElement>('editor-round-count').value).toBe('3')
     expect(screen.getByTestId<HTMLInputElement>('editor-uniform-work').value).toBe('40')
     expect(screen.getByTestId<HTMLInputElement>('editor-uniform-rest').value).toBe('20')
@@ -317,24 +405,7 @@ describe('WorkoutEditorScreen', () => {
     expect(screen.getByTestId<HTMLInputElement>('pod-name-input').value).toBe('Pod 1')
     expect(screen.getAllByTestId('station-name-input')).toHaveLength(1)
     expect(screen.getByTestId<HTMLInputElement>('station-name-input').value).toBe('')
-    expect(screen.getByTestId<HTMLSelectElement>('editor-flow-type').value).toBe('laps')
+    expect(pressed('editor-flow-laps')).toBe('true')
     expect(screen.getByTestId<HTMLInputElement>('editor-round-count').value).toBe('1')
-  })
-
-  it('takeInitialDraft is one-shot — a remount after consumption yields the blank editor', async () => {
-    setInitialDraft(athleticaWorkout)
-    renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
-
-    await screen.findByTestId('workout-editor-screen')
-    expect(screen.getByTestId<HTMLInputElement>('editor-name').value).toBe('Athletica')
-
-    cleanup()
-
-    // Draft was consumed on first mount; remount must not re-seed.
-    renderApp({ ListWorkouts: () => Effect.succeed([]) }, '/workouts/new')
-    await screen.findByTestId('workout-editor-screen')
-    expect(screen.getByTestId<HTMLInputElement>('editor-name').value).toBe('')
-    expect(screen.getAllByTestId('station-name-input')).toHaveLength(1)
-    expect(screen.getByTestId<HTMLInputElement>('station-name-input').value).toBe('')
   })
 })
