@@ -2,7 +2,10 @@ import * as React from 'react'
 
 import { useAtomSet } from '@effect-atom/atom-react'
 import * as Exit from 'effect/Exit'
+import { Fingerprint } from 'lucide-react'
 
+import { AuthLayout } from '@/components/auth-layout'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { enrollPasskeyAtom } from '@/lib/passkeys'
@@ -47,8 +50,8 @@ export function EnrollPasskeyPrompt({ onDone }: EnrollPasskeyPromptProps) {
   const { submitting, failed, handleEnroll } = useEnrollPasskey(onDone)
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-6">
-      <Card className="w-full max-w-sm" data-testid="enroll-passkey-prompt">
+    <AuthLayout>
+      <Card className="w-full" data-testid="enroll-passkey-prompt">
         <CardHeader>
           <CardTitle>Add Face ID or fingerprint?</CardTitle>
           <CardDescription>
@@ -57,9 +60,11 @@ export function EnrollPasskeyPrompt({ onDone }: EnrollPasskeyPromptProps) {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {failed ? (
-            <p role="alert" data-testid="enroll-passkey-error" className="text-sm text-destructive">
-              That didn&apos;t work — you can try again later from your account.
-            </p>
+            <Alert variant="destructive" data-testid="enroll-passkey-error">
+              <AlertDescription>
+                That didn&apos;t work — you can try again later from your account.
+              </AlertDescription>
+            </Alert>
           ) : null}
           <Button
             type="button"
@@ -68,6 +73,7 @@ export function EnrollPasskeyPrompt({ onDone }: EnrollPasskeyPromptProps) {
             data-testid="enroll-passkey-button"
             onClick={handleEnroll}
           >
+            <Fingerprint data-icon="inline-start" />
             Add passkey
           </Button>
           <Button
@@ -82,6 +88,6 @@ export function EnrollPasskeyPrompt({ onDone }: EnrollPasskeyPromptProps) {
           </Button>
         </CardContent>
       </Card>
-    </div>
+    </AuthLayout>
   )
 }

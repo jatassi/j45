@@ -51,6 +51,9 @@ test.describe('registration (chromium + webkit)', () => {
       const displayName = `Register Flow (${projectName})`
 
       await page.goto(`${env.baseUrl}/register?invite=${code}`)
+      // Criterion 2: the invite deep link prefills the code field before the
+      // visitor types anything.
+      await expect(page.locator('#register-code')).toHaveValue(code)
       await fillRegisterForm(page, { username, displayName, pin: '246810' })
 
       await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()

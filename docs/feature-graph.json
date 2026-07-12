@@ -365,7 +365,7 @@
     {
       "id": "auth-screens",
       "title": "Auth surfaces on the design system — passkey-hero login, invite registration, enroll prompt",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "design-system"
       ],

@@ -1,9 +1,14 @@
 import * as React from 'react'
 
 import * as Effect from 'effect/Effect'
+import { Fingerprint } from 'lucide-react'
 
+import { AuthLayout } from '@/components/auth-layout'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Field, FieldGroup, FieldLabel, FieldSeparator } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import * as AuthApi from '@/lib/auth-api'
 import * as Passkeys from '@/lib/passkeys'
 
@@ -96,18 +101,21 @@ function PasskeySignIn({ submitting, failed, onClick }: PasskeySignInProps) {
         data-testid="passkey-login-button"
         onClick={onClick}
       >
+        <Fingerprint data-icon="inline-start" />
         Sign in with passkey
       </Button>
       {failed ? (
-        <p role="alert" data-testid="passkey-login-error" className="text-sm text-destructive">
-          Passkey sign-in didn&apos;t work — try your PIN below.
-        </p>
+        <Alert variant="destructive" data-testid="passkey-login-error">
+          <AlertDescription>
+            Passkey sign-in didn&apos;t work — try your PIN below.
+          </AlertDescription>
+        </Alert>
       ) : null}
     </div>
   )
 }
 
-type PinFieldProps = {
+type AuthFieldProps = {
   readonly id: string
   readonly label: string
   readonly value: string
@@ -117,18 +125,15 @@ type PinFieldProps = {
   readonly autoComplete: string
 }
 
-/** A labeled text input, shared by the username and PIN fields below. */
-function PinField({ id, label, value, onChange, type, inputMode, autoComplete }: PinFieldProps) {
+/** A labeled kit field — username / PIN share this shape. */
+function AuthField({ id, label, value, onChange, type, inputMode, autoComplete }: AuthFieldProps) {
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-sm text-muted-foreground" htmlFor={id}>
-        {label}
-      </label>
-      <input
+    <Field orientation="vertical">
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
         id={id}
         type={type}
         inputMode={inputMode}
-        className="h-9 rounded-md border border-input bg-background px-2.5 text-sm"
         value={value}
         onChange={(event) => {
           onChange(event.target.value)
@@ -136,7 +141,7 @@ function PinField({ id, label, value, onChange, type, inputMode, autoComplete }:
         autoComplete={autoComplete}
         required
       />
-    </div>
+    </Field>
   )
 }
 
@@ -144,20 +149,18 @@ function PinField({ id, label, value, onChange, type, inputMode, autoComplete }:
 function PinLoginError({ error }: { readonly error: PinError | undefined }) {
   if (error?._tag === 'InvalidCredentials') {
     return (
-      <p
-        role="alert"
-        data-testid="login-error-invalid-credentials"
-        className="text-sm text-destructive"
-      >
-        Incorrect username or PIN.
-      </p>
+      <Alert variant="destructive" data-testid="login-error-invalid-credentials">
+        <AlertDescription>Incorrect username or PIN.</AlertDescription>
+      </Alert>
     )
   }
   if (error?._tag === 'RateLimited') {
     return (
-      <p role="alert" data-testid="login-error-rate-limited" className="text-sm text-destructive">
-        Too many attempts — try again in {error.retryAfterSeconds}s.
-      </p>
+      <Alert variant="destructive" data-testid="login-error-rate-limited">
+        <AlertDescription>
+          Too many attempts — try again in {error.retryAfterSeconds}s.
+        </AlertDescription>
+      </Alert>
     )
   }
   return null
@@ -168,23 +171,25 @@ type PinLoginFormProps = ReturnType<typeof usePinLogin>
 /** The username+PIN fallback form. */
 function PinLoginForm(state: PinLoginFormProps) {
   return (
-    <form className="flex flex-col gap-3" onSubmit={state.handleSubmit}>
-      <PinField
-        id="login-username"
-        label="Username"
-        value={state.username}
-        onChange={state.setUsername}
-        autoComplete="username"
-      />
-      <PinField
-        id="login-pin"
-        label="PIN"
-        type="password"
-        inputMode="numeric"
-        value={state.pin}
-        onChange={state.setPin}
-        autoComplete="current-password"
-      />
+    <form className="flex flex-col gap-4" onSubmit={state.handleSubmit}>
+      <FieldGroup className="gap-3">
+        <AuthField
+          id="login-username"
+          label="Username"
+          value={state.username}
+          onChange={state.setUsername}
+          autoComplete="username"
+        />
+        <AuthField
+          id="login-pin"
+          label="PIN"
+          type="password"
+          inputMode="numeric"
+          value={state.pin}
+          onChange={state.setPin}
+          autoComplete="current-password"
+        />
+      </FieldGroup>
       <PinLoginError error={state.error} />
       <Button type="submit" variant="outline" className="w-full" disabled={state.submitting}>
         Sign in with PIN
@@ -202,8 +207,8 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
   const pinLogin = usePinLogin(onAuthenticated)
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-6">
-      <Card className="w-full max-w-sm" data-testid="login-screen">
+    <AuthLayout>
+      <Card className="w-full" data-testid="login-screen">
         <CardHeader>
           <CardTitle>Sign in to J45</CardTitle>
           <CardDescription>Use a passkey, or your username and PIN.</CardDescription>
@@ -214,6 +219,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
             failed={passkey.failed}
             onClick={passkey.handleClick}
           />
+          <FieldSeparator>or</FieldSeparator>
           <PinLoginForm {...pinLogin} />
           <a
             className="text-center text-sm text-primary underline-offset-4 hover:underline"
@@ -224,6 +230,6 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
           </a>
         </CardContent>
       </Card>
-    </div>
+    </AuthLayout>
   )
 }
