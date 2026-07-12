@@ -2,21 +2,21 @@
 
 ## Digest
 
-_4 run(s), 4 feature(s) recorded._
+_5 run(s), 6 feature(s) recorded._
 
 ### Workflow paths
 | path | runs | median agents | median duration |
 | --- | --- | --- | --- |
 | small | 0 | — | — |
-| standard | 4 | 7 | 352 |
+| standard | 6 | 7.5 | 136 |
 
 ### Re-slices
-0 of 4 feature(s) re-sliced (0%).
+0 of 6 feature(s) re-sliced (0%).
 
 ### Footprint accuracy by size class
 | size | features | median planned files | median actual files |
 | --- | --- | --- | --- |
-| m | 3 | 17 | 21 |
+| m | 5 | 18 | 21 |
 
 ### Top block reasons
 - 1× Turn/output budget exhausted while the judge executor (grok) was still running mid-verdict; work is intact and adoptable, not lost. Adopt as follows:
@@ -34,9 +34,9 @@ NEXT STEPS FOR THE ADOPTING DRIVE: (1) check whether PID 98022 has exited and wh
 Acceptance criteria (for reference, verbatim from the brief): (1) TestClock: a session that progressed past ready and is then quit writes one completion record per ever-participant (host + a second user who watched then unsubscribed), each seeing via ListHistory the workout name, as-run Workout snapshot, host, both participants, startedAt, endedAt. (2) TestClock: quit during ready writes nothing; progressed-then-GC'd-after-60-idle-seconds writes records. (3) a reflow-spec-started session records the reflowed Workout, not the stored plan's. (4) ListHistory is caller-scoped, newest-first by endedAt, Unauthorized without a valid cookie; a server-layer rebuild preserves completion rows while ListActiveSessions is empty. (5) migrating a DB through 0004 with an existing user, then 0005, creates session_completions and that user's ListHistory is empty. (6) e2e (chromium+webkit): two logged-in contexts run a short session (host quits after first work segment); /history via a home nav link shows workout name, date, host display name, both participant names for both users. (7) `bun run check`, `bun run test`, `bun run test:e2e` all exit 0.
 
 ### Token split (overhead vs build)
-Lifetime: 66% overhead / 34% build.
-Last-10 median: 76% overhead / 24% build.
-Attribution: 3 of 4 run(s) overlapped — the overhead/build split is approximate.
+Lifetime: 73% overhead / 27% build.
+Last-10 median: 80% overhead / 20% build.
+Attribution: 4 of 5 run(s) overlapped — the overhead/build split is approximate.
 
 ## Runs
 
@@ -44,3 +44,4 @@ Attribution: 3 of 4 run(s) overlapped — the overhead/build split is approximat
 - 2026-07-10T05:54:46.840Z · target main · [flow-control] · 1 validated · 187228 tokens · overlapped
 - 2026-07-10T06:52:55.615Z · target main · [session-history] · 1 stalled · 519963 tokens · overlapped
 - 2026-07-10T08:20:48.589Z · target main · [workout-generation] · 1 validated · 663553 tokens · overlapped
+- 2026-07-12T02:59:20.061Z · target redesign · [design-system, session-leave] · 2 validated · 345803 tokens · overlapped
