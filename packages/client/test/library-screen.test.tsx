@@ -1,16 +1,6 @@
 // @vitest-environment jsdom
 import { RegistryProvider, Result } from '@effect-atom/atom-react'
-import {
-  Flow,
-  LibraryWorkout,
-  Pod,
-  Round,
-  SessionId,
-  SessionSummary,
-  Station,
-  Workout,
-  WorkoutId,
-} from '@j45/domain'
+import { Flow, LibraryWorkout, Pod, Round, Station, Workout, WorkoutId } from '@j45/domain'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -18,9 +8,8 @@ import {
   createRouter,
   Outlet,
   RouterProvider,
-  useParams,
 } from '@tanstack/react-router'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
@@ -98,37 +87,31 @@ const ironCircuit = new LibraryWorkout({
   updatedAt: seededAt,
 })
 
-/** Stand-in destination for `/session/<id>` navigation — the real session screen is a parallel task. */
-function SessionDestination() {
-  const { sessionId } = useParams({ strict: false }) as { sessionId: string }
-  return <div data-testid={`session-screen-${sessionId}`} />
-}
-
 /**
- * Mounts `LibraryScreen` as the `/` route of a throwaway router (memory
- * history, no file-based codegen — a minimal stand-in for `router.tsx`'s own
- * tree) so its `Link`s have the router context they need to render, without
- * pulling in the whole app or `AuthGate`. Includes a session destination so
- * active-session card taps can navigate.
+ * Mounts `LibraryScreen` as the `/library` route of a throwaway router
+ * (memory history, no file-based codegen — a minimal stand-in for
+ * `router.tsx`'s own tree) so its `Link`s have the router context they need
+ * to render, without pulling in the whole app or `AuthGate`.
  */
 function renderLibraryScreen(
   handlers: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>,
+  initialPath = '/library',
 ) {
   const fakeRuntime = makeFakeRuntime(handlers)
   const rootRoute = createRootRoute({ component: Outlet })
-  const indexRoute = createRoute({
+  const libraryRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/',
+    path: '/library',
     component: LibraryScreen,
   })
-  const sessionRoute = createRoute({
+  const exercisesRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/session/$sessionId',
-    component: SessionDestination,
+    path: '/library/exercises',
+    component: () => <div data-testid="exercises-destination" />,
   })
   const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, sessionRoute]),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    routeTree: rootRoute.addChildren([libraryRoute, exercisesRoute]),
+    history: createMemoryHistory({ initialEntries: [initialPath] }),
   })
 
   render(
@@ -138,19 +121,10 @@ function renderLibraryScreen(
   )
 }
 
-const activeSession = new SessionSummary({
-  id: Schema.decodeSync(SessionId)('session-lobby-1'),
-  hostDisplayName: 'Jordan',
-  workoutName: 'Iron Circuit',
-  startedAt: seededAt,
-  participantCount: 4,
-})
-
 describe('LibraryScreen', () => {
   it("lists the caller's workouts (name, focus, station count, MM:SS duration) from ListWorkouts", async () => {
     renderLibraryScreen({
       ListWorkouts: () => Effect.succeed([athletica, ironCircuit]),
-      ListActiveSessions: () => Effect.succeed([]),
     })
 
     await screen.findByTestId(`workout-card-${athletica.id}`)
@@ -165,64 +139,36 @@ describe('LibraryScreen', () => {
     expect(screen.getByTestId(`workout-stations-${ironCircuit.id}`).textContent).toBe('3 stations')
     expect(screen.getByTestId(`workout-duration-${ironCircuit.id}`).textContent).toBe('2:50')
 
-    const accountLink = screen.getByTestId('account-nav-link')
-    expect(accountLink.getAttribute('href')).toBe('/account')
+    expect(screen.getByTestId('new-workout-button').getAttribute('href')).toBe('/workouts/new')
   })
 
-  it('renders an Active sessions strip from a non-empty ListActiveSessions result and navigates on card tap', async () => {
+  it('renders LibrarySegments with Workouts active on /library', async () => {
     renderLibraryScreen({
       ListWorkouts: () => Effect.succeed([]),
-      ListActiveSessions: () => Effect.succeed([activeSession]),
     })
 
-    const strip = await screen.findByTestId('active-sessions-strip')
-    expect(strip.textContent).toContain('Jordan')
-    expect(strip.textContent).toContain('Iron Circuit')
-    expect(strip.textContent).toContain('4')
-
-    fireEvent.click(screen.getByTestId(`session-card-${activeSession.id}`))
-    await screen.findByTestId(`session-screen-${activeSession.id}`)
+    await screen.findByTestId('library-screen')
+    expect(screen.getByTestId('library-segments')).toBeTruthy()
+    expect(screen.getByTestId('library-segment-workouts').getAttribute('href')).toBe('/library')
+    expect(screen.getByTestId('library-segment-exercises').getAttribute('href')).toBe(
+      '/library/exercises',
+    )
+    expect(screen.getByTestId('library-segment-workouts').dataset.active).toBe('true')
+    expect(screen.getByTestId('library-segment-exercises').dataset.active).toBe('false')
   })
 
-  it('omits the Active sessions strip entirely when ListActiveSessions is empty', async () => {
+  it('does not render the old header nav, ActiveSessionsStrip, or the old h1 header', async () => {
     renderLibraryScreen({
       ListWorkouts: () => Effect.succeed([athletica]),
-      ListActiveSessions: () => Effect.succeed([]),
     })
 
     await screen.findByTestId(`workout-card-${athletica.id}`)
     expect(screen.queryByTestId('active-sessions-strip')).toBeNull()
-    expect(screen.queryByText('Active sessions')).toBeNull()
-  })
-
-  it('refetches ListActiveSessions every 5 seconds while mounted', async () => {
-    vi.useFakeTimers()
-    let listCalls = 0
-
-    renderLibraryScreen({
-      ListWorkouts: () => Effect.succeed([]),
-      ListActiveSessions: () => {
-        listCalls++
-        return Effect.succeed([activeSession])
-      },
-    })
-
-    // Flush the initial query (effect-atom schedules via microtasks / 0-delay timers).
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
-    expect(listCalls).toBe(1)
-    expect(screen.getByTestId('active-sessions-strip')).toBeTruthy()
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000)
-    })
-    expect(listCalls).toBe(2)
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000)
-    })
-    expect(listCalls).toBe(3)
+    expect(screen.queryByTestId('account-nav-link')).toBeNull()
+    expect(screen.queryByTestId('timer-nav-link')).toBeNull()
+    expect(screen.queryByTestId('generate-nav-link')).toBeNull()
+    expect(screen.queryByTestId('history-nav-link')).toBeNull()
+    expect(screen.queryByText('Your library')).toBeNull()
   })
 })
 

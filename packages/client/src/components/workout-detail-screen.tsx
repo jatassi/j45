@@ -357,7 +357,7 @@ function WorkoutDetail({ libraryWorkout }: { readonly libraryWorkout: LibraryWor
     >
       <header className="flex w-full max-w-sm flex-col gap-2">
         <Link
-          to="/"
+          to="/library"
           data-testid="library-nav-link"
           className="text-sm text-primary underline-offset-4 hover:underline"
         >
@@ -417,7 +417,7 @@ function WorkoutFailure({ cause }: { readonly cause: Cause.Cause<unknown> }) {
  * never a blank screen. `LibraryScreen`'s cards `Link` here.
  */
 export function WorkoutDetailScreen() {
-  const { workoutId: rawWorkoutId } = useParams({ from: '/workouts/$workoutId' }) as {
+  const { workoutId: rawWorkoutId } = useParams({ strict: false }) as {
     workoutId: string
   }
   const workoutId = Schema.decodeSync(WorkoutId)(rawWorkoutId)

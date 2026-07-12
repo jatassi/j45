@@ -40,7 +40,7 @@ describe('router.tsx catch-all', () => {
   it(
     "redirects an authenticated navigation to a path the route tree doesn't match — " +
       "including '/register?invite=…', the post-registration landing — to '/', with the " +
-      'library home always reachable and never a blank page',
+      'home screen always reachable and never a blank page',
     async () => {
       vi.stubGlobal(
         'fetch',
@@ -52,7 +52,7 @@ describe('router.tsx catch-all', () => {
         }),
       )
 
-      const fakeRuntime = makeFakeRuntime({ ListWorkouts: () => Effect.succeed([]) })
+      const fakeRuntime = makeFakeRuntime({ ListActiveSessions: () => Effect.succeed([]) })
 
       render(
         <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
@@ -60,8 +60,8 @@ describe('router.tsx catch-all', () => {
         </RegistryProvider>,
       )
 
-      // Starts out authenticated on the routed library home.
-      await screen.findByTestId('library-screen')
+      // Starts out authenticated on the routed home screen.
+      await screen.findByTestId('home-screen')
 
       // The exact scenario the catch-all repairs: an authenticated navigation
       // lands on `/register?invite=…` (the post-registration landing, with no
@@ -72,8 +72,8 @@ describe('router.tsx catch-all', () => {
       await router.navigate({ to: '/register', search: { invite: 'ABCD-1234' } })
 
       // No blank/unmatched page — the catch-all's `beforeLoad` redirect wins
-      // before anything unmatched ever renders, landing back on the library.
-      await screen.findByTestId('library-screen')
+      // before anything unmatched ever renders, landing back on the home screen.
+      await screen.findByTestId('home-screen')
       expect(router.state.location.pathname).toBe('/')
     },
   )

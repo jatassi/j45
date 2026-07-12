@@ -17,10 +17,10 @@ function projectNameFrom(testInfo: TestInfo): E2eProjectName {
 /**
  * Registers a brand-new account through the real `/register` form (skipping
  * the passkey enrollment prompt). The catch-all (`router.tsx`) redirects
- * the post-registration landing (`/register?invite=…`) to the library home
- * — so callers land on `library-screen` with no extra `/account` hop.
+ * the post-registration landing (`/register?invite=…`) to Home at `/`
+ * — so callers land on `home-screen` with no extra hop.
  */
-async function registerAndReachLibrary(
+async function registerAndReachHome(
   page: Page,
   baseUrl: string,
   input: {
@@ -39,7 +39,7 @@ async function registerAndReachLibrary(
   await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
   await page.getByTestId('enroll-passkey-skip').click()
 
-  await expect(page.getByTestId('library-screen')).toBeVisible()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
 }
 
 type OscillatorFactory = { createOscillator(): unknown }
@@ -141,16 +141,16 @@ function instrumentWakeLock(): void {
 
 /**
  * Exercises the `/timer` screen (`timer-screen.tsx`) against the real built
- * client + server `global-setup.ts` boots: nav reachability from the library
- * home, a full short run to Done with pause/resume/reset, and Web Audio +
- * `navigator.wakeLock` instrumentation via init scripts. Each test registers
- * its own per-project account from `timer.spec.ts`'s own pre-minted invite
- * pair (`readE2eEnv().timerInvitesByProject`) so `fullyParallel`
- * chromium+webkit runs never share codes with other spec files.
+ * client + server `global-setup.ts` boots: nav reachability from Home via
+ * `home-timer-link`, a full short run to Done with pause/resume/reset, and
+ * Web Audio + `navigator.wakeLock` instrumentation via init scripts. Each
+ * test registers its own per-project account from `timer.spec.ts`'s own
+ * pre-minted invite pair (`readE2eEnv().timerInvitesByProject`) so
+ * `fullyParallel` chromium+webkit runs never share codes with other spec files.
  */
 test.describe('timer (chromium + webkit)', () => {
   test(
-    'e2e (chromium + webkit): /timer is reachable via a nav link from the library home while ' +
+    'e2e (chromium + webkit): /timer is reachable via home-timer-link from Home while ' +
       'logged in; with short inputs (5s work, 0s rest, 2 rounds) Start runs ready → work → work → Done ' +
       'with the round indicator advancing; Pause freezes the displayed count, Resume continues, Reset ' +
       'returns to the idle input state.',
@@ -164,9 +164,9 @@ test.describe('timer (chromium + webkit)', () => {
       const displayName = `Timer Flow (${projectName})`
       const pin = '864200'
 
-      await registerAndReachLibrary(page, env.baseUrl, { code, username, displayName, pin })
+      await registerAndReachHome(page, env.baseUrl, { code, username, displayName, pin })
 
-      await page.getByTestId('timer-nav-link').click()
+      await page.getByTestId('home-timer-link').click()
       await expect(page.getByTestId('timer-screen')).toBeVisible()
 
       await page.getByTestId('work-input').fill('5')
@@ -237,9 +237,9 @@ test.describe('timer (chromium + webkit)', () => {
       const displayName = `Timer Audio (${projectName})`
       const pin = '753190'
 
-      await registerAndReachLibrary(page, env.baseUrl, { code, username, displayName, pin })
+      await registerAndReachHome(page, env.baseUrl, { code, username, displayName, pin })
 
-      await page.getByTestId('timer-nav-link').click()
+      await page.getByTestId('home-timer-link').click()
       await expect(page.getByTestId('timer-screen')).toBeVisible()
 
       // One round is enough here — round-indicator advancing is covered by the other test.

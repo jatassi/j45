@@ -406,7 +406,7 @@ function SessionFeedView({ feed }: { readonly feed: SessionFeed }) {
  * beeps, wake lock, and shared controls — entirely from server state.
  */
 export function SessionScreen() {
-  const { sessionId: raw } = useParams({ from: '/session/$sessionId' }) as { sessionId: string }
+  const { sessionId: raw } = useParams({ strict: false }) as { sessionId: string }
   const sessionId = Schema.decodeSync(SessionId)(raw)
   const feed = useAtomValue(sessionFeedFamily(sessionId))
 

@@ -6,9 +6,9 @@ import { readE2eEnv } from './support/state.js'
 
 /**
  * Registers a brand-new account through the real `/register` form (skipping
- * the passkey enrollment prompt). Lands on `library-screen`.
+ * the passkey enrollment prompt). Lands on `home-screen` at `/`.
  */
-async function registerAndReachLibrary(
+async function registerAndReachHome(
   page: Page,
   baseUrl: string,
   input: {
@@ -27,7 +27,7 @@ async function registerAndReachLibrary(
   await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
   await page.getByTestId('enroll-passkey-skip').click()
 
-  await expect(page.getByTestId('library-screen')).toBeVisible()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
 }
 
 /**
@@ -44,8 +44,9 @@ async function mintTwoInviteCodes(
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
   await page.getByRole('button', { name: 'Sign in with PIN' }).click()
-  await expect(page.getByTestId('library-screen')).toBeVisible()
-  await page.goto(`${baseUrl}/account`)
+  await expect(page.getByTestId('home-screen')).toBeVisible()
+  await page.getByTestId('avatar-chip').click()
+  await expect(page.getByTestId('account-screen')).toBeVisible()
   await expect(page.getByTestId('people-invites')).toBeVisible()
 
   await page.getByTestId('mint-invite-button').click()
@@ -70,8 +71,13 @@ async function mintTwoInviteCodes(
   return [first, second]
 }
 
-/** Opens Apex, starts a session, returns the session id from the URL. */
+/**
+ * Opens `/library` via the tab bar, opens Apex, starts a session, returns
+ * the session id from the URL.
+ */
 async function startApexSession(page: Page): Promise<string> {
+  await page.getByTestId('tab-library').click()
+  await expect(page.getByTestId('library-screen')).toBeVisible()
   await page.locator('a[data-testid^="workout-card-"]').filter({ hasText: 'Apex' }).click()
   await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
   await page.getByTestId('start-session-button').click()
@@ -129,7 +135,7 @@ async function progressAndSkipToDone(page: Page): Promise<void> {
 }
 
 /**
- * Via the home nav link (not `page.goto`), open `/history` and assert the row
+ * Via the History tab (not `page.goto`), open `/history` and assert the row
  * for this session: Apex name, a non-empty date, and host label. Scope to the
  * row containing `rowMarker` so leftover history from other e2e runs cannot
  * confuse the assertion. Does not assert `participants` — each leave writes a
@@ -143,7 +149,7 @@ async function assertHistoryRow(
     readonly hostLabel: string
   },
 ): Promise<string> {
-  await page.getByTestId('history-nav-link').click()
+  await page.getByTestId('tab-history').click()
   await expect(page).toHaveURL(/\/history/)
   await expect(page.getByTestId('history-screen')).toBeVisible()
   await expect(page.getByTestId('history-list')).toBeVisible()
@@ -196,7 +202,7 @@ test.describe('history (chromium + webkit)', () => {
       const displayA = `Hist Host ${projectName}`
       const displayB = `Hist Guest ${projectName}`
 
-      await registerAndReachLibrary(page, env.baseUrl, {
+      await registerAndReachHome(page, env.baseUrl, {
         code: codeA,
         username: `e2e-hist-a-${projectName}`,
         displayName: displayA,
@@ -206,17 +212,18 @@ test.describe('history (chromium + webkit)', () => {
       const contextB = await browser.newContext()
       const pageB = await contextB.newPage()
       try {
-        await registerAndReachLibrary(pageB, env.baseUrl, {
+        await registerAndReachHome(pageB, env.baseUrl, {
           code: codeB,
           username: `e2e-hist-b-${projectName}`,
           displayName: displayB,
           pin: '192838',
         })
-        await expect(pageB.getByTestId('library-screen')).toBeVisible()
+        await expect(pageB.getByTestId('home-screen')).toBeVisible()
 
         const sessionId = await startApexSession(page)
         await expect(page).toHaveURL(new RegExp(`/session/${sessionId}`))
 
+        // Active-session cards live on Home; guest is already there after register.
         const card = pageB.getByTestId(`session-card-${sessionId}`)
         await expect(card).toBeVisible({ timeout: 10_000 })
         await card.click()
@@ -233,13 +240,14 @@ test.describe('history (chromium + webkit)', () => {
           })
           .toBe(true)
         await clickSessionControl(page, 'session-leave')
-        await expect(page.getByTestId('library-screen')).toBeVisible()
+        // Leave navigates to `/` (home).
+        await expect(page.getByTestId('home-screen')).toBeVisible()
 
         // B continues to Done and leaves via Finish (higher progress).
         await progressAndSkipToDone(pageB)
         await expect(pageB.getByTestId('session-finish')).toBeVisible()
         await clickSessionControl(pageB, 'session-finish')
-        await expect(pageB.getByTestId('library-screen')).toBeVisible()
+        await expect(pageB.getByTestId('home-screen')).toBeVisible()
 
         // Host row still lists B (roster at A's leave); guest row is keyed by host name.
         const completionIdA = await assertHistoryRow(page, {

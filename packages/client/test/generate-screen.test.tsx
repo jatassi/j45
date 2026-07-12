@@ -141,21 +141,16 @@ function renderApp(handlers: Handlers, initialPath: string) {
 }
 
 describe('GenerateScreen', () => {
-  it('/generate is reachable via a nav link on the library home', async () => {
+  it('renders at /generate with library-nav-link pointing to /library', async () => {
     renderApp(
       {
         ListWorkouts: () => Effect.succeed([]),
-        ListActiveSessions: () => Effect.succeed([]),
       },
-      '/',
+      '/generate',
     )
 
-    await screen.findByTestId('library-screen')
-    const link = screen.getByTestId('generate-nav-link')
-    expect(link.getAttribute('href')).toBe('/generate')
-
-    fireEvent.click(link)
     await screen.findByTestId('generate-screen')
+    expect(screen.getByTestId('library-nav-link').getAttribute('href')).toBe('/library')
   })
 
   it('renders a preview with codename, works·duration chip matching compile, and data-seed; Regenerate changes seed while constraints stay put', async () => {

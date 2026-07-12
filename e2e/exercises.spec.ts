@@ -34,11 +34,12 @@ function projectNameFrom(testInfo: TestInfo): E2eProjectName {
  * `library.spec.ts`).
  *
  * `router.tsx`'s route tree has no entry for `/register` itself — only `/`,
- * `/workouts/$workoutId`, `/exercises`, and `/account` are routed — so once
- * the visitor authenticates while still sitting on `/register?invite=...`,
- * `RouterProvider` finds no matching route there. This helper reaches
- * `/account` directly afterwards (a real, matched, authenticated route) so
- * callers land somewhere the router actually renders.
+ * `/library`, `/library/exercises`, `/workouts/$workoutId`, `/account`, and
+ * the other tab/push leaves are routed — so once the visitor authenticates
+ * while still sitting on `/register?invite=...`, `RouterProvider` finds no
+ * matching route there. This helper reaches `/account` directly afterwards
+ * (a real, matched, authenticated route) so callers land somewhere the
+ * router actually renders.
  */
 async function registerAccount(
   page: Page,
@@ -71,8 +72,8 @@ function exerciseRows(page: Page) {
 /**
  * Exercises the whole stack this feature adds atop `global-setup.ts`'s
  * harness: registration-time exercise seeding (`registration-seeding`), the
- * live `ExerciseRpcs` handlers, and the routed `/exercises` client screen
- * (`exercise-library-screen` / `exercise-dialogs`). Registers its own
+ * live `ExerciseRpcs` handlers, and the routed `/library/exercises` client
+ * screen (`exercise-library-screen` / `exercise-dialogs`). Registers its own
  * per-project account from `exercises.spec.ts`'s own pre-minted invite
  * (`readE2eEnv().exercisesInvitesByProject`) precisely so `fullyParallel`
  * chromium+webkit runs never race `registerInvitesByProject` or
@@ -80,7 +81,7 @@ function exerciseRows(page: Page) {
  */
 test.describe('exercises (chromium + webkit)', () => {
   test(
-    "after registration, '/exercises' via the home nav lists the 96 seed exercises; " +
+    "after registration, '/library/exercises' via the Library tab + Exercises segment lists the 96 seed exercises; " +
       'the calves muscle filter narrows the list; create → reload → edit tags → reload → ' +
       'delete all persist through the real stack',
     async ({ page }, testInfo) => {
@@ -94,13 +95,16 @@ test.describe('exercises (chromium + webkit)', () => {
 
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
 
-      // Land on `/` (still authenticated) so the first visit to `/exercises`
-      // goes through `library-screen.tsx`'s `exercises-nav-link`, not a
-      // direct `page.goto('/exercises')`.
+      // Land on `/` (still authenticated) so the first visit to the catalog
+      // goes through the Library tab + Exercises segment control, not a
+      // direct `page.goto('/library/exercises')`.
       await page.goto(env.baseUrl)
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await page.getByTestId('tab-library').click()
       await expect(page.getByTestId('library-screen')).toBeVisible()
-      await page.getByTestId('exercises-nav-link').click()
+      await page.getByTestId('library-segment-exercises').click()
 
+      await expect(page).toHaveURL(/\/library\/exercises/)
       await expect(page.getByTestId('exercise-library-screen')).toBeVisible()
       await expect(page.getByTestId('exercise-list')).toBeVisible()
       await expect(exerciseRows(page)).toHaveCount(SEEDED_EXERCISE_COUNT)

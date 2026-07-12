@@ -11,8 +11,12 @@ import { AccountScreen } from '@/components/account-screen'
 import { ExerciseLibraryScreen } from '@/components/exercise-library-screen'
 import { GenerateScreen } from '@/components/generate-screen'
 import { HistoryScreen } from '@/components/history-screen'
+import { HomeScreen } from '@/components/home-screen'
 import { LibraryScreen } from '@/components/library-screen'
 import { SessionScreen } from '@/components/session-screen'
+import { AppHeader } from '@/components/shell/app-header'
+import { PushHeader } from '@/components/shell/push-header'
+import { TabBar } from '@/components/shell/tab-bar'
 import { TimerScreen } from '@/components/timer-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 import {
@@ -27,8 +31,8 @@ import {
  * (`app.tsx`) owns. `AuthGate` stays outside the router (see its own doc
  * comment) and hands both down through `RouterProvider`'s `context` prop —
  * re-supplied on every render, so a fresh `user`/`onLoggedOut` always
- * reaches the routes that need them (currently just `/account`) without the
- * router itself knowing anything about auth.
+ * reaches the routes that need them (tab layout's `AppHeader`, `/history`,
+ * `/account`) without the router itself knowing anything about auth.
  */
 export type RouterContext = {
   readonly user: User
@@ -44,11 +48,178 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: Outlet,
 })
 
-/** `/` — the library home. */
-const indexRoute = createRoute({
+/**
+ * Pathless tab-layout group: sticky `AppHeader` + page `Outlet` + floating
+ * `TabBar`. `user` for the header comes from `RouterContext` via the same
+ * `useRouteContext() as RouterContext` assertion the leaf routes use
+ * (global `Register` is deliberately skipped — see the `router` export).
+ * Inline anonymous component (matching `accountRoute` / `historyRoute`) so
+ * this module's non-component exports don't trip oxlint's
+ * `only-export-components` Fast Refresh guard.
+ */
+const tabLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
+  id: 'tab',
+  component: () => {
+    const { user } = tabLayoutRoute.useRouteContext() as RouterContext
+    return (
+      <>
+        <AppHeader user={user} />
+        <div className="pb-[calc(6rem+env(safe-area-inset-bottom))]">
+          <Outlet />
+        </div>
+        <TabBar />
+      </>
+    )
+  },
+})
+
+/**
+ * Short title for the sticky push header, written by each push leaf's
+ * `beforeLoad` before the layout paints. Avoids a free `useLocation` hook
+ * in this module (oxlint's `rules-of-hooks` rejects hooks in anonymous
+ * route components, and a PascalCase layout component would trip
+ * `only-export-components` against this file's non-component exports).
+ * Editors keep their own internal save controls — `PushHeader`'s optional
+ * `action` slot is left unset.
+ */
+let pushTitle = ''
+
+/**
+ * Pathless push-layout group: sticky `PushHeader` + page `Outlet`, no
+ * `TabBar`. Full-screen / editor / account surfaces that leave the tab IA.
+ */
+const pushLayoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'push',
+  component: () => (
+    <>
+      <PushHeader title={pushTitle} />
+      <Outlet />
+    </>
+  ),
+})
+
+/** Sets the push layout title before the leaf paints; returns nothing. */
+function setPushTitle(title: string) {
+  pushTitle = title
+}
+
+// ── Tab-layout leaves ──────────────────────────────────────────────────
+
+/** `/` — the home dashboard (active sessions + quick actions). */
+const indexRoute = createRoute({
+  getParentRoute: () => tabLayoutRoute,
   path: '/',
+  component: HomeScreen,
+})
+
+/** `/library` — the caller's workout list. */
+const libraryRoute = createRoute({
+  getParentRoute: () => tabLayoutRoute,
+  path: '/library',
   component: LibraryScreen,
+})
+
+/**
+ * `/library/exercises` — the exercise catalog as a Library segment (moved
+ * from the legacy `/exercises` path; that path redirects here).
+ */
+const libraryExercisesRoute = createRoute({
+  getParentRoute: () => tabLayoutRoute,
+  path: '/library/exercises',
+  component: ExerciseLibraryScreen,
+})
+
+/** `/generate` — procedural workout generation form + preview. */
+const generateRoute = createRoute({
+  getParentRoute: () => tabLayoutRoute,
+  path: '/generate',
+  component: GenerateScreen,
+})
+
+/**
+ * `/history` — the caller's session completion list; no path params. Reads
+ * `RouterContext` for the authenticated `User` (host "you" vs display name),
+ * same `useRouteContext() as RouterContext` assertion as `accountRoute`.
+ */
+const historyRoute = createRoute({
+  getParentRoute: () => tabLayoutRoute,
+  path: '/history',
+  component: () => {
+    const { user } = historyRoute.useRouteContext() as RouterContext
+    return <HistoryScreen user={user} />
+  },
+})
+
+/**
+ * `/workouts/$workoutId` — `WorkoutDetailScreen`, keyed off the `workoutId`
+ * path param. Keeps the tab bar (Library browsing context).
+ */
+const workoutDetailRoute = createRoute({
+  getParentRoute: () => tabLayoutRoute,
+  path: '/workouts/$workoutId',
+  component: WorkoutDetailScreen,
+})
+
+// ── Push-layout leaves ─────────────────────────────────────────────────
+
+/** `/session/$sessionId` — the live workout player, keyed off the `sessionId` path param. */
+const sessionRoute = createRoute({
+  getParentRoute: () => pushLayoutRoute,
+  path: '/session/$sessionId',
+  beforeLoad: () => {
+    setPushTitle('Session')
+  },
+  component: SessionScreen,
+})
+
+/** `/timer` — the manual interval timer, run entirely client-side. */
+const timerRoute = createRoute({
+  getParentRoute: () => pushLayoutRoute,
+  path: '/timer',
+  beforeLoad: () => {
+    setPushTitle('Timer')
+  },
+  component: TimerScreen,
+})
+
+/**
+ * `/workouts/new` — the editor on a blank draft. A static segment, so it
+ * outranks `/workouts/$workoutId` (which would otherwise capture `new` as an
+ * id) in TanStack Router's specificity ordering.
+ */
+const workoutNewRoute = createRoute({
+  getParentRoute: () => pushLayoutRoute,
+  path: '/workouts/new',
+  beforeLoad: () => {
+    setPushTitle('New workout')
+  },
+  component: NewWorkoutScreen,
+})
+
+/** `/workouts/$workoutId/edit` — the editor on the draft loaded from `GetWorkout`. */
+const workoutEditRoute = createRoute({
+  getParentRoute: () => pushLayoutRoute,
+  path: '/workouts/$workoutId/edit',
+  beforeLoad: () => {
+    setPushTitle('Edit workout')
+  },
+  component: EditWorkoutScreen,
+})
+
+/**
+ * `/workouts/$workoutId/reflow` — launch mode: the reflow editor on the
+ * workout loaded from `GetWorkout`. A static `reflow` suffix like `edit`
+ * above, so it never collides with the `$workoutId` detail route.
+ */
+const workoutReflowRoute = createRoute({
+  getParentRoute: () => pushLayoutRoute,
+  path: '/workouts/$workoutId/reflow',
+  beforeLoad: () => {
+    setPushTitle('Reflow')
+  },
+  component: ReflowWorkoutScreen,
 })
 
 /**
@@ -60,90 +231,33 @@ const indexRoute = createRoute({
  * assertion is what actually recovers `RouterContext`'s shape.
  */
 const accountRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => pushLayoutRoute,
   path: '/account',
+  beforeLoad: () => {
+    setPushTitle('Account')
+  },
   component: () => {
     const { user, onLoggedOut } = accountRoute.useRouteContext() as RouterContext
     return <AccountScreen user={user} onLoggedOut={onLoggedOut} />
   },
 })
 
-/** `/timer` — the manual interval timer, run entirely client-side. */
-const timerRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/timer',
-  component: TimerScreen,
-})
-
-/** `/generate` — procedural workout generation form + preview. */
-const generateRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/generate',
-  component: GenerateScreen,
-})
-
-/** `/session/$sessionId` — the live workout player, keyed off the `sessionId` path param. */
-const sessionRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/session/$sessionId',
-  component: SessionScreen,
-})
+// ── Root-level redirects ───────────────────────────────────────────────
 
 /**
- * `/workouts/new` — the editor on a blank draft. A static segment, so it
- * outranks `/workouts/$workoutId` (which would otherwise capture `new` as an
- * id) in TanStack Router's specificity ordering.
+ * `/exercises` — legacy path; redirect to the Library segment catalog at
+ * `/library/exercises` before anything ever renders.
  */
-const workoutNewRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/workouts/new',
-  component: NewWorkoutScreen,
-})
-
-/** `/exercises` — the `ExerciseLibraryScreen` catalog; no route params or context of its own. */
-const exercisesRoute = createRoute({
+const exercisesRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/exercises',
-  component: ExerciseLibraryScreen,
-})
-
-/**
- * `/history` — the caller's session completion list; no path params. Reads
- * `RouterContext` for the authenticated `User` (host "you" vs display name),
- * same `useRouteContext() as RouterContext` assertion as `accountRoute`.
- */
-const historyRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/history',
-  component: () => {
-    const { user } = historyRoute.useRouteContext() as RouterContext
-    return <HistoryScreen user={user} />
+  beforeLoad: () => {
+    // `redirect`'s own `throw: true` (rather than a `throw redirect(...)`
+    // statement here) does the throwing from *inside* the call — `redirect`
+    // returns a `Response`, not an `Error`, which oxlint's type-aware
+    // `only-throw-error` rule (correctly) won't let this file's own code throw.
+    redirect({ to: '/library/exercises', throw: true })
   },
-})
-
-/** `/workouts/$workoutId` — `WorkoutDetailScreen`, keyed off the `workoutId` path param. */
-const workoutDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/workouts/$workoutId',
-  component: WorkoutDetailScreen,
-})
-
-/** `/workouts/$workoutId/edit` — the editor on the draft loaded from `GetWorkout`. */
-const workoutEditRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/workouts/$workoutId/edit',
-  component: EditWorkoutScreen,
-})
-
-/**
- * `/workouts/$workoutId/reflow` — launch mode: the reflow editor on the
- * workout loaded from `GetWorkout`. A static `reflow` suffix like `edit`
- * above, so it never collides with the `$workoutId` detail route.
- */
-const workoutReflowRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/workouts/$workoutId/reflow',
-  component: ReflowWorkoutScreen,
 })
 
 /**
@@ -170,17 +284,26 @@ const notFoundRedirectRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([
-  indexRoute,
-  timerRoute,
-  generateRoute,
-  sessionRoute,
-  workoutNewRoute,
-  workoutDetailRoute,
-  workoutEditRoute,
-  workoutReflowRoute,
-  accountRoute,
-  exercisesRoute,
-  historyRoute,
+  tabLayoutRoute.addChildren([
+    indexRoute,
+    libraryRoute,
+    libraryExercisesRoute,
+    generateRoute,
+    historyRoute,
+    // Static `/workouts/new` lives under the push group; the parametric
+    // detail route stays here. TanStack ranks the static segment higher, so
+    // `new` is never captured as a `$workoutId`.
+    workoutDetailRoute,
+  ]),
+  pushLayoutRoute.addChildren([
+    sessionRoute,
+    timerRoute,
+    workoutNewRoute,
+    workoutEditRoute,
+    workoutReflowRoute,
+    accountRoute,
+  ]),
+  exercisesRedirectRoute,
   notFoundRedirectRoute,
 ])
 
@@ -198,7 +321,7 @@ const routeTree = rootRoute.addChildren([
  * project's `consistent-type-definitions: type` lint rule, and not worth a
  * project-wide carve-out for one file's route-level typing). `Link`'s `to`
  * therefore accepts any string rather than only known paths, and
- * `accountRoute`'s `useRouteContext()` above needs its own `as RouterContext`.
+ * leaf/layout `useRouteContext()` calls above need their own `as RouterContext`.
  */
 export const router = createRouter({
   routeTree,

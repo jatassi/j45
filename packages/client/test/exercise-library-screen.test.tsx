@@ -72,23 +72,28 @@ const frontSquat = new LibraryExercise({
 })
 
 /**
- * Mounts `ExerciseLibraryScreen` as the `/exercises` route of a throwaway
- * router (memory history, no file-based codegen) — a minimal stand-in for
- * `router.tsx`'s own tree, matching `library-screen.test.tsx`'s pattern.
+ * Mounts `ExerciseLibraryScreen` as the `/library/exercises` route of a
+ * throwaway router (memory history, no file-based codegen) — a minimal
+ * stand-in for `router.tsx`'s own tree, matching `library-screen.test.tsx`.
  */
 function renderScreen(
   handlers: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>,
 ) {
   const fakeRuntime = makeFakeRuntime(handlers)
   const rootRoute = createRootRoute({ component: Outlet })
+  const libraryRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/library',
+    component: () => <div data-testid="library-destination" />,
+  })
   const route = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/exercises',
+    path: '/library/exercises',
     component: ExerciseLibraryScreen,
   })
   const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([route]),
-    history: createMemoryHistory({ initialEntries: ['/exercises'] }),
+    routeTree: rootRoute.addChildren([libraryRoute, route]),
+    history: createMemoryHistory({ initialEntries: ['/library/exercises'] }),
   })
 
   render(
@@ -118,6 +123,20 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Moderate')
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Quads')
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Barbell')
+  })
+
+  it('renders library-nav-link to /library and LibrarySegments with Exercises active', async () => {
+    renderScreen({ ListExercises: () => Effect.succeed([rower]) })
+
+    await screen.findByTestId('exercise-library-screen')
+    expect(screen.getByTestId('library-nav-link').getAttribute('href')).toBe('/library')
+    expect(screen.getByTestId('library-segments')).toBeTruthy()
+    expect(screen.getByTestId('library-segment-workouts').getAttribute('href')).toBe('/library')
+    expect(screen.getByTestId('library-segment-exercises').getAttribute('href')).toBe(
+      '/library/exercises',
+    )
+    expect(screen.getByTestId('library-segment-exercises').dataset.active).toBe('true')
+    expect(screen.getByTestId('library-segment-workouts').dataset.active).toBe('false')
   })
 
   it('filter chips render domain labels while testids stay keyed to raw literals', async () => {

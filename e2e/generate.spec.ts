@@ -16,9 +16,9 @@ function projectNameFrom(testInfo: TestInfo): E2eProjectName {
 
 /**
  * Registers a brand-new account through the real `/register` form (skipping
- * the passkey enrollment prompt). Lands on `library-screen`.
+ * the passkey enrollment prompt). Lands on `home-screen` at `/`.
  */
-async function registerAndReachLibrary(
+async function registerAndReachHome(
   page: Page,
   baseUrl: string,
   input: {
@@ -37,7 +37,7 @@ async function registerAndReachLibrary(
   await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
   await page.getByTestId('enroll-passkey-skip').click()
 
-  await expect(page.getByTestId('library-screen')).toBeVisible()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
 }
 
 /**
@@ -54,8 +54,9 @@ async function mintOneInviteCode(
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
   await page.getByRole('button', { name: 'Sign in with PIN' }).click()
-  await expect(page.getByTestId('library-screen')).toBeVisible()
-  await page.goto(`${baseUrl}/account`)
+  await expect(page.getByTestId('home-screen')).toBeVisible()
+  await page.getByTestId('avatar-chip').click()
+  await expect(page.getByTestId('account-screen')).toBeVisible()
   await expect(page.getByTestId('people-invites')).toBeVisible()
 
   await page.getByTestId('mint-invite-button').click()
@@ -72,7 +73,7 @@ async function mintOneInviteCode(
   return code
 }
 
-/** Every `workout-card-<id>` `Link` currently rendered on the library home. */
+/** Every `workout-card-<id>` `Link` currently rendered on the library list. */
 function workoutCards(page: Page) {
   return page.locator('a[data-testid^="workout-card-"]')
 }
@@ -81,13 +82,12 @@ function workoutCards(page: Page) {
 const SUMMARY_SHAPE = /^\d+ works · \d{1,2}:\d{2}$/
 
 /**
- * Opens `/generate` from the library home, applies permissive constraints
+ * Opens `/generate` from the tab bar, applies permissive constraints
  * (hybrid / 30 min / all equipment default / no emphasis / default no-repeat),
  * and clicks Generate until a preview appears.
  */
 async function generatePreview(page: Page): Promise<void> {
-  await expect(page.getByTestId('library-screen')).toBeVisible()
-  await page.getByTestId('generate-nav-link').click()
+  await page.getByTestId('tab-generate').click()
   await expect(page).toHaveURL(/\/generate/)
   await expect(page.getByTestId('generate-screen')).toBeVisible()
 
@@ -154,7 +154,7 @@ async function previewSeed(preview: ReturnType<Page['getByTestId']>): Promise<st
 
 test.describe('generate (chromium + webkit)', () => {
   test(
-    'from library home: generate preview (codename + works·duration chip), regenerate ' +
+    'from Home: generate preview (codename + works·duration chip) via the Generate tab, regenerate ' +
       'changes data-seed, edit opens editor on the draft, save lands in library and ' +
       'survives reload',
     async ({ page }, testInfo) => {
@@ -164,17 +164,17 @@ test.describe('generate (chromium + webkit)', () => {
       const projectName = projectNameFrom(testInfo)
       const code = await mintOneInviteCode(page, env.baseUrl, env.owner)
 
-      await registerAndReachLibrary(page, env.baseUrl, {
+      await registerAndReachHome(page, env.baseUrl, {
         code,
         username: `e2e-gen-${projectName}`,
         displayName: `Generate Flow (${projectName})`,
         pin: '517390',
       })
 
-      // --- 1. Generate preview via home nav + form knobs ---
+      // --- 1. Generate preview via tab bar + form knobs ---
       await page.goto(env.baseUrl)
-      await expect(page.getByTestId('library-screen')).toBeVisible()
-      await page.getByTestId('generate-nav-link').click()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await page.getByTestId('tab-generate').click()
       await expect(page).toHaveURL(/\/generate/)
       await assertDomainLabelsOnGenerateScreen(page)
 
@@ -214,10 +214,10 @@ test.describe('generate (chromium + webkit)', () => {
       await expect(page.getByTestId('editor-summary')).toHaveText(editSummary)
 
       // --- 4. Save lands the workout in the library and survives reload ---
-      // Cancel back to library, then generate a fresh preview to Save (Edit
+      // Cancel back to Home, then generate a fresh preview to Save (Edit
       // navigated away from the generate screen).
       await page.getByTestId('editor-cancel').click()
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
       await generatePreview(page)
 
       const { codename: saveCodename } = await capturePreviewIdentity(page)

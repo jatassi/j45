@@ -18,11 +18,11 @@ function projectNameFrom(testInfo: TestInfo): E2eProjectName {
  * the passkey enrollment prompt, exactly like `auth-register.spec.ts`).
  *
  * `router.tsx`'s route tree has no entry for `/register` itself — only `/`,
- * `/workouts/$workoutId`, and `/account` are routed — so once the visitor
- * authenticates while still sitting on `/register?invite=...`,
- * `RouterProvider` finds no matching route there. This helper reaches
- * `/account` directly afterwards (a real, matched, authenticated route) so
- * callers land somewhere the router actually renders.
+ * `/library`, `/workouts/$workoutId`, `/account`, and the other tab/push
+ * leaves are routed — so once the visitor authenticates while still sitting
+ * on `/register?invite=...`, `RouterProvider` finds no matching route there.
+ * This helper reaches `/account` directly afterwards (a real, matched,
+ * authenticated route) so callers land somewhere the router actually renders.
  */
 async function registerAccount(
   page: Page,
@@ -47,9 +47,19 @@ async function registerAccount(
   await expect(page.getByTestId('account-screen')).toBeVisible()
 }
 
-/** Every `workout-card-<id>` `Link` currently rendered on the library home. */
+/** Every `workout-card-<id>` `Link` currently rendered on the library list. */
 function workoutCards(page: Page) {
   return page.locator('a[data-testid^="workout-card-"]')
+}
+
+/**
+ * Opens `/library` via the bottom tab bar and waits for `library-screen`.
+ * Used when the app has landed on Home and the test needs the workout list
+ * or the Library "New workout" action.
+ */
+async function openLibraryTab(page: Page): Promise<void> {
+  await page.getByTestId('tab-library').click()
+  await expect(page.getByTestId('library-screen')).toBeVisible()
 }
 
 /**
@@ -78,7 +88,8 @@ test.describe('plan-editing (chromium + webkit)', () => {
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
 
       await page.goto(env.baseUrl)
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
       await page.getByTestId('new-workout-button').click()
 
       await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
@@ -134,7 +145,8 @@ test.describe('plan-editing (chromium + webkit)', () => {
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
 
       await page.goto(env.baseUrl)
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
 
       const athleticaLink = workoutCards(page).filter({ hasText: 'Athletica' })
       await expect(athleticaLink).toHaveCount(1)
@@ -143,7 +155,9 @@ test.describe('plan-editing (chromium + webkit)', () => {
       await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
       await page.getByTestId('duplicate-button').click()
 
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      // Duplicate navigates to `/` (home); open Library to find the copy.
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
       const copyLink = workoutCards(page).filter({ hasText: 'Athletica (copy)' })
       await expect(copyLink).toHaveCount(1)
       await copyLink.click()

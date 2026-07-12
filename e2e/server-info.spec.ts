@@ -24,7 +24,7 @@ test('renders the rpc-delivered server SHA inside a shadcn/ui Card', async ({ pa
 
   // Authenticated now lands on the routed library home, not `AccountScreen`
   // directly — `ServerInfoCard` is mounted there, reached via `/account`.
-  await expect(page.getByTestId('library-screen')).toBeVisible()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.goto(`${env.baseUrl}/account`)
 
   // `ServerInfoCard` renders a shadcn/ui `Card` (packages/client/src/components/ui/card.tsx).

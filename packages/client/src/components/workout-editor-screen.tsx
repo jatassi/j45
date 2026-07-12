@@ -132,7 +132,7 @@ function EditWorkoutForm({ libraryWorkout }: EditFormProps) {
 
 /** `/workouts/$workoutId/edit` — loads the workout via `GetWorkout` and mounts the editor on it. */
 export function EditWorkoutScreen() {
-  const { workoutId } = useParams({ from: '/workouts/$workoutId/edit' }) as { workoutId: string }
+  const { workoutId } = useParams({ strict: false }) as { workoutId: string }
   const id = Schema.decodeSync(WorkoutId)(workoutId)
   const result = useAtomValue(ServerRpcClient.query('GetWorkout', { id }))
   return Result.match(result, {
@@ -215,7 +215,7 @@ function ReflowForm({ libraryWorkout }: { readonly libraryWorkout: LibraryWorkou
 
 /** `/workouts/$workoutId/reflow` — loads the workout via `GetWorkout` and mounts launch mode on it. */
 export function ReflowWorkoutScreen() {
-  const { workoutId } = useParams({ from: '/workouts/$workoutId/reflow' }) as { workoutId: string }
+  const { workoutId } = useParams({ strict: false }) as { workoutId: string }
   const id = Schema.decodeSync(WorkoutId)(workoutId)
   const result = useAtomValue(ServerRpcClient.query('GetWorkout', { id }))
   return Result.match(result, {

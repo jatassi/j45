@@ -18,7 +18,6 @@ import {
 } from '@j45/domain'
 import {
   createMemoryHistory,
-  createRootRoute,
   createRootRouteWithContext,
   createRoute,
   createRouter,
@@ -33,7 +32,6 @@ import * as Schema from 'effect/Schema'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { HistoryScreen } from '@/components/history-screen'
-import { LibraryScreen } from '@/components/library-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import type { RouterContext } from '@/router'
 
@@ -157,34 +155,6 @@ function renderHistoryScreen(
   )
 }
 
-/**
- * Mounts `LibraryScreen` as `/` so its nav `Link`s have router context —
- * same throwaway-router pattern as `library-screen.test.tsx`.
- */
-function renderLibraryScreen(
-  handlers: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>,
-) {
-  const fakeRuntime = makeFakeRuntime(handlers)
-  const rootRoute = createRootRoute({ component: Outlet })
-  const indexRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: LibraryScreen,
-  })
-  const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute]),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
-  })
-
-  render(
-    React.createElement(
-      RegistryProvider,
-      { initialValues: [[ServerRpcClient.runtime, Result.success(fakeRuntime)]] },
-      React.createElement(RouterProvider, { router: testRouter }),
-    ),
-  )
-}
-
 describe('HistoryScreen', () => {
   it("lists the caller's completions newest-first with name, date, host (you vs name), and participants", async () => {
     // Server already returns newest-first — seed in that order and assert render order.
@@ -257,17 +227,5 @@ describe('HistoryScreen', () => {
 
     await screen.findByTestId(`history-row-${newerCompletion.id}`)
     expect(screen.queryByTestId(`history-progress-${newerCompletion.id}`)).toBeNull()
-  })
-})
-
-describe('LibraryScreen history nav', () => {
-  it('links to /history from the home nav', async () => {
-    renderLibraryScreen({
-      ListWorkouts: () => Effect.succeed([]),
-      ListActiveSessions: () => Effect.succeed([]),
-    })
-
-    const historyLink = await screen.findByTestId('history-nav-link')
-    expect(historyLink.getAttribute('href')).toBe('/history')
   })
 })

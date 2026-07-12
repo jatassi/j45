@@ -42,7 +42,7 @@ test.describe('passkey ceremony (chromium only — CDP virtual authenticator)', 
 
       // Authenticated now lands on the routed library home, not
       // `AccountScreen` directly — reach it the way a user does, via `/account`.
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
       await page.goto(`${env.baseUrl}/account`)
       await expect(page.getByTestId('account-screen')).toBeVisible()
 

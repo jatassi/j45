@@ -330,7 +330,7 @@ export function GenerateScreen() {
     <div className="flex min-h-svh flex-col items-center gap-6 p-6" data-testid="generate-screen">
       <header className="flex w-full max-w-sm flex-col gap-2">
         <Link
-          to="/"
+          to="/library"
           data-testid="library-nav-link"
           className="text-sm text-primary underline-offset-4 hover:underline"
         >

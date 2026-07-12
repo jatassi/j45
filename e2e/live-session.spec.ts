@@ -6,7 +6,7 @@ import { readE2eEnv } from './support/state.js'
 
 /**
  * Registers a brand-new account through the real `/register` form (skipping
- * the passkey enrollment prompt). Lands on `library-screen`.
+ * the passkey enrollment prompt). Lands on `home-screen`.
  */
 async function registerAndReachLibrary(
   page: Page,
@@ -27,7 +27,7 @@ async function registerAndReachLibrary(
   await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
   await page.getByTestId('enroll-passkey-skip').click()
 
-  await expect(page.getByTestId('library-screen')).toBeVisible()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
 }
 
 /**
@@ -44,7 +44,7 @@ async function mintTwoInviteCodes(
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
   await page.getByRole('button', { name: 'Sign in with PIN' }).click()
-  await expect(page.getByTestId('library-screen')).toBeVisible()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.goto(`${baseUrl}/account`)
   await expect(page.getByTestId('people-invites')).toBeVisible()
 
@@ -70,8 +70,10 @@ async function mintTwoInviteCodes(
   return [first, second]
 }
 
-/** Opens Apex, starts a session, returns the session id from the URL. */
+/** Opens Apex from the Library tab, starts a session, returns the session id from the URL. */
 async function startApexSession(page: Page): Promise<string> {
+  // Post-login landing is Home; seed workout cards live under the Library tab.
+  await page.getByTestId('tab-library').click()
   await page.locator('a[data-testid^="workout-card-"]').filter({ hasText: 'Apex' }).click()
   await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
   await page.getByTestId('start-session-button').click()
@@ -226,7 +228,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
           displayName: 'Live Guest B',
           pin: '864202',
         })
-        await expect(pageB.getByTestId('library-screen')).toBeVisible()
+        await expect(pageB.getByTestId('home-screen')).toBeVisible()
 
         const sessionId = await startApexSession(page)
         await expect(page).toHaveURL(new RegExp(`/session/${sessionId}`))
@@ -255,7 +257,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
 
         // A leaves mid-workout — only A navigates home; B's player keeps running.
         await clickSessionControl(page, 'session-leave')
-        await expect(page.getByTestId('library-screen')).toBeVisible()
+        await expect(page.getByTestId('home-screen')).toBeVisible()
 
         await expect(pageB.getByTestId('session-screen')).toBeVisible()
         await expect(pageB.getByTestId('session-phase')).toBeVisible()
@@ -265,7 +267,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         await skipSessionToDone(pageB)
         await expect(pageB.getByTestId('session-finish')).toBeVisible()
         await clickSessionControl(pageB, 'session-finish')
-        await expect(pageB.getByTestId('library-screen')).toBeVisible()
+        await expect(pageB.getByTestId('home-screen')).toBeVisible()
 
         // Home poll (5s) must drop the ended session card for an observer (A).
         await expect(page.getByTestId(`session-card-${sessionId}`)).not.toBeVisible({

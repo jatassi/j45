@@ -18,11 +18,11 @@ function projectNameFrom(testInfo: TestInfo): E2eProjectName {
  * the passkey enrollment prompt, exactly like `auth-register.spec.ts`).
  *
  * `router.tsx`'s route tree has no entry for `/register` itself — only `/`,
- * `/workouts/$workoutId`, and `/account` are routed — so once the visitor
- * authenticates while still sitting on `/register?invite=...`,
- * `RouterProvider` finds no matching route there. This helper reaches
- * `/account` directly afterwards (a real, matched, authenticated route) so
- * callers land somewhere the router actually renders.
+ * `/library`, `/workouts/$workoutId`, `/account`, and the other tab/push
+ * leaves are routed — so once the visitor authenticates while still sitting
+ * on `/register?invite=...`, `RouterProvider` finds no matching route there.
+ * This helper reaches `/account` directly afterwards (a real, matched,
+ * authenticated route) so callers land somewhere the router actually renders.
  */
 async function registerAccount(
   page: Page,
@@ -58,9 +58,19 @@ async function loginWithPin(
   await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 }
 
-/** Every `workout-card-<id>` `Link` currently rendered on the library home. */
+/** Every `workout-card-<id>` `Link` currently rendered on the library list. */
 function workoutCards(page: Page) {
   return page.locator('a[data-testid^="workout-card-"]')
+}
+
+/**
+ * Opens `/library` via the bottom tab bar and waits for `library-screen`.
+ * Used when the app has landed on Home (post-login, post-duplicate/delete)
+ * and the test needs the workout list.
+ */
+async function openLibraryTab(page: Page): Promise<void> {
+  await page.getByTestId('tab-library').click()
+  await expect(page.getByTestId('library-screen')).toBeVisible()
 }
 
 /**
@@ -75,7 +85,7 @@ function workoutCards(page: Page) {
  */
 test.describe('library (chromium + webkit)', () => {
   test(
-    "after PIN login, '/' lists the 12 seed workouts; opening Athletica shows 3 pods, 9 stations, " +
+    "after PIN login, '/library' lists the 12 seed workouts; opening Athletica shows 3 pods, 9 stations, " +
       "and total duration 26:45; Duplicate creates 'Athletica (copy)'; renaming the copy persists " +
       'across a page reload; Delete removes it',
     async ({ page }, testInfo) => {
@@ -92,11 +102,12 @@ test.describe('library (chromium + webkit)', () => {
       await expect(page.getByTestId('login-screen')).toBeVisible()
 
       // Land back on `/` (anonymous) before logging in, so the router mounts
-      // at `/` — the library home — once the login succeeds.
+      // at `/` — Home — once the login succeeds. Workout list lives at `/library`.
       await page.goto(env.baseUrl)
       await loginWithPin(page, { username, pin })
 
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
       await expect(workoutCards(page)).toHaveCount(12)
 
       const athleticaLink = workoutCards(page).filter({ hasText: 'Athletica' })
@@ -111,7 +122,9 @@ test.describe('library (chromium + webkit)', () => {
 
       await page.getByTestId('duplicate-button').click()
 
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      // Duplicate navigates to `/` (home); open Library to assert the new card.
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
       await expect(workoutCards(page)).toHaveCount(13)
       const copyLink = workoutCards(page).filter({ hasText: 'Athletica (copy)' })
       await expect(copyLink).toHaveCount(1)
@@ -135,7 +148,9 @@ test.describe('library (chromium + webkit)', () => {
       await expect(page.getByTestId('delete-dialog')).toBeVisible()
       await page.getByTestId('delete-confirm').click()
 
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      // Delete navigates to `/` (home); open Library to assert the list shrank.
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
       await expect(workoutCards(page)).toHaveCount(12)
       await expect(workoutCards(page).filter({ hasText: 'Athletica Renamed' })).toHaveCount(0)
     },
@@ -144,7 +159,7 @@ test.describe('library (chromium + webkit)', () => {
   test(
     'a logged-out visit to /workouts/<seed id> shows the login screen, and completing PIN login ' +
       "renders that workout's detail without further navigation; /account renders the account " +
-      'screen via the home nav link',
+      'screen via the header avatar chip',
     async ({ page }, testInfo) => {
       const env = readE2eEnv()
       const projectName = projectNameFrom(testInfo)
@@ -155,19 +170,20 @@ test.describe('library (chromium + webkit)', () => {
 
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
 
-      // Harvest a seed workout id from the library list.
+      // Harvest a seed workout id from the library list at `/library`.
       await page.goto(env.baseUrl)
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
+      await openLibraryTab(page)
       const firstCard = workoutCards(page).first()
       const cardTestId = await firstCard.getAttribute('data-testid')
       if (cardTestId === null) {
-        throw new Error('expected at least one workout-card-<id> Link on the library home')
+        throw new Error('expected at least one workout-card-<id> Link on the library list')
       }
       const workoutId = cardTestId.replace('workout-card-', '')
       const workoutName = await page.getByTestId(`workout-name-${workoutId}`).textContent()
 
-      // Log out, then attempt a deep link while anonymous.
-      await page.getByTestId('account-nav-link').click()
+      // Log out via the header avatar chip, then attempt a deep link while anonymous.
+      await page.getByTestId('avatar-chip').click()
       await expect(page.getByTestId('account-screen')).toBeVisible()
       await page.getByTestId('logout-button').click()
       await expect(page.getByTestId('login-screen')).toBeVisible()
@@ -184,7 +200,7 @@ test.describe('library (chromium + webkit)', () => {
 
       await page.getByTestId('library-nav-link').click()
       await expect(page.getByTestId('library-screen')).toBeVisible()
-      await page.getByTestId('account-nav-link').click()
+      await page.getByTestId('avatar-chip').click()
       await expect(page.getByTestId('account-screen')).toBeVisible()
       await expect(page.getByTestId('account-display-name')).toHaveText(displayName)
     },

@@ -25,7 +25,7 @@ test('PIN login succeeds with the correct PIN and shows InvalidCredentials with 
 
   // Authenticated now lands on the routed library home, not `AccountScreen`
   // directly — reach the account screen the way a user does, via `/account`.
-  await expect(page.getByTestId('library-screen')).toBeVisible()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.goto(`${env.baseUrl}/account`)
   await expect(page.getByTestId('account-screen')).toBeVisible()
   await expect(page.getByTestId('account-display-name')).toHaveText(env.owner.displayName)

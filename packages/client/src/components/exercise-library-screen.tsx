@@ -16,6 +16,7 @@ import {
 import { Link } from '@tanstack/react-router'
 
 import { ChipRow, DeleteConfirm, ExerciseDialog } from '@/components/exercise-dialogs'
+import { LibrarySegments } from '@/components/library-segments'
 import { Button } from '@/components/ui/button'
 import {
   createExerciseAtom,
@@ -357,9 +358,10 @@ function Catalog({ exercises }: CatalogProps) {
 }
 
 /**
- * The exercise library (`/exercises`): the caller's catalog from
- * `ListExercises` as a filterable, editable list. Header links back to the
- * library home; the catalog, its filter chips, and the create/edit/delete
+ * The exercise library (`/library/exercises` once the route tree restructure
+ * lands): Workouts | Exercises segment control, a back-link to the workout
+ * list, and the caller's catalog from `ListExercises` as a filterable,
+ * editable list. The catalog, its filter chips, and the create/edit/delete
  * dialogs live in `Catalog`, whose mutations refresh `listExercisesAtom` via
  * the shared `useAtomValue` + `Result.match` idiom.
  */
@@ -371,15 +373,15 @@ export function ExerciseLibraryScreen() {
       className="flex min-h-svh flex-col items-center gap-6 p-6"
       data-testid="exercise-library-screen"
     >
-      <header className="flex w-full max-w-md items-center justify-between">
+      <header className="flex w-full max-w-md flex-col gap-3">
         <Link
-          to="/"
+          to="/library"
           data-testid="library-nav-link"
           className="text-sm text-primary underline-offset-4 hover:underline"
         >
           ← Your library
         </Link>
-        <h1 className="text-lg font-medium">Exercises</h1>
+        <LibrarySegments />
       </header>
       <div className="w-full max-w-md">
         {Result.match(exercises, {

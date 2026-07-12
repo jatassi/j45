@@ -101,7 +101,7 @@ test.describe('owner invites + owner-only rpc access (chromium + webkit)', () =>
       // Authenticated now lands on the routed library home, not
       // `AccountScreen` directly — reach `PeopleInvites` the way a user
       // does, via `/account`.
-      await expect(page.getByTestId('library-screen')).toBeVisible()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
       await page.goto(`${env.baseUrl}/account`)
       await expect(page.getByTestId('people-invites')).toBeVisible()
 
@@ -135,7 +135,7 @@ test.describe('owner invites + owner-only rpc access (chromium + webkit)', () =>
         // Registering now lands the new member on the routed library home
         // (the catch-all's redirect target), not `AccountScreen` directly —
         // reach it via `/account`, same as the owner above.
-        await expect(memberPage.getByTestId('library-screen')).toBeVisible()
+        await expect(memberPage.getByTestId('home-screen')).toBeVisible()
         await memberPage.goto(`${env.baseUrl}/account`)
         await expect(memberPage.getByTestId('account-screen')).toBeVisible()
         await expect(memberPage.getByTestId('account-display-name')).toHaveText(displayName)

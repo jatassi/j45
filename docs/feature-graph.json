@@ -249,7 +249,7 @@
     {
       "id": "nav-shell",
       "title": "Navigation shell — glass bottom tab bar, sticky headers, avatar chip, route restructure with push layouts",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "design-system"
       ],

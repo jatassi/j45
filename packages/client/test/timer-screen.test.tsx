@@ -164,7 +164,7 @@ describe('TimerScreen — audio and wake-lock wiring', () => {
 })
 
 describe('TimerScreen — routing and navigation', () => {
-  it('is reachable at /timer via a nav link on the authenticated library home', async () => {
+  it('is reachable at /timer after authenticating to the library home', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((path: string) => {
@@ -187,10 +187,9 @@ describe('TimerScreen — routing and navigation', () => {
       </RegistryProvider>,
     )
 
-    await screen.findByTestId('library-screen')
-    const link = screen.getByTestId('timer-nav-link')
-    expect(link.getAttribute('href')).toBe('/timer')
-
+    // Authenticated lands on home; timer is a Home quick action once
+    // the nav-shell lands (the old header nav link is gone).
+    await screen.findByTestId('home-screen')
     await act(async () => {
       await router.navigate({ to: '/timer' })
     })

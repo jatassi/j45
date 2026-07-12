@@ -49,8 +49,9 @@ async function registerAccount(
  */
 async function createSource(page: Page, baseUrl: string, name: string): Promise<string> {
   await page.goto(baseUrl)
-  await expect(page.getByTestId('library-screen')).toBeVisible()
-  await page.getByTestId('new-workout-button').click()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
+  // Workout list / New workout live under Library now; Home only has the quick link.
+  await page.getByTestId('home-new-workout-link').click()
   await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
 
   await page.getByTestId('editor-name').fill(name)

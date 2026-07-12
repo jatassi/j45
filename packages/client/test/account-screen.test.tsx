@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { RegistryProvider, Result } from '@effect-atom/atom-react'
 import { PasskeySummary, ServerInfo, User } from '@j45/domain'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@/app'
 import { AccountScreen } from '@/components/account-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
+import { router } from '@/router'
 
 vi.mock('@simplewebauthn/browser', () => ({
   startRegistration: vi.fn(() => Promise.resolve({ id: 'webauthn-response' })),
@@ -159,11 +160,13 @@ describe('App', () => {
 
     const { rerender } = render(<Harness reloadKey={0} />)
 
-    // Authenticated now lands on the library home (`/`, routed by
-    // `router.tsx`) rather than `AccountScreen` directly — reach it the way
-    // a user does, via the header's nav link to `/account`.
-    await screen.findByTestId('library-screen')
-    fireEvent.click(screen.getByTestId('account-nav-link'))
+    // Authenticated lands on the home screen (`/`). Account is reached via
+    // the shell avatar chip once the nav-shell lands; navigate imperatively
+    // here (the old header nav link is gone).
+    await screen.findByTestId('home-screen')
+    await act(async () => {
+      await router.navigate({ to: '/account' })
+    })
     await screen.findByTestId('account-screen')
 
     // `App` wires `AccountScreen`'s `onLoggedOut` to `location.reload()` —

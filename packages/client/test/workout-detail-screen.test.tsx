@@ -193,6 +193,7 @@ describe('WorkoutDetailScreen', () => {
     await screen.findByTestId('workout-detail-screen')
     expect(screen.getByTestId('workout-flow-summary').textContent).toBe('40″/20″ × 2')
     expect(screen.getByTestId('workout-duration').textContent).toBe('5:45')
+    expect(screen.getByTestId('library-nav-link').getAttribute('href')).toBe('/library')
 
     expect(screen.getAllByTestId('pod').map((pod) => pod.textContent)).toHaveLength(2)
     expect(screen.getAllByTestId('pod-name').map((pod) => pod.textContent)).toEqual([
