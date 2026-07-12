@@ -6,10 +6,16 @@ import * as Runtime from 'effect/Runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/app'
+import { RING_CIRCUMFERENCE } from '@/components/player/progress-ring'
 import { TimerScreen } from '@/components/timer-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import * as audio from '@/player/audio'
 import { router } from '@/router'
+
+// Glass hooks touch canvas / ResizeObserver during mount; the timer screen only
+// needs the immersive kit DOM contracts in these unit tests.
+vi.mock('@/glass/use-liquid-glass', () => ({ useLiquidGlass: vi.fn() }))
+vi.mock('@/glass/use-scene-surface', () => ({ useSceneSurface: vi.fn() }))
 
 afterEach(() => {
   cleanup()
@@ -46,13 +52,33 @@ function setInputs(work: string, rest: string, rounds: string): void {
   fireEvent.change(screen.getByTestId('rounds-input'), { target: { value: rounds } })
 }
 
-describe('TimerScreen — inputs and the domain-driven run', () => {
-  it('renders the three inputs at their legacy defaults (40/20/9) with the right minimums and the Start control', () => {
+/** Read the progress arc's stroke-dashoffset (null when the ring is not mounted). */
+function ringDashOffset(): string | null {
+  const arc = screen.queryByTestId('player-progress-ring-arc')
+  return arc?.getAttribute('stroke-dashoffset') ?? null
+}
+
+describe('TimerScreen — idle field kit composition', () => {
+  it('composes work / rest / rounds from the ui/ Field kit (Field + kit Input, numeric inputMode) — no raw hand-styled native number rows', () => {
     render(<TimerScreen />)
 
     const work = screen.getByTestId('work-input')
     const rest = screen.getByTestId('rest-input')
     const rounds = screen.getByTestId('rounds-input')
+
+    // Kit Input marks itself with data-slot="input"; the Field group wraps each row.
+    expect(work.dataset.slot).toBe('input')
+    expect(rest.dataset.slot).toBe('input')
+    expect(rounds.dataset.slot).toBe('input')
+
+    expect(work.closest('[data-slot="field"]')).not.toBeNull()
+    expect(rest.closest('[data-slot="field"]')).not.toBeNull()
+    expect(rounds.closest('[data-slot="field"]')).not.toBeNull()
+
+    // Numeric mobile keyboard; min floors retained on the editable controls.
+    expect(work.inputMode).toBe('numeric')
+    expect(rest.inputMode).toBe('numeric')
+    expect(rounds.inputMode).toBe('numeric')
 
     expect(work.getAttribute('value')).toBe('40')
     expect(rest.getAttribute('value')).toBe('20')
@@ -63,8 +89,15 @@ describe('TimerScreen — inputs and the domain-driven run', () => {
 
     expect(screen.getByTestId('start-button')).toBeTruthy()
     expect(screen.getByTestId('timer-context').textContent).toBe('9 rounds · 40″/20″')
-  })
 
+    // Idle has no immersive running chrome.
+    expect(screen.queryByTestId('player-phase-backdrop')).toBeNull()
+    expect(screen.queryByTestId('player-progress-ring')).toBeNull()
+    expect(screen.queryByTestId('player-control-dock')).toBeNull()
+  })
+})
+
+describe('TimerScreen — inputs and the domain-driven run', () => {
   it('Start compiles the synthetic workout and drives ready → work → work → Done, the round indicator advancing, via a Date.now()-recomputed timeout', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
@@ -126,6 +159,78 @@ describe('TimerScreen — inputs and the domain-driven run', () => {
     expect(screen.getByTestId('start-button')).toBeTruthy()
     expect(screen.queryByTestId('pause-button')).toBeNull()
     expect(screen.getByTestId('timer-context').textContent).toBe('2 rounds · 5″/0″')
+  })
+})
+
+describe('TimerScreen — immersive running layout', () => {
+  it('renders PhaseBackdrop + ProgressRing around the digits, a round indicator, and ControlDock with Pause/Resume and Reset (no next-up, no participants)', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+
+    render(<TimerScreen />)
+    setInputs('5', '0', '2')
+    fireEvent.click(screen.getByTestId('start-button'))
+
+    // Immersive kit mounts once the run starts.
+    const backdrop = screen.getByTestId('player-phase-backdrop')
+    expect(backdrop.dataset.phase).toBe('ready')
+    expect(backdrop.dataset.paused).toBe('false')
+    expect(screen.getByTestId('player-progress-ring')).toBeTruthy()
+    expect(screen.getByTestId('player-control-dock')).toBeTruthy()
+
+    // Digits + phase + context live inside the ring; preserved testids.
+    expect(screen.getByTestId('timer-phase').textContent).toBe('Get ready')
+    expect(screen.getByTestId('timer-count').textContent).toBe('0:05')
+    expect(screen.getByTestId('timer-context').textContent).toBe('2 rounds · 5″/0″')
+    expect(screen.getByTestId('audio-indicator').dataset.audio).toBeDefined()
+
+    // No next-up line content, no participant chrome.
+    const nextUp = screen.getByTestId('player-control-dock').querySelector('[data-slot="next-up"]')
+    expect(nextUp).not.toBeNull()
+    expect((nextUp?.textContent ?? '').trim()).toBe('')
+    expect(screen.queryByText(/participant/i)).toBeNull()
+
+    // Idle form is gone; dock has Pause + Reset.
+    expect(screen.queryByTestId('work-input')).toBeNull()
+    expect(screen.getByTestId('pause-button')).toBeTruthy()
+    expect(screen.getByTestId('reset-button')).toBeTruthy()
+
+    // Into work: phase hue follows the segment; round indicator takes over context.
+    await advance(5000)
+    expect(screen.getByTestId('player-phase-backdrop').dataset.phase).toBe('work')
+    expect(screen.getByTestId('timer-phase').textContent).toBe('Work')
+    expect(screen.getByTestId('timer-context').textContent).toBe('Round 1 of 2')
+
+    // Ring fraction tracks remaining/duration (full at segment entry → offset 0).
+    expect(ringDashOffset()).toBe('0')
+
+    await advance(2000)
+    fireEvent.click(screen.getByTestId('pause-button'))
+
+    // Paused freezes count and ring, and desaturates the backdrop.
+    const frozenOffset = ringDashOffset()
+    expect(screen.getByTestId('timer-count').textContent).toBe('0:03')
+    expect(screen.getByTestId('player-phase-backdrop').dataset.paused).toBe('true')
+    await advance(3000)
+    expect(screen.getByTestId('timer-count').textContent).toBe('0:03')
+    expect(ringDashOffset()).toBe(frozenOffset)
+
+    fireEvent.click(screen.getByTestId('resume-button'))
+    expect(screen.getByTestId('player-phase-backdrop').dataset.paused).toBe('false')
+    expect(screen.getByTestId('pause-button')).toBeTruthy()
+
+    // Through to Done: orange done phase, 0:00, Nice work; ring empty.
+    await advance(3000)
+    await advance(5000)
+    expect(screen.getByTestId('timer-phase').textContent).toBe('Done')
+    expect(screen.getByTestId('timer-count').textContent).toBe('0:00')
+    expect(screen.getByTestId('timer-context').textContent).toBe('Nice work')
+    expect(screen.getByTestId('player-phase-backdrop').dataset.phase).toBe('done')
+    expect(ringDashOffset()).toBe(String(RING_CIRCUMFERENCE))
+    // Done: only Reset remains (no Pause/Resume).
+    expect(screen.queryByTestId('pause-button')).toBeNull()
+    expect(screen.queryByTestId('resume-button')).toBeNull()
+    expect(screen.getByTestId('reset-button')).toBeTruthy()
   })
 })
 

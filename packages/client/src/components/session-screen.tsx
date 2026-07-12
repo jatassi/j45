@@ -1,41 +1,37 @@
-import { useEffect, useMemo, useReducer, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
 import { SessionId } from '@j45/domain'
-import type { Participant, SessionCommand, SessionState, WorkContext } from '@j45/domain'
+import type { SessionState } from '@j45/domain'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import * as Schema from 'effect/Schema'
 
-import { Button } from '@/components/ui/button'
+import { PhaseBackdrop } from '@/components/player/phase-backdrop'
 import {
-  cellState,
+  CenterStack,
+  DemoChip,
+  Participants,
+  ProgressDots,
+  SessionDock,
+  TopStrip,
+  type Dispatch,
+  type Leave,
+} from '@/components/session-player-parts'
+import {
   contextLine,
   cueKey,
   currentWorkContext,
   displayMillis,
   leaveSessionAtom,
-  nextWorkStationName,
-  phaseLabel,
   podGroups,
   sendSessionCommandAtom,
   sessionFeedFamily,
+  sessionPhase,
   sessionTotals,
   sessionWorks,
-  type CellState,
-  type PodGroup,
   type SessionFeed,
 } from '@/lib/session'
-import { formatDuration } from '@/lib/workouts'
-import {
-  audioState,
-  beepCountdown,
-  beepDone,
-  beepReady,
-  beepRest,
-  beepWork,
-  unlockAudio,
-  type AudioState,
-} from '@/player/audio'
+import { beepCountdown, beepDone, beepReady, beepRest, beepWork } from '@/player/audio'
 import { useCountdown } from '@/player/use-countdown'
 import { useWakeLock } from '@/player/wake-lock'
 
@@ -94,203 +90,15 @@ function useServerCountdown(state: SessionState): number {
   return displayMillis(state, remainingMillis)
 }
 
-type ReadoutProps = {
-  readonly state: SessionState
-  readonly ctx: WorkContext | undefined
-  readonly count: string
-  readonly context: string
-  readonly nextUp: string | undefined
-}
-
-/** Phase, big count, current exercise + detail, the context strip, and next-up. */
-function Readout({ state, ctx, count, context, nextUp }: ReadoutProps) {
-  const station = ctx?.station
-  return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-2">
-      <p className="text-lg font-medium" data-testid="session-phase">
-        {phaseLabel(state)}
-      </p>
-      <p className="text-6xl font-semibold tabular-nums" data-testid="session-count">
-        {count}
-      </p>
-      <p className="text-xl font-medium" data-testid="session-exercise-name">
-        {station?.name ?? '—'}
-      </p>
-      {station?.detail === undefined ? null : (
-        <p className="text-sm text-muted-foreground" data-testid="session-exercise-detail">
-          {station.detail}
-        </p>
-      )}
-      <p className="text-sm text-muted-foreground" data-testid="session-context">
-        {context}
-      </p>
-      {nextUp === undefined ? null : (
-        <p className="text-sm text-muted-foreground" data-testid="session-next-up">
-          Next: {nextUp}
-        </p>
-      )}
-    </div>
-  )
-}
-
-const cellClass: Record<CellState, string> = {
-  done: 'bg-primary',
-  active: 'bg-primary ring-2 ring-primary ring-offset-2 ring-offset-background',
-  upcoming: 'bg-input/40',
-}
-
-/** One pod's row of progress cells, one per work, keyed by its stable `workIndex`. */
-function PodRow({
-  group,
-  currentWorkIndex,
-}: {
-  readonly group: PodGroup
-  readonly currentWorkIndex: number | undefined
-}) {
-  return (
-    <div className="flex flex-col gap-1" data-testid={`session-pod-group-${group.podIndex}`}>
-      <span className="text-xs text-muted-foreground">{group.podName}</span>
-      <div className="flex flex-wrap gap-1">
-        {group.works.map((work) => {
-          const state = cellState(work.workIndex, currentWorkIndex)
-          return (
-            <span
-              key={work.workIndex}
-              data-testid={`session-progress-cell-${work.workIndex}`}
-              data-state={state}
-              className={`h-3 w-3 rounded-sm ${cellClass[state]}`}
-            />
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-/** Every work as a progress cell, grouped by pod — legacy-parity completion strip. */
-function ProgressGrid({
-  groups,
-  currentWorkIndex,
-}: {
-  readonly groups: readonly PodGroup[]
-  readonly currentWorkIndex: number | undefined
-}) {
-  return (
-    <div className="flex w-full max-w-sm flex-col gap-2" data-testid="session-progress">
-      {groups.map((group) => (
-        <PodRow key={group.podIndex} group={group} currentWorkIndex={currentWorkIndex} />
-      ))}
-    </div>
-  )
-}
-
-/** The joined participants, host included, by display name. */
-function Participants({ participants }: { readonly participants: readonly Participant[] }) {
-  return (
-    <div className="flex w-full max-w-sm flex-wrap gap-2" data-testid="session-participants">
-      {participants.map((participant) => (
-        <span
-          key={participant.userId}
-          data-testid={`session-participant-${participant.userId}`}
-          className="rounded-full bg-input/40 px-2.5 py-1 text-xs"
-        >
-          {participant.displayName}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-type PrimaryControl = {
-  readonly testId: string
-  readonly label: string
-  readonly command: SessionCommand
-}
-
-/** Pause (running) or Resume (paused); `null` when done. */
-function primaryControl(state: SessionState): PrimaryControl | null {
-  if (state.timer._tag === 'running')
-    return { testId: 'session-pause', label: 'Pause', command: 'pause' }
-  if (state.timer._tag === 'paused')
-    return { testId: 'session-resume', label: 'Resume', command: 'resume' }
-  return null
-}
-
-type Dispatch = (command: SessionCommand) => void
-type Leave = () => void
-
-type ExitControlProps = { readonly testId: string; readonly label: string; readonly onLeave: Leave }
-
 /**
- * The only session exit — Finish on the done screen, Leave mid-workout — both
- * invoking `LeaveSession`. Leaving records the caller's completion and, once
- * everyone has left, ends the session. The done-state Finish reads as a primary
- * action; the mid-workout Leave is a quieter `ghost`.
+ * The timer-driving and exit actions bound to this session id. Any participant
+ * may send commands (`SendSessionCommand`); `LeaveSession` is the only exit,
+ * whose failures surface via the atoms' own `Result`.
  */
-function ExitControl({ testId, label, onLeave }: ExitControlProps) {
-  return (
-    <Button
-      type="button"
-      variant={testId === 'session-leave' ? 'ghost' : 'default'}
-      data-testid={testId}
-      className="w-full flex-1"
-      onClick={onLeave}
-    >
-      {label}
-    </Button>
-  )
-}
-
-/** Prev, the Pause/Resume primary, and Skip — the timer-driving row. */
-function RunControls({
-  primary,
-  dispatch,
-}: {
-  readonly primary: PrimaryControl | null
+function useSessionActions(id: SessionId): {
   readonly dispatch: Dispatch
-}) {
-  return (
-    <div className="flex w-full max-w-sm gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        data-testid="session-prev"
-        className="flex-1"
-        onClick={() => dispatch('prev')}
-      >
-        Prev
-      </Button>
-      {primary === null ? null : (
-        <Button
-          type="button"
-          variant="secondary"
-          data-testid={primary.testId}
-          className="flex-1"
-          onClick={() => dispatch(primary.command)}
-        >
-          {primary.label}
-        </Button>
-      )}
-      <Button
-        type="button"
-        variant="outline"
-        data-testid="session-skip"
-        className="flex-1"
-        onClick={() => dispatch('skip')}
-      >
-        Skip
-      </Button>
-    </div>
-  )
-}
-
-/**
- * Pause/Resume, Prev, Skip, and the exit control — any participant may drive
- * the timer controls (via `SendSessionCommand`); the exit (Leave mid-workout,
- * Finish when done) goes through `LeaveSession`, the only way out. The leaver's
- * own feed folds to `ended` when their stream detaches, navigating them home.
- */
-function SessionControls({ state, id }: { readonly state: SessionState; readonly id: SessionId }) {
+  readonly onLeave: Leave
+} {
   const [, send] = useAtom(sendSessionCommandAtom, { mode: 'promise' })
   const [, leaveSession] = useAtom(leaveSessionAtom, { mode: 'promise' })
   const dispatch: Dispatch = (command) => {
@@ -303,46 +111,13 @@ function SessionControls({ state, id }: { readonly state: SessionState; readonly
       // Surfaced via leaveSessionAtom's own Result; nothing to do here.
     })
   }
-  if (state.timer._tag === 'done') {
-    return (
-      <div className="flex w-full max-w-sm">
-        <ExitControl testId="session-finish" label="Finish" onLeave={onLeave} />
-      </div>
-    )
-  }
-  return (
-    <div className="flex w-full max-w-sm flex-col gap-2">
-      <RunControls primary={primaryControl(state)} dispatch={dispatch} />
-      <ExitControl testId="session-leave" label="Leave" onLeave={onLeave} />
-    </div>
-  )
-}
-
-/** The muted/sound indicator — tappable to retry the audio unlock — carrying `data-audio`. */
-function AudioIndicator({
-  audio,
-  onRetry,
-}: {
-  readonly audio: AudioState
-  readonly onRetry: () => void
-}) {
-  return (
-    <button
-      type="button"
-      data-testid="session-audio-indicator"
-      data-audio={audio}
-      onClick={onRetry}
-      className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-    >
-      {audio === 'on' ? 'Sound on' : 'Sound off'}
-    </button>
-  )
+  return { dispatch, onLeave }
 }
 
 /** The live session render: server state only, plus the player-kit wiring. */
 function SessionView({ state }: { readonly state: SessionState }) {
-  const [, refreshAudio] = useReducer((n: number) => n + 1, 0)
   const count = useServerCountdown(state)
+  const { dispatch, onLeave } = useSessionActions(state.id)
   useSegmentCues(state)
   useWakeLock(state.timer._tag === 'running')
 
@@ -350,31 +125,33 @@ function SessionView({ state }: { readonly state: SessionState }) {
   const totals = useMemo(() => sessionTotals(works), [works])
   const groups = useMemo(() => podGroups(works), [works])
   const ctx = currentWorkContext(state)
+  const phase = sessionPhase(state)
 
   return (
-    <div className="flex min-h-svh flex-col items-center gap-6 p-6" data-testid="session-screen">
-      <div className="flex w-full max-w-sm items-center justify-between">
-        <p className="text-sm font-medium tracking-wide text-muted-foreground uppercase">
-          {state.workoutName}
-        </p>
-        <AudioIndicator
-          audio={audioState()}
-          onRetry={() => {
-            unlockAudio()
-            refreshAudio()
-          }}
-        />
-      </div>
-      <Readout
-        state={state}
-        ctx={ctx}
-        count={formatDuration(count)}
-        context={ctx === undefined ? '' : contextLine(ctx, totals)}
-        nextUp={nextWorkStationName(state)}
+    <div
+      className="relative flex min-h-svh flex-col items-center gap-5 px-5 pt-10 pb-32"
+      data-testid="session-screen"
+      data-phase={phase}
+    >
+      <PhaseBackdrop phase={phase} paused={state.timer._tag === 'paused'} />
+      <TopStrip
+        workoutName={state.workoutName}
+        showLeave={state.timer._tag !== 'done'}
+        onLeave={onLeave}
       />
-      <ProgressGrid groups={groups} currentWorkIndex={ctx?.workIndex} />
-      <SessionControls state={state} id={state.id} />
-      <Participants participants={state.participants} />
+      <div className="flex flex-1 flex-col items-center justify-center gap-5">
+        <CenterStack
+          state={state}
+          phase={phase}
+          ctx={ctx}
+          count={count}
+          context={ctx === undefined ? '' : contextLine(ctx, totals)}
+        />
+        <DemoChip detail={ctx?.station.detail} />
+        <ProgressDots groups={groups} currentWorkIndex={ctx?.workIndex} />
+        <Participants participants={state.participants} />
+      </div>
+      <SessionDock state={state} dispatch={dispatch} onLeave={onLeave} />
     </div>
   )
 }

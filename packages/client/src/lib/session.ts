@@ -5,6 +5,7 @@ import * as Duration from 'effect/Duration'
 import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
 
+import type { PlayerPhase } from '@/components/player/phase'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 /**
@@ -152,14 +153,54 @@ export const currentWorkContext = (state: SessionState): WorkContext | undefined
   return segment._tag === 'work' ? segment.work : segment.nextWork
 }
 
-/** Get ready / Work / Rest / Done — the phase heading. */
+/**
+ * Get ready / Work / Rest / Done — the phase heading; `Paused` whenever the
+ * timer is held (any participant's pause), since a paused workout is on hold
+ * regardless of which segment it froze in.
+ */
 export const phaseLabel = (state: SessionState): string => {
   const { timer, compiled } = state
+  if (timer._tag === 'paused') return 'Paused'
   if (timer._tag === 'done') return 'Done'
   if (timer._tag === 'idle') return 'Get ready'
   const segment = compiled.segments[timer.segmentIndex]
   if (segment._tag === 'ready') return 'Get ready'
   return segment._tag === 'work' ? 'Work' : 'Rest'
+}
+
+/**
+ * The immersive player's phase for `data-phase`, the backdrop tint, and the
+ * ring hue: `ready | work | rest | done`, read from the current segment (both
+ * running and paused expose `segmentIndex`) so a pause keeps the segment's
+ * identity while `phaseLabel` reads `Paused`.
+ */
+export const sessionPhase = (state: SessionState): PlayerPhase => {
+  const { timer, compiled } = state
+  if (timer._tag === 'done') return 'done'
+  if (timer._tag === 'idle') return 'ready'
+  const segment = compiled.segments[timer.segmentIndex]
+  if (segment._tag === 'work') return 'work'
+  if (segment._tag === 'rest') return 'rest'
+  return 'ready'
+}
+
+/**
+ * Full duration of the segment the timer sits in, for the progress ring's
+ * depletion fraction. `0` when idle/done (no segment in focus), which the ring
+ * reads as an empty arc.
+ */
+export const currentSegmentDurationMillis = (state: SessionState): number =>
+  currentSegment(state)?.durationMillis ?? 0
+
+/**
+ * The remaining fraction (0..1) of the current segment for the progress ring's
+ * depletion — `remainingMillis` over the segment's full duration, clamped. `0`
+ * when there is no segment in focus (idle/done), an empty arc.
+ */
+export const ringFraction = (state: SessionState, remainingMillis: number): number => {
+  const durationMillis = currentSegmentDurationMillis(state)
+  if (durationMillis <= 0) return 0
+  return Math.max(0, Math.min(1, remainingMillis / durationMillis))
 }
 
 /** The station name of the next work after the current position, if any. */

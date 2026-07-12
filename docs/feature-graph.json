@@ -331,7 +331,7 @@
     {
       "id": "player-screens",
       "title": "Immersive session player and manual timer — ring countdown on phase-tinted ground, glass control dock, leave UX",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "glass-live-refraction",
         "session-leave",

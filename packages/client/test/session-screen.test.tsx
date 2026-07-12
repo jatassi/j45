@@ -141,8 +141,23 @@ function renderSession(
   return testRouter
 }
 
+/** A live single-state render — the common case for a static snapshot. */
+function renderLive(id: string, state: SessionState) {
+  return renderSession(id, { WatchSession: () => liveStream(state) })
+}
+
 /** A stream that emits `state` and then stays open (never `ended`). */
 const liveStream = (state: SessionState) => Stream.make(state).pipe(Stream.concat(Stream.never))
+
+/** Offer one snapshot onto a feed queue inside `act`, flushing React effects. */
+const push = (queue: Queue.Queue<SessionState>, state: SessionState) =>
+  act(async () => {
+    await Effect.runPromise(Queue.offer(queue, state))
+  })
+
+/** The demo chip — the always-present `data-slot="exercise-demo"` element. */
+const demoChip = (): HTMLElement | null =>
+  document.querySelector<HTMLElement>('[data-slot="exercise-demo"]')
 
 describe('SessionScreen — stream retry discrimination', () => {
   it('SessionNotFound stops retrying and navigates home', async () => {
@@ -168,25 +183,70 @@ describe('SessionScreen — stream retry discrimination', () => {
 })
 
 describe('SessionScreen — server-state render', () => {
-  it('renders phase, exercise + detail, context line, next-up, progress cells, and participants', async () => {
+  it('renders phase, exercise, demo detail, context line, next-up, progress cells, and participants', async () => {
     const id = 'sess-render'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const now = Date.now()
     const timer = new TimerRunning({ segmentIndex: 1, endsAtMillis: now + 30_000 })
-    renderSession(id, { WatchSession: () => liveStream(makeState(sessionId, timer, now)) })
+    renderLive(id, makeState(sessionId, timer, now))
 
     await screen.findByTestId('session-screen')
     expect(screen.getByTestId('session-phase').textContent).toBe('Work')
     expect(screen.getByTestId('session-exercise-name').textContent).toBe('Rower')
-    expect(screen.getByTestId('session-exercise-detail').textContent).toBe('10 cal')
+    expect(demoChip()?.textContent).toContain('10 cal')
     expect(screen.getByTestId('session-context').textContent).toBe(
       'Pod 1/1 · Lap 1/2 · Station 1/2',
     )
-    expect(screen.getByTestId('session-next-up').textContent).toBe('Next: Burpee')
+    expect(screen.getByTestId('session-next-up').textContent).toContain('Burpee')
     expect(screen.getByTestId('session-progress-cell-0').dataset.state).toBe('active')
     expect(screen.getByTestId('session-progress-cell-1').dataset.state).toBe('upcoming')
-    expect(screen.getByTestId('session-participant-u-ann').textContent).toBe('Ann')
-    expect(screen.getByTestId('session-participant-u-ben').textContent).toBe('Ben')
+    expect(screen.getByTestId('session-participant-u-ann').textContent).toContain('Ann')
+    expect(screen.getByTestId('session-participant-u-ben').textContent).toContain('Ben')
+  })
+
+  it('carries data-phase on the session root matching the current segment/timer state', async () => {
+    const id = 'sess-phase'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const now = Date.now()
+    const cases: readonly (readonly [TimerState, string])[] = [
+      [new TimerRunning({ segmentIndex: 0, endsAtMillis: now + 5000 }), 'ready'],
+      [new TimerRunning({ segmentIndex: 1, endsAtMillis: now + 30_000 }), 'work'],
+      [new TimerRunning({ segmentIndex: 2, endsAtMillis: now + 10_000 }), 'rest'],
+      [new TimerDone({}), 'done'],
+    ]
+    for (const [timer, phase] of cases) {
+      renderLive(`${id}-${phase}`, makeState(sessionId, timer, now))
+      await screen.findByTestId('session-screen')
+      expect(screen.getByTestId('session-screen').dataset.phase).toBe(phase)
+      cleanup()
+    }
+  })
+
+  it('a paused timer reads Paused in session-phase while keeping the segment data-phase', async () => {
+    const id = 'sess-paused'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const timer = new TimerPaused({ segmentIndex: 1, remainingMillis: 18_000 })
+    renderLive(id, makeState(sessionId, timer, Date.now()))
+
+    await screen.findByTestId('session-screen')
+    expect(screen.getByTestId('session-phase').textContent).toBe('Paused')
+    expect(screen.getByTestId('session-screen').dataset.phase).toBe('work')
+    // The count freezes on the paused remainder (18s → 0:18), never ticking.
+    expect(screen.getByTestId('session-count').textContent).toBe('0:18')
+  })
+
+  it('keeps a non-broken demo chip present even when the exercise has no detail', async () => {
+    const id = 'sess-no-detail'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    // Segment 3 is work Br1 — Burpee, which carries no `detail`.
+    const timer = new TimerRunning({ segmentIndex: 3, endsAtMillis: Date.now() + 30_000 })
+    renderLive(id, makeState(sessionId, timer, Date.now()))
+
+    await screen.findByTestId('session-screen')
+    expect(screen.getByTestId('session-exercise-name').textContent).toBe('Burpee')
+    const chip = demoChip()
+    expect(chip).not.toBeNull()
+    expect(chip?.textContent).not.toContain('10 cal')
   })
 
   it('counts down against the server clock offset, never the raw phone clock', async () => {
@@ -196,7 +256,7 @@ describe('SessionScreen — server-state render', () => {
     // 67:20; only applying (clientNow − serverNow) yields the true 0:40.
     const serverNow = Date.now() + 4_000_000
     const timer = new TimerRunning({ segmentIndex: 1, endsAtMillis: serverNow + 40_000 })
-    renderSession(id, { WatchSession: () => liveStream(makeState(sessionId, timer, serverNow)) })
+    renderLive(id, makeState(sessionId, timer, serverNow))
 
     await screen.findByTestId('session-count')
     expect(screen.getByTestId('session-count').textContent).toBe('0:40')
@@ -225,7 +285,7 @@ describe('SessionScreen — controls', () => {
     })
   })
 
-  it('the done state shows Finish, which leaves the session', async () => {
+  it('the done state shows Finish, which leaves the session with no confirm dialog', async () => {
     const id = 'sess-done'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const leaves: unknown[] = []
@@ -240,12 +300,14 @@ describe('SessionScreen — controls', () => {
     await screen.findByTestId('session-finish')
     fireEvent.click(screen.getByTestId('session-finish'))
 
+    // No dialog stands between Finish and the leave — it fires directly.
+    expect(screen.queryByTestId('session-leave-confirm')).toBeNull()
     await waitFor(() => {
       expect(leaves).toContainEqual({ id: sessionId })
     })
   })
 
-  it('the interim Leave control leaves the session mid-workout', async () => {
+  it('the Leave control opens a confirm dialog and only its confirm leaves the session', async () => {
     const id = 'sess-leave'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const leaves: unknown[] = []
@@ -259,8 +321,14 @@ describe('SessionScreen — controls', () => {
     })
 
     await screen.findByTestId('session-leave')
+    // The bare Leave tap opens the dialog but must not leave on its own.
+    expect(screen.queryByTestId('session-leave-confirm')).toBeNull()
     fireEvent.click(screen.getByTestId('session-leave'))
 
+    const confirm = await screen.findByTestId('session-leave-confirm')
+    expect(leaves).toHaveLength(0)
+
+    fireEvent.click(confirm)
     await waitFor(() => {
       expect(leaves).toContainEqual({ id: sessionId })
     })
@@ -275,33 +343,25 @@ describe('SessionScreen — cues, audio, and wake lock', () => {
     renderSession(id, { WatchSession: () => Stream.fromQueue(queue) })
 
     // Enter the get-ready segment first, then transition into work.
-    await act(async () => {
-      await Effect.runPromise(
-        Queue.offer(
-          queue,
-          makeState(
-            sessionId,
-            new TimerRunning({ segmentIndex: 0, endsAtMillis: Date.now() + 5000 }),
-            Date.now(),
-          ),
-        ),
-      )
-    })
+    await push(
+      queue,
+      makeState(
+        sessionId,
+        new TimerRunning({ segmentIndex: 0, endsAtMillis: Date.now() + 5000 }),
+        Date.now(),
+      ),
+    )
     await screen.findByTestId('session-screen')
     expect(audio.beepWork).not.toHaveBeenCalled()
 
-    await act(async () => {
-      await Effect.runPromise(
-        Queue.offer(
-          queue,
-          makeState(
-            sessionId,
-            new TimerRunning({ segmentIndex: 1, endsAtMillis: Date.now() + 30_000 }),
-            Date.now(),
-          ),
-        ),
-      )
-    })
+    await push(
+      queue,
+      makeState(
+        sessionId,
+        new TimerRunning({ segmentIndex: 1, endsAtMillis: Date.now() + 30_000 }),
+        Date.now(),
+      ),
+    )
 
     await waitFor(() => {
       expect(audio.beepWork).toHaveBeenCalled()
@@ -323,34 +383,26 @@ describe('SessionScreen — cues, audio, and wake lock', () => {
     const queue = Effect.runSync(Queue.unbounded<SessionState>())
     renderSession(id, { WatchSession: () => Stream.fromQueue(queue) })
 
-    await act(async () => {
-      await Effect.runPromise(
-        Queue.offer(
-          queue,
-          makeState(
-            sessionId,
-            new TimerRunning({ segmentIndex: 1, endsAtMillis: Date.now() + 30_000 }),
-            Date.now(),
-          ),
-        ),
-      )
-    })
+    await push(
+      queue,
+      makeState(
+        sessionId,
+        new TimerRunning({ segmentIndex: 1, endsAtMillis: Date.now() + 30_000 }),
+        Date.now(),
+      ),
+    )
     await waitFor(() => {
       expect(request).toHaveBeenCalledWith('screen')
     })
 
-    await act(async () => {
-      await Effect.runPromise(
-        Queue.offer(
-          queue,
-          makeState(
-            sessionId,
-            new TimerPaused({ segmentIndex: 1, remainingMillis: 20_000 }),
-            Date.now(),
-          ),
-        ),
-      )
-    })
+    await push(
+      queue,
+      makeState(
+        sessionId,
+        new TimerPaused({ segmentIndex: 1, remainingMillis: 20_000 }),
+        Date.now(),
+      ),
+    )
     await waitFor(() => {
       expect(release).toHaveBeenCalled()
     })

@@ -239,7 +239,10 @@ test.describe('history (chromium + webkit)', () => {
             return phase === 'Done' || phase !== phaseBefore
           })
           .toBe(true)
+        // Leave opens an alert-dialog; only confirm exits mid-workout.
         await clickSessionControl(page, 'session-leave')
+        await expect(page.getByTestId('session-leave-dialog')).toBeVisible()
+        await page.getByTestId('session-leave-confirm').click()
         // Leave navigates to `/` (home).
         await expect(page.getByTestId('home-screen')).toBeVisible()
 

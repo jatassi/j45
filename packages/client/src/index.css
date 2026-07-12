@@ -123,6 +123,33 @@
   letter-spacing: -0.02em;
 }
 
+/* Immersive player: full-bleed radial phase tint that breathes slowly. The
+   phase hue arrives as `--phase-hue` (set per-render from the PlayerPhase map),
+   so this stays palette-agnostic. CSS-only, GPU-cheap, and silenced under
+   `prefers-reduced-motion`. */
+.player-phase-backdrop {
+  background: radial-gradient(
+    120% 90% at 50% 0%,
+    color-mix(in oklab, var(--phase-hue) 26%, transparent) 0%,
+    color-mix(in oklab, var(--phase-hue) 9%, transparent) 42%,
+    transparent 78%
+  );
+  animation: player-phase-pulse 5s ease-in-out infinite alternate;
+}
+@keyframes player-phase-pulse {
+  from {
+    opacity: 0.68;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-phase-backdrop {
+    animation: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

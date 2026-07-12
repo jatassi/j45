@@ -1,112 +1,94 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 
-import {
-  advanceIfDue,
-  compile,
-  nextTransitionAt,
-  pause,
-  quit,
-  READY_SECONDS,
-  resume,
-  start,
-  TimerIdle,
-  type Segment,
-  type TimerState,
-} from '@j45/domain'
+import * as Domain from '@j45/domain'
 import * as Option from 'effect/Option'
 
+import { ControlDock } from '@/components/player/control-dock'
+import type { PlayerPhase } from '@/components/player/phase'
+import { PhaseBackdrop } from '@/components/player/phase-backdrop'
+import { ProgressRing } from '@/components/player/progress-ring'
 import { Button } from '@/components/ui/button'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { buildManualWorkout } from '@/lib/manual-workout'
 import { formatDuration } from '@/lib/workouts'
-import {
-  audioState,
-  beepCountdown,
-  beepDone,
-  beepReady,
-  beepRest,
-  beepWork,
-  unlockAudio,
-  type AudioState,
-} from '@/player/audio'
+import * as Audio from '@/player/audio'
 import { useCountdown } from '@/player/use-countdown'
 import { useWakeLock } from '@/player/wake-lock'
 
-/** The three inputs, parsed and clamped to their minimums. */
 type Settings = {
   readonly workSeconds: number
   readonly restSeconds: number
   readonly rounds: number
 }
+type TimerState = Domain.TimerState
+type Segment = Domain.Segment
+type AudioProps = { audio: Audio.AudioState; onRetry: () => void }
+type DigitsProps = { phase: string; count: string; context: string }
+type ViewModel = DigitsProps & { fraction: number; playerPhase: PlayerPhase }
 
 const WORK_MIN = 5
 const REST_MIN = 0
 const ROUNDS_MIN = 1
 const DEFAULTS: Settings = { workSeconds: 40, restSeconds: 20, rounds: 9 }
 
-/** Parse an input string and clamp to a floor; empty/NaN falls back to the floor. */
 function clampInt(raw: string, min: number): number {
   const parsed = Math.floor(Number(raw))
   return Number.isFinite(parsed) ? Math.max(min, parsed) : min
 }
 
-/** `9 rounds · 40″/20″` — the idle/get-ready context line, legacy parity. */
-function settingsSummary({ workSeconds, restSeconds, rounds }: Settings): string {
-  return `${rounds} rounds · ${workSeconds}″/${restSeconds}″`
+function settingsSummary(s: Settings): string {
+  return `${s.rounds} rounds · ${s.workSeconds}″/${s.restSeconds}″`
 }
 
-/** Get ready / Work / Rest / Done — from the current segment (or the terminal tag). */
-function phaseLabel(state: TimerState, segments: readonly Segment[]): string {
-  if (state._tag === 'done') return 'Done'
-  if (state._tag === 'idle') return 'Get ready'
+/** Phase label, player-kit phase, and context line — one segment lookup. */
+function phaseInfo(state: TimerState, segments: readonly Segment[], session: Settings) {
+  if (state._tag === 'done')
+    return { phase: 'Done', playerPhase: 'done' as const, context: 'Nice work' }
+  if (state._tag === 'idle') {
+    return { phase: 'Get ready', playerPhase: 'ready' as const, context: settingsSummary(session) }
+  }
   const segment = segments[state.segmentIndex]
-  if (segment._tag === 'ready') return 'Get ready'
-  return segment._tag === 'work' ? 'Work' : 'Rest'
-}
-
-/**
- * The context line: the settings summary while idle or getting ready, `Round
- * k of N` during work (this round) and rest (the round about to start, from
- * `RestSegment.nextWork.round`), and `Nice work` when done.
- */
-function contextLine(state: TimerState, segments: readonly Segment[], session: Settings): string {
-  if (state._tag === 'idle') return settingsSummary(session)
-  if (state._tag === 'done') return 'Nice work'
-  const segment = segments[state.segmentIndex]
-  if (segment._tag === 'ready') return settingsSummary(session)
-  const round = segment._tag === 'work' ? segment.work.round : segment.nextWork.round
-  return `Round ${round} of ${session.rounds}`
-}
-
-/** Milliseconds to display: the live countdown while running, the frozen value while paused. */
-function displayMillis(state: TimerState, liveRemaining: number | null): number {
-  switch (state._tag) {
-    case 'running': {
-      return liveRemaining ?? 0
-    }
-    case 'paused': {
-      return state.remainingMillis
-    }
-    case 'done': {
-      return 0
-    }
-    case 'idle': {
-      return READY_SECONDS * 1000
-    }
+  if (segment._tag === 'ready') {
+    return { phase: 'Get ready', playerPhase: 'ready' as const, context: settingsSummary(session) }
+  }
+  const work = segment._tag === 'work'
+  const round = work ? segment.work.round : segment.nextWork.round
+  return {
+    phase: work ? 'Work' : 'Rest',
+    playerPhase: (work ? 'work' : 'rest') as PlayerPhase,
+    context: `Round ${round} of ${session.rounds}`,
   }
 }
 
-/** A stable key per cued segment, so a resume never re-fires the segment's beep. */
-function cueKey(state: TimerState): string | null {
-  if (state._tag === 'running') return `seg-${state.segmentIndex}`
-  if (state._tag === 'done') return 'done'
-  return null
+function displayMillis(state: TimerState, liveRemaining: number | null): number {
+  if (state._tag === 'running') return liveRemaining ?? 0
+  if (state._tag === 'paused') return state.remainingMillis
+  if (state._tag === 'done') return 0
+  return Domain.READY_SECONDS * 1000
 }
 
-/**
- * The driver: sleep until this segment's deadline (`nextTransitionAt`), then
- * advance — recomputed from `Date.now()` inside the callback so a late or
- * slept wake catches up across every boundary it crossed.
- */
+/** Same remaining millis as the digits so pause freezes count and ring together. */
+function ringFraction(
+  state: TimerState,
+  segments: readonly Segment[],
+  liveRemaining: number | null,
+): number {
+  if (state._tag === 'idle' || state._tag === 'done') return 0
+  const duration = segments[state.segmentIndex].durationMillis
+  if (duration <= 0) return 0
+  return Math.max(0, Math.min(1, displayMillis(state, liveRemaining) / duration))
+}
+
+function viewModel(timer: ReturnType<typeof useManualTimer>, settings: Settings): ViewModel {
+  const millis = displayMillis(timer.state, timer.liveRemaining)
+  return {
+    ...phaseInfo(timer.state, timer.segments, settings),
+    count: formatDuration(millis),
+    fraction: ringFraction(timer.state, timer.segments, timer.liveRemaining),
+  }
+}
+
 function useTimerDriver(
   state: TimerState,
   segments: readonly Segment[],
@@ -114,11 +96,11 @@ function useTimerDriver(
 ): void {
   useEffect(() => {
     if (state._tag !== 'running') return undefined
-    const target = Option.getOrUndefined(nextTransitionAt(state))
+    const target = Option.getOrUndefined(Domain.nextTransitionAt(state))
     if (target === undefined) return undefined
     const id = setTimeout(
       () => {
-        setState((prev) => advanceIfDue(prev, segments, Date.now()))
+        setState((prev) => Domain.advanceIfDue(prev, segments, Date.now()))
       },
       Math.max(0, target - Date.now()),
     )
@@ -128,15 +110,12 @@ function useTimerDriver(
   }, [state, segments, setState])
 }
 
-/**
- * Segment-boundary beeps: fire once as each new segment is entered (and the
- * rising done chord when finished). A resume re-enters the same segment key
- * and stays silent; returning to idle re-arms the cue.
- */
 function useSegmentCues(state: TimerState, segments: readonly Segment[]): void {
   const cueRef = useRef<string | null>(null)
   useEffect(() => {
-    const key = cueKey(state)
+    let key: string | null = null
+    if (state._tag === 'running') key = `seg-${state.segmentIndex}`
+    else if (state._tag === 'done') key = 'done'
     if (key === null) {
       cueRef.current = null
       return
@@ -144,75 +123,56 @@ function useSegmentCues(state: TimerState, segments: readonly Segment[]): void {
     if (cueRef.current === key) return
     cueRef.current = key
     if (state._tag !== 'running') {
-      beepDone()
+      Audio.beepDone()
       return
     }
     const segment = segments[state.segmentIndex]
-    if (segment._tag === 'work') beepWork()
-    else if (segment._tag === 'rest') beepRest()
-    else beepReady()
+    if (segment._tag === 'work') Audio.beepWork()
+    else if (segment._tag === 'rest') Audio.beepRest()
+    else Audio.beepReady()
   }, [state, segments])
 }
 
-/**
- * The whole client-side timer: domain `TimerState`, the compiled segments it
- * runs, the driver + cue effects, and the display-only countdown (whose
- * whole-second boundaries fire the 3-2-1 tones). Actions build the synthetic
- * workout, compile it, and step the domain state — no timer sequencing lives
- * here.
- */
 function useManualTimer() {
-  const [state, setState] = useState<TimerState>(() => new TimerIdle({}))
+  const [state, setState] = useState<TimerState>(() => new Domain.TimerIdle({}))
   const [segments, setSegments] = useState<readonly Segment[]>([])
   const [session, setSession] = useState<Settings>(DEFAULTS)
-
   useTimerDriver(state, segments, setState)
   useSegmentCues(state, segments)
-
-  const runningDeadline = state._tag === 'running' ? state.endsAtMillis : null
-  const { remainingMillis: liveRemaining } = useCountdown(runningDeadline, {
-    onSecondTransition: (whole) => {
-      if (whole >= 1 && whole <= 3) beepCountdown(whole)
+  const { remainingMillis: liveRemaining } = useCountdown(
+    state._tag === 'running' ? state.endsAtMillis : null,
+    {
+      onSecondTransition: (whole) => {
+        if (whole >= 1 && whole <= 3) Audio.beepCountdown(whole)
+      },
     },
-  })
-
-  const startTimer = (settings: Settings): void => {
-    const compiled = compile(
-      buildManualWorkout(settings.workSeconds, settings.restSeconds, settings.rounds),
-    )
-    setSession(settings)
-    setSegments(compiled.segments)
-    setState(() => start(compiled.segments, Date.now()))
-  }
-  const pauseTimer = (): void => setState((prev) => pause(prev, Date.now()))
-  const resumeTimer = (): void => setState((prev) => resume(prev, Date.now()))
-  const resetTimer = (): void => {
-    setSegments([])
-    setState((prev) => quit(prev))
-  }
-
+  )
   return {
     state,
     segments,
     session,
     liveRemaining,
-    startTimer,
-    pauseTimer,
-    resumeTimer,
-    resetTimer,
+    startTimer: (settings: Settings): void => {
+      const compiled = Domain.compile(
+        buildManualWorkout(settings.workSeconds, settings.restSeconds, settings.rounds),
+      )
+      setSession(settings)
+      setSegments(compiled.segments)
+      setState(() => Domain.start(compiled.segments, Date.now()))
+    },
+    pauseTimer: (): void => setState((prev) => Domain.pause(prev, Date.now())),
+    resumeTimer: (): void => setState((prev) => Domain.resume(prev, Date.now())),
+    resetTimer: (): void => {
+      setSegments([])
+      setState((prev) => Domain.quit(prev))
+    },
   }
 }
 
-/** The three text inputs and their clamp-on-read into a `Settings`. */
 function useTimerInputs() {
   const [workInput, setWorkInput] = useState(String(DEFAULTS.workSeconds))
   const [restInput, setRestInput] = useState(String(DEFAULTS.restSeconds))
   const [roundsInput, setRoundsInput] = useState(String(DEFAULTS.rounds))
-  const readSettings = (): Settings => ({
-    workSeconds: clampInt(workInput, WORK_MIN),
-    restSeconds: clampInt(restInput, REST_MIN),
-    rounds: clampInt(roundsInput, ROUNDS_MIN),
-  })
   return {
     workInput,
     restInput,
@@ -220,123 +180,82 @@ function useTimerInputs() {
     setWorkInput,
     setRestInput,
     setRoundsInput,
-    readSettings,
+    readSettings: (): Settings => ({
+      workSeconds: clampInt(workInput, WORK_MIN),
+      restSeconds: clampInt(restInput, REST_MIN),
+      rounds: clampInt(roundsInput, ROUNDS_MIN),
+    }),
   }
 }
 
-type ReadoutProps = {
-  readonly phase: string
-  readonly count: string
-  readonly context: string
-  readonly audio: AudioState
-  readonly onRetryAudio: () => void
-}
-
-/**
- * The phase label, the big `M:SS` count, the context line, and the
- * muted/sound indicator — tappable to retry the unlock — carrying `data-audio`.
- */
-function TimerReadout({ phase, count, context, audio, onRetryAudio }: ReadoutProps) {
+// prettier-ignore
+function Header({ audio, onRetry, className }: AudioProps & { className: string }) {
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-4">
-      <div className="flex w-full items-center justify-between">
-        <p className="text-sm font-medium tracking-wide text-muted-foreground uppercase">Timer</p>
-        <button
-          type="button"
-          data-testid="audio-indicator"
-          data-audio={audio}
-          onClick={onRetryAudio}
-          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-        >
-          {audio === 'on' ? 'Sound on' : 'Sound off'}
-        </button>
-      </div>
-      <p className="text-lg font-medium" data-testid="timer-phase">
-        {phase}
-      </p>
-      <p className="text-6xl font-semibold tabular-nums" data-testid="timer-count">
-        {count}
-      </p>
-      <p className="text-sm text-muted-foreground" data-testid="timer-context">
-        {context}
-      </p>
+    <div className={className}>
+      <p className="text-sm font-medium tracking-wide text-muted-foreground uppercase">Timer</p>
+      <button type="button" data-testid="audio-indicator" data-audio={audio} onClick={onRetry} className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+        {audio === 'on' ? 'Sound on' : 'Sound off'}
+      </button>
     </div>
   )
 }
 
-type NumberFieldProps = {
-  readonly label: string
-  readonly min: number
-  readonly testId: string
-  readonly value: string
-  readonly onChange: (value: string) => void
-}
-
-/** One labelled numeric input row. */
-function NumberField({ label, min, testId, value, onChange }: NumberFieldProps) {
+// prettier-ignore
+function Digits({ phase, count, context }: DigitsProps) {
   return (
-    <label className="flex items-center justify-between gap-3 text-sm">
-      <span>{label}</span>
-      <input
-        type="number"
-        min={min}
-        inputMode="numeric"
-        data-testid={testId}
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value)
-        }}
-        className="w-24 rounded-md border border-input bg-input/30 px-2.5 py-1.5 text-right text-sm"
-      />
-    </label>
+    <>
+      <p className="text-sm font-medium" data-testid="timer-phase">{phase}</p>
+      <p className="text-6xl font-semibold tabular-nums" data-testid="timer-count">{count}</p>
+      <p className="text-sm text-muted-foreground" data-testid="timer-context">{context}</p>
+    </>
   )
 }
 
-type IdleFormProps = {
-  readonly inputs: ReturnType<typeof useTimerInputs>
-  readonly onStart: () => void
-}
-
-/** The idle state: the three settings inputs and the Start control. */
-function IdleForm({ inputs, onStart }: IdleFormProps) {
+function IdleForm({
+  inputs,
+  onStart,
+}: {
+  inputs: ReturnType<typeof useTimerInputs>
+  onStart: () => void
+}) {
+  // prettier-ignore
+  const rows = [
+    ['timer-work', 'Work (sec)', WORK_MIN, 'work-input', inputs.workInput, inputs.setWorkInput],
+    ['timer-rest', 'Rest (sec)', REST_MIN, 'rest-input', inputs.restInput, inputs.setRestInput],
+    ['timer-rounds', 'Rounds', ROUNDS_MIN, 'rounds-input', inputs.roundsInput, inputs.setRoundsInput],
+  ] as const
+  // prettier-ignore
   return (
     <div className="flex w-full max-w-sm flex-col gap-3">
-      <NumberField
-        label="Work (sec)"
-        min={WORK_MIN}
-        testId="work-input"
-        value={inputs.workInput}
-        onChange={inputs.setWorkInput}
-      />
-      <NumberField
-        label="Rest (sec)"
-        min={REST_MIN}
-        testId="rest-input"
-        value={inputs.restInput}
-        onChange={inputs.setRestInput}
-      />
-      <NumberField
-        label="Rounds"
-        min={ROUNDS_MIN}
-        testId="rounds-input"
-        value={inputs.roundsInput}
-        onChange={inputs.setRoundsInput}
-      />
-      <Button type="button" data-testid="start-button" onClick={onStart}>
-        Start
-      </Button>
+      {rows.map(([id, label, min, testId, value, set]) => (
+        <Field key={id} orientation="horizontal">
+          <FieldLabel htmlFor={id}>{label}</FieldLabel>
+          <Input id={id} type="number" min={min} inputMode="numeric" data-testid={testId} value={value} onChange={(e) => { set(e.target.value) }} className="w-24 text-right" />
+        </Field>
+      ))}
+      <Button type="button" data-testid="start-button" onClick={onStart}>Start</Button>
     </div>
   )
 }
 
-type RunControlsProps = {
-  readonly state: TimerState
-  readonly onPause: () => void
-  readonly onResume: () => void
-  readonly onReset: () => void
+function IdleView(
+  p: AudioProps & DigitsProps & { inputs: ReturnType<typeof useTimerInputs>; onStart: () => void },
+) {
+  return (
+    <>
+      <div className="flex w-full max-w-sm flex-col items-center gap-4">
+        <Header
+          className="flex w-full items-center justify-between"
+          audio={p.audio}
+          onRetry={p.onRetry}
+        />
+        <Digits phase={p.phase} count={p.count} context={p.context} />
+      </div>
+      <IdleForm inputs={p.inputs} onStart={p.onStart} />
+    </>
+  )
 }
 
-/** The running/paused primary action; `null` when done (only Reset remains). */
 function primaryControl(state: TimerState, onPause: () => void, onResume: () => void) {
   if (state._tag === 'running') return { testId: 'pause-button', label: 'Pause', onClick: onPause }
   if (state._tag === 'paused')
@@ -344,78 +263,91 @@ function primaryControl(state: TimerState, onPause: () => void, onResume: () => 
   return null
 }
 
-/** Pause (running) or Resume (paused) — mutually exclusive — plus the always-present Reset. */
-function RunControls({ state, onPause, onResume, onReset }: RunControlsProps) {
-  const primary = primaryControl(state, onPause, onResume)
+function RunControls(p: {
+  state: TimerState
+  onPause: () => void
+  onResume: () => void
+  onReset: () => void
+}) {
+  const primary = primaryControl(p.state, p.onPause, p.onResume)
+  // prettier-ignore
   return (
-    <div className="flex w-full max-w-sm gap-2">
-      {primary === null ? null : (
-        <Button
-          type="button"
-          variant="secondary"
-          data-testid={primary.testId}
-          onClick={primary.onClick}
-          className="flex-1"
-        >
-          {primary.label}
-        </Button>
-      )}
-      <Button
-        type="button"
-        variant="outline"
-        data-testid="reset-button"
-        onClick={onReset}
-        className="flex-1"
-      >
-        Reset
-      </Button>
-    </div>
+    <ControlDock maxTier="css">
+      <div className="flex w-full items-center justify-center gap-3">
+        {primary === null ? null : (
+          <Button type="button" variant="secondary" data-testid={primary.testId} onClick={primary.onClick}>{primary.label}</Button>
+        )}
+        <Button type="button" variant="outline" data-testid="reset-button" onClick={p.onReset}>Reset</Button>
+      </div>
+    </ControlDock>
   )
 }
 
-/**
- * The `/timer` screen: an ad-hoc interval countdown run entirely client-side.
- * Reads work / rest / rounds, drives the domain timer (`useManualTimer`), and
- * wires the shared player kit — audio unlock on the Start tap (synchronous),
- * the `data-audio` indicator, and `useWakeLock` while running.
- */
+// prettier-ignore
+function RunningView(
+  p: AudioProps & DigitsProps & {
+    state: TimerState
+    fraction: number
+    playerPhase: PlayerPhase
+    onPause: () => void
+    onResume: () => void
+    onReset: () => void
+  },
+) {
+  return (
+    <>
+      <PhaseBackdrop phase={p.playerPhase} paused={p.state._tag === 'paused'} />
+      <Header className="relative z-10 flex items-center justify-between px-5 pt-6" audio={p.audio} onRetry={p.onRetry} />
+      {/* pointer-events-none so the absolute ControlDock below receives taps */}
+      <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center px-5 pb-40">
+        <div className="size-[min(290px,80vw)]">
+          <ProgressRing fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
+            <Digits phase={p.phase} count={p.count} context={p.context} />
+          </ProgressRing>
+        </div>
+      </div>
+      <div className="relative z-20">
+        <RunControls state={p.state} onPause={p.onPause} onResume={p.onResume} onReset={p.onReset} />
+      </div>
+    </>
+  )
+}
+
+/** `/timer` — Field-kit idle form; immersive backdrop + ring + dock while running. */
 export function TimerScreen() {
   const inputs = useTimerInputs()
   const timer = useManualTimer()
   const [, refreshAudio] = useReducer((n: number) => n + 1, 0)
-
-  const audio = audioState()
+  const audio = Audio.audioState()
   const isIdle = timer.state._tag === 'idle'
   useWakeLock(timer.state._tag === 'running')
-
-  const handleStart = (): void => {
-    // Unlock audio synchronously inside this tap — never deferred behind an
-    // await — so iOS actually starts the context.
-    unlockAudio()
-    refreshAudio()
-    timer.startTimer(inputs.readSettings())
-  }
-  const handleRetryAudio = (): void => {
-    unlockAudio()
+  const armAudio = (): void => {
+    Audio.unlockAudio()
     refreshAudio()
   }
-
-  const summarySettings = isIdle ? inputs.readSettings() : timer.session
-
+  const vm = viewModel(timer, isIdle ? inputs.readSettings() : timer.session)
+  const shell = isIdle
+    ? 'relative flex min-h-svh flex-col items-center gap-6 p-6'
+    : 'relative flex min-h-svh flex-col overflow-hidden'
   return (
-    <div className="flex min-h-svh flex-col items-center gap-6 p-6" data-testid="timer-screen">
-      <TimerReadout
-        phase={phaseLabel(timer.state, timer.segments)}
-        count={formatDuration(displayMillis(timer.state, timer.liveRemaining))}
-        context={contextLine(timer.state, timer.segments, summarySettings)}
-        audio={audio}
-        onRetryAudio={handleRetryAudio}
-      />
+    <div className={shell} data-testid="timer-screen">
       {isIdle ? (
-        <IdleForm inputs={inputs} onStart={handleStart} />
+        <IdleView
+          {...vm}
+          audio={audio}
+          onRetry={armAudio}
+          inputs={inputs}
+          onStart={() => {
+            armAudio()
+            timer.startTimer(inputs.readSettings())
+          }}
+        />
       ) : (
-        <RunControls
+        <RunningView
+          {...vm}
           state={timer.state}
+          audio={audio}
+          onRetry={armAudio}
           onPause={timer.pauseTimer}
           onResume={timer.resumeTimer}
           onReset={timer.resetTimer}

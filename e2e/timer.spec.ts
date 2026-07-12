@@ -142,17 +142,19 @@ function instrumentWakeLock(): void {
 /**
  * Exercises the `/timer` screen (`timer-screen.tsx`) against the real built
  * client + server `global-setup.ts` boots: nav reachability from Home via
- * `home-timer-link`, a full short run to Done with pause/resume/reset, and
- * Web Audio + `navigator.wakeLock` instrumentation via init scripts. Each
- * test registers its own per-project account from `timer.spec.ts`'s own
- * pre-minted invite pair (`readE2eEnv().timerInvitesByProject`) so
- * `fullyParallel` chromium+webkit runs never share codes with other spec files.
+ * `home-timer-link`, idle composition from the ui/ field kit, a full short run
+ * to Done with pause/resume/reset on the immersive ring + dock, and Web Audio
+ * + `navigator.wakeLock` instrumentation via init scripts. Each test registers
+ * its own per-project account from `timer.spec.ts`'s own pre-minted invite pair
+ * (`readE2eEnv().timerInvitesByProject`) so `fullyParallel` chromium+webkit
+ * runs never share codes with other spec files.
  */
 test.describe('timer (chromium + webkit)', () => {
   test(
     'e2e (chromium + webkit): /timer is reachable via home-timer-link from Home while ' +
-      'logged in; with short inputs (5s work, 0s rest, 2 rounds) Start runs ready → work → work → Done ' +
-      'with the round indicator advancing; Pause freezes the displayed count, Resume continues, Reset ' +
+      'logged in; idle composes work/rest/rounds from ui/ fields; with short inputs ' +
+      '(5s work, 0s rest, 2 rounds) Start runs ready → work → work → Done with the round ' +
+      'indicator advancing; Pause freezes the displayed count, Resume continues, Reset ' +
       'returns to the idle input state.',
     async ({ page }, testInfo) => {
       test.setTimeout(60_000)
@@ -169,12 +171,25 @@ test.describe('timer (chromium + webkit)', () => {
       await page.getByTestId('home-timer-link').click()
       await expect(page.getByTestId('timer-screen')).toBeVisible()
 
-      await page.getByTestId('work-input').fill('5')
-      await page.getByTestId('rest-input').fill('0')
-      await page.getByTestId('rounds-input').fill('2')
+      // Idle: kit Field + Input composition (data-slot contract), not raw rows.
+      const workInput = page.getByTestId('work-input')
+      const restInput = page.getByTestId('rest-input')
+      const roundsInput = page.getByTestId('rounds-input')
+      await expect(workInput).toHaveAttribute('data-slot', 'input')
+      await expect(restInput).toHaveAttribute('data-slot', 'input')
+      await expect(roundsInput).toHaveAttribute('data-slot', 'input')
+      await expect(workInput.locator('xpath=ancestor::*[@data-slot="field"]')).toHaveCount(1)
+
+      await workInput.fill('5')
+      await restInput.fill('0')
+      await roundsInput.fill('2')
 
       await page.getByTestId('start-button').click()
       await expect(page.getByTestId('timer-phase')).toHaveText('Get ready')
+      // Immersive kit mounts on start.
+      await expect(page.getByTestId('player-phase-backdrop')).toBeVisible()
+      await expect(page.getByTestId('player-progress-ring')).toBeVisible()
+      await expect(page.getByTestId('player-control-dock')).toBeVisible()
 
       await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 8000 })
       await expect(page.getByTestId('timer-context')).toHaveText('Round 1 of 2')
