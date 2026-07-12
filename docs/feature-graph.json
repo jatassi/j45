@@ -211,7 +211,7 @@
     },
     {
       "id": "design-system",
-      "title": "Design-system foundation — evolved tokens, ui/ kit on Base UI, domain vocabulary labels, /design gallery, client CLAUDE.md",
+      "title": "Design-system foundation — evolved tokens, ui/ kit on shadcn/ui Base UI, domain vocabulary labels, /design gallery, client CLAUDE.md",
       "status": "designed",
       "depends_on": [
         "liquid-glass-ui",
