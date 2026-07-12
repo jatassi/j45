@@ -13,6 +13,7 @@ import {
   cueKey,
   currentWorkContext,
   displayMillis,
+  leaveSessionAtom,
   nextWorkStationName,
   phaseLabel,
   podGroups,
@@ -216,24 +217,31 @@ function primaryControl(state: SessionState): PrimaryControl | null {
 }
 
 type Dispatch = (command: SessionCommand) => void
+type Leave = () => void
 
-/** The done state's single Finish control, which sends `quit`. */
-function DoneControls({ dispatch }: { readonly dispatch: Dispatch }) {
+type ExitControlProps = { readonly testId: string; readonly label: string; readonly onLeave: Leave }
+
+/**
+ * The only session exit — Finish on the done screen, Leave mid-workout — both
+ * invoking `LeaveSession`. Leaving records the caller's completion and, once
+ * everyone has left, ends the session. The done-state Finish reads as a primary
+ * action; the mid-workout Leave is a quieter `ghost`.
+ */
+function ExitControl({ testId, label, onLeave }: ExitControlProps) {
   return (
-    <div className="flex w-full max-w-sm">
-      <Button
-        type="button"
-        data-testid="session-finish"
-        className="flex-1"
-        onClick={() => dispatch('quit')}
-      >
-        Finish
-      </Button>
-    </div>
+    <Button
+      type="button"
+      variant={testId === 'session-leave' ? 'ghost' : 'default'}
+      data-testid={testId}
+      className="w-full flex-1"
+      onClick={onLeave}
+    >
+      {label}
+    </Button>
   )
 }
 
-/** Prev, the Pause/Resume primary, and Skip — the running/paused controls. */
+/** Prev, the Pause/Resume primary, and Skip — the timer-driving row. */
 function RunControls({
   primary,
   dispatch,
@@ -277,21 +285,36 @@ function RunControls({
 }
 
 /**
- * Pause/Resume, Prev, Skip — any participant may drive them; the done state
- * shows Finish (which sends `quit`, ending the session for everyone). All go
- * through `SendSessionCommand`.
+ * Pause/Resume, Prev, Skip, and the exit control — any participant may drive
+ * the timer controls (via `SendSessionCommand`); the exit (Leave mid-workout,
+ * Finish when done) goes through `LeaveSession`, the only way out. The leaver's
+ * own feed folds to `ended` when their stream detaches, navigating them home.
  */
 function SessionControls({ state, id }: { readonly state: SessionState; readonly id: SessionId }) {
   const [, send] = useAtom(sendSessionCommandAtom, { mode: 'promise' })
+  const [, leaveSession] = useAtom(leaveSessionAtom, { mode: 'promise' })
   const dispatch: Dispatch = (command) => {
     void send({ payload: { id, command } }).catch(() => {
       // Surfaced via sendSessionCommandAtom's own Result; nothing to do here.
     })
   }
-  return state.timer._tag === 'done' ? (
-    <DoneControls dispatch={dispatch} />
-  ) : (
-    <RunControls primary={primaryControl(state)} dispatch={dispatch} />
+  const onLeave: Leave = () => {
+    void leaveSession({ payload: { id } }).catch(() => {
+      // Surfaced via leaveSessionAtom's own Result; nothing to do here.
+    })
+  }
+  if (state.timer._tag === 'done') {
+    return (
+      <div className="flex w-full max-w-sm">
+        <ExitControl testId="session-finish" label="Finish" onLeave={onLeave} />
+      </div>
+    )
+  }
+  return (
+    <div className="flex w-full max-w-sm flex-col gap-2">
+      <RunControls primary={primaryControl(state)} dispatch={dispatch} />
+      <ExitControl testId="session-leave" label="Leave" onLeave={onLeave} />
+    </div>
   )
 }
 

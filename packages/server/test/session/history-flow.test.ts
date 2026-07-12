@@ -121,7 +121,7 @@ const listHistoryFor = (userId: UserId) =>
 
 describe('history flows via ListHistory (TestClock)', () => {
   it.scoped(
-    'host starts, ticker crosses into work, second user watches then unsubscribes mid-session, host quits — both ListHistory records hold workoutName, as-run snapshot, host, both participants, startedAt, endedAt',
+    'host starts, ticker crosses into work, second user joins then leaves mid-session, host leaves last — both ListHistory records hold workoutName, as-run snapshot, host, startedAt, endedAt, and timer-position progress',
     () =>
       Effect.gen(function* () {
         yield* seedUser(alice.userId, 'Alice')
@@ -130,49 +130,59 @@ describe('history flows via ListHistory (TestClock)', () => {
         const { id } = yield* startFixture(svc)
 
         // Sequence matters: advance first so the ticker crosses into work, THEN
-        // bob watches and leaves mid-session, THEN the host quits.
+        // bob joins the roster and leaves mid-session, THEN the host leaves last.
         yield* TestClock.adjust('5 seconds')
         yield* watchThenLeave(svc, id, bob)
+        yield* svc.leaveSession(id, bob.userId)
         expect((yield* svc.snapshot(id)).participants.map((p) => p.userId)).not.toContain(
           bob.userId,
         )
-        yield* svc.command(id, 'quit')
+        // The host, the last ever-participant, leaves — ending the session.
+        yield* svc.leaveSession(id, alice.userId)
 
         const aliceHistory = yield* listHistoryFor(alice.userId)
         const bobHistory = yield* listHistoryFor(bob.userId)
         expect(aliceHistory).toHaveLength(1)
         expect(bobHistory).toHaveLength(1)
 
-        for (const record of [aliceHistory[0], bobHistory[0]]) {
-          if (record === undefined) {
-            throw new Error('expected a ListHistory record')
-          }
+        const aliceRecord = aliceHistory[0]
+        const bobRecord = bobHistory[0]
+        if (aliceRecord === undefined || bobRecord === undefined) {
+          throw new Error('expected a ListHistory record')
+        }
+        for (const record of [aliceRecord, bobRecord]) {
           expect(record.workoutName).toBe('Fixture')
           expect(record.workout).toEqual(fixtureWorkout)
           expect(record.host).toEqual(alice)
-          expect(participantIdsSorted(record)).toEqual([alice.userId, bob.userId])
-          // Span from the test clock: started at epoch 0, ended at 5s.
+          // Span from the test clock: started at epoch 0, personal end at 5s.
           expect(DateTime.toEpochMillis(record.startedAt)).toBe(0)
           expect(DateTime.toEpochMillis(record.endedAt)).toBe(5000)
+          // Progress rides the wire: furthest segment entered is 1 of 4.
+          expect(record.progress?.segmentsCompleted).toBe(1)
+          expect(record.progress?.totalSegments).toBe(4)
         }
+        // Per-leaver participants: bob left first (both rostered), alice last.
+        expect(participantIdsSorted(bobRecord)).toEqual([alice.userId, bob.userId])
+        expect(participantIdsSorted(aliceRecord)).toEqual([alice.userId])
         // Distinct records — a fresh id each, filed under different users.
-        expect(aliceHistory[0]?.id).not.toBe(bobHistory[0]?.id)
+        expect(aliceRecord.id).not.toBe(bobRecord.id)
       }).pipe(Effect.provide(FlowLive)),
   )
 
   it.scoped(
-    'quit during ready writes no records for anyone; a progressed session GC’d after 60 idle seconds writes them',
+    'leaving during ready writes no records for anyone; a progressed session GC’d after 60 idle seconds writes them',
     () =>
       Effect.gen(function* () {
         yield* seedUser(alice.userId, 'Alice')
         yield* seedUser(bob.userId, 'Bob')
         const svc = yield* LiveSessions
 
-        // (a) Quit while still in the ready segment — ListHistory empty for both.
+        // (a) Leave while still in the ready segment — ListHistory empty for both.
         {
           const { id } = yield* startFixture(svc)
           yield* watchThenLeave(svc, id, bob)
-          yield* svc.command(id, 'quit')
+          yield* svc.leaveSession(id, bob.userId)
+          yield* svc.leaveSession(id, alice.userId)
 
           expect(yield* listHistoryFor(alice.userId)).toHaveLength(0)
           expect(yield* listHistoryFor(bob.userId)).toHaveLength(0)
@@ -253,10 +263,11 @@ describe('history flows via ListHistory (TestClock)', () => {
           { headers },
         )
 
-        // Progress past ready, then quit so a completion is written.
+        // Progress past ready, then the host (sole ever-participant) leaves, so
+        // a completion is written and the session ends.
         const svc = yield* LiveSessions
         yield* svc.command(summary.id, 'skip')
-        yield* svc.command(summary.id, 'quit')
+        yield* svc.leaveSession(summary.id, ownerId)
 
         const history = yield* listHistoryFor(ownerId)
         expect(history).toHaveLength(1)

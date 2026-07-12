@@ -4,6 +4,7 @@ import * as React from 'react'
 import { RegistryProvider, Result } from '@effect-atom/atom-react'
 import {
   CompletionId,
+  CompletionProgress,
   Flow,
   Participant,
   Pod,
@@ -226,6 +227,36 @@ describe('HistoryScreen', () => {
     expect(screen.getByTestId(`history-participants-${olderCompletion.id}`).textContent).toContain(
       'Carol',
     )
+  })
+
+  it('renders progress fraction when completion has progress', async () => {
+    const withProgress = new SessionCompletion({
+      id: Schema.decodeSync(CompletionId)('completion-with-progress'),
+      sessionId: Schema.decodeSync(SessionId)('session-with-progress'),
+      workoutName: 'Athletica',
+      workout: makeWorkout('Athletica'),
+      host: alice,
+      participants: [alice, bob],
+      startedAt: DateTime.unsafeMake('2026-03-01T10:00:00.000Z'),
+      endedAt: DateTime.unsafeMake('2026-03-01T10:30:00.000Z'),
+      progress: new CompletionProgress({ segmentsCompleted: 3, totalSegments: 12 }),
+    })
+
+    renderHistoryScreen({
+      ListHistory: () => Effect.succeed([withProgress]),
+    })
+
+    await screen.findByTestId(`history-row-${withProgress.id}`)
+    expect(screen.getByTestId(`history-progress-${withProgress.id}`).textContent).toBe('3/12')
+  })
+
+  it('omits progress element when completion has no progress', async () => {
+    renderHistoryScreen({
+      ListHistory: () => Effect.succeed([newerCompletion]),
+    })
+
+    await screen.findByTestId(`history-row-${newerCompletion.id}`)
+    expect(screen.queryByTestId(`history-progress-${newerCompletion.id}`)).toBeNull()
   })
 })
 

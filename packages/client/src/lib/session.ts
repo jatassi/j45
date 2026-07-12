@@ -73,8 +73,16 @@ export const sessionFeedFamily = Atom.family((id: SessionId) =>
   ),
 )
 
-/** Drives `SendSessionCommand`; any participant may pause/resume/skip/prev/quit. */
+/** Drives `SendSessionCommand`; any participant may pause/resume/skip/prev. */
 export const sendSessionCommandAtom = ServerRpcClient.mutation('SendSessionCommand')
+
+/**
+ * Drives `LeaveSession` — the only exit from a session. Leaving records the
+ * caller's progress (if the session progressed) and removes them; when the last
+ * participant leaves the session ends. The leaver's own feed folds to `ended`
+ * once their stream detaches, which navigates them home.
+ */
+export const leaveSessionAtom = ServerRpcClient.mutation('LeaveSession')
 
 /** Every work in run order — the flat list the progress cells render. */
 export const sessionWorks = (segments: readonly Segment[]): readonly WorkContext[] =>

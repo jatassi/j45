@@ -197,8 +197,8 @@ function instrumentWakeLock(): void {
 
 test.describe('live session (chromium only — two logged-in browser contexts)', () => {
   test(
-    'A starts Apex; B sees the active-session card within 10s and joins the same segment; B pause ' +
-      'and A skip are visible on both tabs; A skips to Done and Finish returns both to library',
+    'A starts Apex; B joins the same segment; B pause and A skip sync; A leaves mid-workout ' +
+      '(B keeps running without A); B finishes and the session card clears on home',
     async ({ page, browser, browserName }) => {
       test.skip(
         browserName !== 'chromium',
@@ -253,12 +253,24 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         const contextAfter = await page.getByTestId('session-context').textContent()
         await expect(pageB.getByTestId('session-context')).toHaveText(contextAfter ?? '')
 
-        await skipSessionToDone(page)
-        await expect(page.getByTestId('session-finish')).toBeVisible()
-        await page.getByTestId('session-finish').click()
-
+        // A leaves mid-workout — only A navigates home; B's player keeps running.
+        await clickSessionControl(page, 'session-leave')
         await expect(page.getByTestId('library-screen')).toBeVisible()
+
+        await expect(pageB.getByTestId('session-screen')).toBeVisible()
+        await expect(pageB.getByTestId('session-phase')).toBeVisible()
+        await expect(pageB.getByTestId('session-participants')).not.toContainText(displayA)
+
+        // Last leave ends the session: B skips to Done and finishes.
+        await skipSessionToDone(pageB)
+        await expect(pageB.getByTestId('session-finish')).toBeVisible()
+        await clickSessionControl(pageB, 'session-finish')
         await expect(pageB.getByTestId('library-screen')).toBeVisible()
+
+        // Home poll (5s) must drop the ended session card for an observer (A).
+        await expect(page.getByTestId(`session-card-${sessionId}`)).not.toBeVisible({
+          timeout: 10_000,
+        })
       } finally {
         await contextB.close()
       }

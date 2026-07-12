@@ -150,6 +150,7 @@ export class SessionRpcs extends RpcGroup.make(
     payload: { id: SessionId, command: SessionCommand },
     error: SessionNotFound,
   }),
+  Rpc.make('LeaveSession', { payload: { id: SessionId }, error: SessionNotFound }),
 ).middleware(AuthMiddleware) {}
 
 /**

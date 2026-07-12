@@ -7,17 +7,15 @@ import {
   prev as prevTimer,
   resume as resumeTimer,
   SessionId,
-  SessionNotFound,
   SessionState,
-  SessionSummary,
   skip as skipTimer,
   start as startTimer,
-  type CompiledWorkout,
   type Participant,
   type SessionCommand,
+  type SessionNotFound,
+  type SessionSummary,
   type TimerState,
   type UserId,
-  type Workout,
 } from '@j45/domain'
 import * as Clock from 'effect/Clock'
 import * as DateTime from 'effect/DateTime'
@@ -27,6 +25,7 @@ import * as Effect from 'effect/Effect'
 import * as ExecutionStrategy from 'effect/ExecutionStrategy'
 import * as Exit from 'effect/Exit'
 import * as HashMap from 'effect/HashMap'
+import * as HashSet from 'effect/HashSet'
 import * as Option from 'effect/Option'
 import * as Queue from 'effect/Queue'
 import * as Ref from 'effect/Ref'
@@ -35,7 +34,27 @@ import * as Scope from 'effect/Scope'
 import * as Stream from 'effect/Stream'
 import * as SubscriptionRef from 'effect/SubscriptionRef'
 
-import { completionRowsForSession, CompletionsRepo } from './completions-repo.js'
+import {
+  completionRowForUser,
+  completionRowsForSession,
+  CompletionsRepo,
+} from './completions-repo.js'
+import {
+  addPresence,
+  getHandle,
+  isProgressed,
+  participantsOf,
+  progressOf,
+  removePresence,
+  summaryOf,
+  timersEqual,
+  withState,
+  type PresenceEntry,
+  type Registry,
+  type SessionHandle,
+  type StartParams,
+  type Sub,
+} from './session-state.js'
 
 /**
  * A session with zero raw subscribers for this long is considered abandoned
@@ -46,160 +65,6 @@ const GC_IDLE: Duration.Duration = Duration.seconds(60)
 
 /** Turns a raw UUID into a branded `SessionId` — every session gets a fresh one. */
 const freshSessionId = Schema.decodeSync(SessionId)
-
-/**
- * One user's presence in a session, plus how many live subscriptions they
- * hold. `participants` lists each user once (two tabs = one participant); a
- * user leaves the list only when their *last* subscription releases.
- */
-type PresenceEntry = { readonly participant: Participant; readonly count: number }
-
-/**
- * The in-memory actor for one live session. Its `stateRef` is the single
- * source of truth streamed to watchers; every mutation — commands, ticker
- * advances, presence changes — is serialized through `sem`, so a command and
- * the ticker never interleave a read-modify-write. `wakeup` re-arms the
- * ticker when a command changes the deadline out from under its sleep;
- * `rawSubs` (counting every subscription, not distinct users) drives the GC;
- * `ended` completes every watcher stream and, via the reaper, closes `scope`
- * (which owns the ticker and GC fibers).
- */
-type SessionHandle = {
-  readonly id: SessionId
-  readonly host: Participant
-  readonly workoutName: string
-  readonly workout: Workout
-  readonly compiled: CompiledWorkout
-  readonly startedAt: DateTime.Utc
-  readonly stateRef: SubscriptionRef.SubscriptionRef<SessionState>
-  readonly rawSubs: SubscriptionRef.SubscriptionRef<number>
-  readonly presence: Ref.Ref<HashMap.HashMap<UserId, PresenceEntry>>
-  // Add-only: every user who ever joined stays, even after they unsubscribe —
-  // by design distinct from `presence`, which shrinks on leave. Seeded with
-  // the host, grown by `join`, never pruned. Drives who gets a completion row.
-  readonly roster: Ref.Ref<HashMap.HashMap<UserId, Participant>>
-  // Flips true the first time a published timer crosses into segment 1 (past
-  // the ready segment) or reaches done; gates whether ending writes any rows.
-  readonly progressed: Ref.Ref<boolean>
-  readonly sem: Effect.Semaphore
-  readonly wakeup: Queue.Queue<undefined>
-  readonly ended: Deferred.Deferred<undefined>
-  readonly scope: Scope.CloseableScope
-}
-
-/** The shared registry every session actor is filed under. */
-type Registry = {
-  readonly sessions: Ref.Ref<HashMap.HashMap<SessionId, SessionHandle>>
-  readonly layerScope: Scope.Scope
-  readonly completionsRepo: CompletionsRepo
-}
-
-type StartParams = {
-  readonly host: Participant
-  readonly workoutName: string
-  readonly workout: Workout
-  readonly compiled: CompiledWorkout
-}
-
-/** Structural equality on timer states — used to suppress no-op republishes. */
-const timersEqual = (a: TimerState, b: TimerState): boolean => {
-  if (a._tag !== b._tag) {
-    return false
-  }
-  if (a._tag === 'running' && b._tag === 'running') {
-    return a.segmentIndex === b.segmentIndex && a.endsAtMillis === b.endsAtMillis
-  }
-  if (a._tag === 'paused' && b._tag === 'paused') {
-    return a.segmentIndex === b.segmentIndex && a.remainingMillis === b.remainingMillis
-  }
-  return true
-}
-
-/**
- * A fresh snapshot with a new `serverNow` plus whichever of `timer` /
- * `participants` the caller overrides — everything else carried from `state`.
- * The two publish paths (a timer advance, a presence change) each vary one.
- */
-const withState = (
-  state: SessionState,
-  over: {
-    readonly serverNow: number
-    readonly timer?: TimerState
-    readonly participants?: readonly Participant[]
-  },
-): SessionState =>
-  new SessionState({
-    id: state.id,
-    host: state.host,
-    workoutName: state.workoutName,
-    compiled: state.compiled,
-    timer: over.timer ?? state.timer,
-    serverNow: over.serverNow,
-    participants: over.participants ?? state.participants,
-  })
-
-const addPresence =
-  (participant: Participant) =>
-  (map: HashMap.HashMap<UserId, PresenceEntry>): HashMap.HashMap<UserId, PresenceEntry> => {
-    const count = Option.match(HashMap.get(map, participant.userId), {
-      onNone: () => 0,
-      onSome: (entry) => entry.count,
-    })
-    return HashMap.set(map, participant.userId, { participant, count: count + 1 })
-  }
-
-const removePresence =
-  (userId: UserId) =>
-  (map: HashMap.HashMap<UserId, PresenceEntry>): HashMap.HashMap<UserId, PresenceEntry> =>
-    Option.match(HashMap.get(map, userId), {
-      onNone: () => map,
-      onSome: (entry) =>
-        entry.count <= 1
-          ? HashMap.remove(map, userId)
-          : HashMap.set(map, userId, { participant: entry.participant, count: entry.count - 1 }),
-    })
-
-const participantsOf = (map: HashMap.HashMap<UserId, PresenceEntry>): readonly Participant[] =>
-  [...HashMap.values(map)]
-    .map((entry) => entry.participant)
-    .sort((a, b) =>
-      a.displayName === b.displayName
-        ? a.userId.localeCompare(b.userId)
-        : a.displayName.localeCompare(b.displayName),
-    )
-
-/**
- * Whether a timer state counts as having progressed past the ready segment —
- * any running/paused segment beyond index 0, or a finished workout. A session
- * that only ever sat at the ready segment never progressed.
- */
-const isProgressed = (timer: TimerState): boolean =>
-  timer._tag === 'done' ||
-  ((timer._tag === 'running' || timer._tag === 'paused') && timer.segmentIndex >= 1)
-
-const getHandle = (
-  registry: Registry,
-  id: SessionId,
-): Effect.Effect<SessionHandle, SessionNotFound> =>
-  Effect.flatMap(Ref.get(registry.sessions), (map) =>
-    Option.match(HashMap.get(map, id), {
-      onNone: () => Effect.fail(new SessionNotFound({ id })),
-      onSome: Effect.succeed,
-    }),
-  )
-
-const summaryOf = (handle: SessionHandle): Effect.Effect<SessionSummary> =>
-  Effect.map(
-    Ref.get(handle.presence),
-    (map) =>
-      new SessionSummary({
-        id: handle.id,
-        hostDisplayName: handle.host.displayName,
-        workoutName: handle.workoutName,
-        startedAt: handle.startedAt,
-        participantCount: HashMap.size(map),
-      }),
-  )
 
 // A single serialized read-modify-write over one session's timer. The ticker
 // and every command funnel through here, so their writes never interleave. A
@@ -241,19 +106,39 @@ const republishParticipants = (handle: SessionHandle): Effect.Effect<void> =>
     }),
   )
 
-const join = (handle: SessionHandle, participant: Participant): Effect.Effect<void> =>
+// Acquiring a `watch`: register a fresh `Sub`, count its subscription, add the
+// user to presence, (re-)add them to the roster, and clear any departed flag —
+// a re-watch after leaving restores them as a fresh ever-participant. Returns
+// the `Sub` so the release finalizer can claim its own decrement.
+const join = (handle: SessionHandle, participant: Participant): Effect.Effect<Sub> =>
   Effect.gen(function* () {
+    const id = yield* Ref.modify(handle.nextSubId, (n) => [n, n + 1])
+    const active = yield* Ref.make(true)
+    const interrupt = yield* Deferred.make<undefined>()
+    const sub: Sub = { id, userId: participant.userId, active, interrupt }
+    yield* Ref.update(handle.subs, HashMap.set(id, sub))
     yield* SubscriptionRef.update(handle.rawSubs, (n) => n + 1)
     yield* Ref.update(handle.presence, addPresence(participant))
     // Add-only: a re-set refreshes their display name but never removes them.
     yield* Ref.update(handle.roster, HashMap.set(participant.userId, participant))
+    yield* Ref.update(handle.departed, HashSet.remove(participant.userId))
     yield* republishParticipants(handle)
+    return sub
   })
 
-const leave = (handle: SessionHandle, userId: UserId): Effect.Effect<void> =>
+// Releasing a `watch`: drop the sub from the registry, then claim its
+// decrement — but only if `leaveSession` did not already detach this user (it
+// flips `active` false and does the decrement itself). Claiming is atomic, so
+// exactly one of the two paths decrements.
+const leave = (handle: SessionHandle, sub: Sub): Effect.Effect<void> =>
   Effect.gen(function* () {
+    yield* Ref.update(handle.subs, HashMap.remove(sub.id))
+    const claimed = yield* Ref.getAndSet(sub.active, false)
+    if (!claimed) {
+      return
+    }
     yield* SubscriptionRef.update(handle.rawSubs, (n) => Math.max(0, n - 1))
-    yield* Ref.update(handle.presence, removePresence(userId))
+    yield* Ref.update(handle.presence, removePresence(sub.userId))
     yield* republishParticipants(handle)
   })
 
@@ -267,6 +152,7 @@ const endSession = (registry: Registry, handle: SessionHandle): Effect.Effect<vo
     // ready segment writes nothing. Teardown (below) runs regardless — a
     // failed insert is logged and swallowed, never blocking the reaper.
     if (yield* Ref.get(handle.progressed)) {
+      const state = yield* SubscriptionRef.get(handle.stateRef)
       const rows = completionRowsForSession({
         sessionId: handle.id,
         workoutName: handle.workoutName,
@@ -275,6 +161,7 @@ const endSession = (registry: Registry, handle: SessionHandle): Effect.Effect<vo
         participants: [...HashMap.values(yield* Ref.get(handle.roster))],
         startedAt: handle.startedAt,
         endedAt: yield* DateTime.now,
+        progress: progressOf(state.timer, handle.compiled.segments.length),
       })
       yield* Effect.catchAllCause(registry.completionsRepo.insertAll(rows), (cause) =>
         Effect.logError('session completion write failed', cause),
@@ -359,6 +246,9 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
       // Seeded with the host: they count as an ever-participant even if they
       // never open a watch stream themselves.
       roster: yield* Ref.make(HashMap.make([params.host.userId, params.host])),
+      departed: yield* Ref.make(HashSet.empty<UserId>()),
+      subs: yield* Ref.make(HashMap.empty<number, Sub>()),
+      nextSubId: yield* Ref.make(0),
       progressed: yield* Ref.make(false),
       sem: yield* Effect.makeSemaphore(1),
       wakeup: yield* Queue.unbounded<undefined>(),
@@ -395,10 +285,15 @@ const watch = (
   Stream.unwrapScoped(
     Effect.gen(function* () {
       const handle = yield* getHandle(registry, id)
-      yield* Effect.acquireRelease(join(handle, participant), () =>
-        leave(handle, participant.userId),
+      const sub = yield* Effect.acquireRelease(join(handle, participant), (sub) =>
+        leave(handle, sub),
       )
-      return handle.stateRef.changes.pipe(Stream.interruptWhenDeferred(handle.ended))
+      // Ends on the session-wide `ended` (everyone) or this user's own
+      // `interrupt` (a `leaveSession` detaching just them).
+      return handle.stateRef.changes.pipe(
+        Stream.interruptWhenDeferred(handle.ended),
+        Stream.interruptWhenDeferred(sub.interrupt),
+      )
     }),
   )
 
@@ -409,9 +304,6 @@ const command = (
 ): Effect.Effect<void, SessionNotFound> =>
   Effect.gen(function* () {
     const handle = yield* getHandle(registry, id)
-    if (cmd === 'quit') {
-      return yield* endSession(registry, handle)
-    }
     const segments = handle.compiled.segments
     yield* applyTimer(handle, (timer, now) => {
       switch (cmd) {
@@ -430,6 +322,91 @@ const command = (
       }
     })
   })
+
+// Step (1) of a leave: a progressed session writes the leaver one completion
+// row now — personal `endedAt`, `progress` from the published timer, and
+// `participants` = the roster *before* unrostering, so the row lists the leaver
+// among the still-present ever-participants. No row before progression.
+const recordLeaver = (
+  registry: Registry,
+  handle: SessionHandle,
+  userId: UserId,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    if (!(yield* Ref.get(handle.progressed))) {
+      return
+    }
+    const state = yield* SubscriptionRef.get(handle.stateRef)
+    const rows = completionRowForUser(
+      {
+        sessionId: handle.id,
+        workoutName: handle.workoutName,
+        workout: handle.workout,
+        host: handle.host,
+        participants: [...HashMap.values(yield* Ref.get(handle.roster))],
+        startedAt: handle.startedAt,
+        endedAt: yield* DateTime.now,
+        progress: progressOf(state.timer, handle.compiled.segments.length),
+      },
+      userId,
+    )
+    yield* Effect.catchAllCause(registry.completionsRepo.insertAll(rows), (cause) =>
+      Effect.logError('session completion write failed', cause),
+    )
+  })
+
+// Step (3) of a leave: interrupt every one of the leaver's subscriptions and,
+// for each one we still own (an atomic `active` claim), drop its presence and
+// raw-sub count — so a later stream-release finalizer never double-decrements.
+const detachUser = (handle: SessionHandle, userId: UserId): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const subs = yield* Ref.get(handle.subs)
+    const userSubs = [...HashMap.values(subs)].filter((sub) => sub.userId === userId)
+    for (const sub of userSubs) {
+      yield* Ref.update(handle.subs, HashMap.remove(sub.id))
+      const claimed = yield* Ref.getAndSet(sub.active, false)
+      yield* Deferred.succeed(sub.interrupt, undefined)
+      if (claimed) {
+        yield* SubscriptionRef.update(handle.rawSubs, (n) => Math.max(0, n - 1))
+        yield* Ref.update(handle.presence, removePresence(userId))
+      }
+    }
+    // Republish the shrunken participant list (inline: the sem is held).
+    const now = yield* Clock.currentTimeMillis
+    const state = yield* SubscriptionRef.get(handle.stateRef)
+    const presence = yield* Ref.get(handle.presence)
+    yield* SubscriptionRef.set(
+      handle.stateRef,
+      withState(state, { serverNow: now, participants: participantsOf(presence) }),
+    )
+  })
+
+// One participant leaving a session, serialized through the handle's `sem` like
+// every other mutation. In order: (1) record the leaver's row; (2) unroster —
+// move the leaver from roster to `departed` so a later end never writes them
+// again; (3) detach their streams and presence; (4) maybe end — end immediately
+// when presence is empty and every ever-participant has departed (empty
+// roster), otherwise leave the 60s GC to end it.
+const leaveSession = (
+  registry: Registry,
+  id: SessionId,
+  userId: UserId,
+): Effect.Effect<void, SessionNotFound> =>
+  Effect.flatMap(getHandle(registry, id), (handle) =>
+    handle.sem.withPermits(1)(
+      Effect.gen(function* () {
+        yield* recordLeaver(registry, handle, userId)
+        yield* Ref.update(handle.roster, HashMap.remove(userId))
+        yield* Ref.update(handle.departed, HashSet.add(userId))
+        yield* detachUser(handle, userId)
+        const presenceEmpty = HashMap.isEmpty(yield* Ref.get(handle.presence))
+        const rosterEmpty = HashMap.isEmpty(yield* Ref.get(handle.roster))
+        if (presenceEmpty && rosterEmpty) {
+          yield* endSession(registry, handle)
+        }
+      }),
+    ),
+  )
 
 /**
  * The server-authoritative registry of live workout sessions — one in-memory
@@ -453,6 +430,7 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
       snapshot: (id: SessionId) => snapshot(registry, id),
       watch: (id: SessionId, participant: Participant) => watch(registry, id, participant),
       command: (id: SessionId, cmd: SessionCommand) => command(registry, id, cmd),
+      leaveSession: (id: SessionId, userId: UserId) => leaveSession(registry, id, userId),
     } as const
   }),
 }) {}

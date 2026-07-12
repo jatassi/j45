@@ -130,19 +130,19 @@ async function progressAndSkipToDone(page: Page): Promise<void> {
 
 /**
  * Via the home nav link (not `page.goto`), open `/history` and assert the row
- * for this session: Apex name, a non-empty date, host label, and both
- * participant display names. Scope to the row containing `rowMarker` so
- * leftover history from other e2e runs cannot confuse the assertion.
+ * for this session: Apex name, a non-empty date, and host label. Scope to the
+ * row containing `rowMarker` so leftover history from other e2e runs cannot
+ * confuse the assertion. Does not assert `participants` — each leave writes a
+ * per-stint roster snapshot, so co-leavers may not share the same list.
+ * Returns the completion id for progress assertions.
  */
 async function assertHistoryRow(
   page: Page,
   input: {
     readonly rowMarker: string
     readonly hostLabel: string
-    readonly displayA: string
-    readonly displayB: string
   },
-): Promise<void> {
+): Promise<string> {
   await page.getByTestId('history-nav-link').click()
   await expect(page).toHaveURL(/\/history/)
   await expect(page.getByTestId('history-screen')).toBeVisible()
@@ -164,15 +164,26 @@ async function assertHistoryRow(
   await expect(page.getByTestId(`history-host-${completionId}`)).toHaveText(
     `Host: ${input.hostLabel}`,
   )
-  const participants = page.getByTestId(`history-participants-${completionId}`)
-  await expect(participants).toContainText(input.displayA)
-  await expect(participants).toContainText(input.displayB)
+  return completionId
+}
+
+/** Parse `segmentsCompleted` from `history-progress-<id>` text like `"3/12"`. */
+async function readHistoryProgressNumerator(page: Page, completionId: string): Promise<number> {
+  const progress = page.getByTestId(`history-progress-${completionId}`)
+  await expect(progress).toBeVisible()
+  const rawText = await progress.textContent()
+  const text = rawText?.trim() ?? ''
+  const match = /^(\d+)\/(\d+)$/.exec(text)
+  if (match === null) {
+    throw new Error(`history-progress-${completionId} text was not N/M: ${JSON.stringify(text)}`)
+  }
+  return Number(match[1])
 }
 
 test.describe('history (chromium + webkit)', () => {
   test(
-    'two users complete a progressed Apex session; both see name, date, host, and ' +
-      'participants on /history via the home nav link',
+    'two users independently leave a progressed Apex session; both see name, date, host on ' +
+      '/history; mid-leave progress numerator is strictly lower than done-leave',
     async ({ page, browser }, testInfo) => {
       test.setTimeout(90_000)
 
@@ -212,28 +223,37 @@ test.describe('history (chromium + webkit)', () => {
         await expect(pageB).toHaveURL(new RegExp(`/session/${sessionId}`))
         await expect(pageB.getByTestId('session-screen')).toBeVisible()
 
-        // Skip past ready (and on to Done) so a completion is written on quit;
-        // Finish only renders in the done state.
-        await progressAndSkipToDone(page)
-        await expect(page.getByTestId('session-finish')).toBeVisible()
-        await page.getByTestId('session-finish').click()
-
+        // A progresses past ready, then leaves mid-workout (partial progress).
+        const phaseBefore = await page.getByTestId('session-phase').textContent()
+        await clickSessionControl(page, 'session-skip')
+        await expect
+          .poll(async () => {
+            const phase = await page.getByTestId('session-phase').textContent()
+            return phase === 'Done' || phase !== phaseBefore
+          })
+          .toBe(true)
+        await clickSessionControl(page, 'session-leave')
         await expect(page.getByTestId('library-screen')).toBeVisible()
+
+        // B continues to Done and leaves via Finish (higher progress).
+        await progressAndSkipToDone(pageB)
+        await expect(pageB.getByTestId('session-finish')).toBeVisible()
+        await clickSessionControl(pageB, 'session-finish')
         await expect(pageB.getByTestId('library-screen')).toBeVisible()
 
-        // Host sees "you"; guest sees the host's real display name.
-        await assertHistoryRow(page, {
+        // Host row still lists B (roster at A's leave); guest row is keyed by host name.
+        const completionIdA = await assertHistoryRow(page, {
           rowMarker: displayB,
           hostLabel: 'you',
-          displayA,
-          displayB,
         })
-        await assertHistoryRow(pageB, {
+        const completionIdB = await assertHistoryRow(pageB, {
           rowMarker: displayA,
           hostLabel: displayA,
-          displayA,
-          displayB,
         })
+
+        const progressA = await readHistoryProgressNumerator(page, completionIdA)
+        const progressB = await readHistoryProgressNumerator(pageB, completionIdB)
+        expect(progressA).toBeLessThan(progressB)
       } finally {
         await contextB.close()
       }

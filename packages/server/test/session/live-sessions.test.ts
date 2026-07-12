@@ -326,26 +326,70 @@ describe('LiveSessions', () => {
     }).pipe(Effect.provide(TestLive)),
   )
 
-  it.effect('quit completes every subscriber stream and removes the session', () =>
-    Effect.gen(function* () {
-      const svc = yield* LiveSessions
-      const { id } = yield* startFixture(svc)
+  it.effect(
+    'leaving detaches only the leaver’s stream; the last leaver empties the roster and ends the session',
+    () =>
+      Effect.gen(function* () {
+        const svc = yield* LiveSessions
+        const { id } = yield* startFixture(svc)
 
-      // The subscriber first receives the live snapshot.
-      const { scope, pull, first } = yield* openWatch(svc, id, bob)
-      expect(Chunk.isNonEmpty(first)).toBe(true)
+        // Host and a second participant both watching.
+        const aliceW = yield* openWatch(svc, id, alice)
+        const bobW = yield* openWatch(svc, id, bob)
+        expect((yield* svc.snapshot(id)).participants).toHaveLength(2)
 
-      yield* svc.command(id, 'quit')
+        // bob leaves: his stream ends, he drops from the list, session lives on
+        // (alice is still a non-departed roster member).
+        yield* svc.leaveSession(id, bob.userId)
+        expect(Exit.isFailure(yield* Effect.exit(bobW.pull))).toBe(true)
+        expect(yield* svc.list()).toHaveLength(1)
+        expect(participantIds(yield* svc.snapshot(id))).toEqual([alice.userId])
 
-      // Then the stream ends: no further element is produced.
-      expect(Exit.isFailure(yield* Effect.exit(pull))).toBe(true)
-      yield* Scope.close(scope, Exit.void)
+        // alice (the host, the last ever-participant) leaves: presence empty and
+        // roster empty, so the session ends immediately.
+        yield* svc.leaveSession(id, alice.userId)
+        expect(Exit.isFailure(yield* Effect.exit(aliceW.pull))).toBe(true)
+        yield* Scope.close(aliceW.scope, Exit.void)
+        yield* Scope.close(bobW.scope, Exit.void)
 
-      // The session is gone from the active list and can no longer be found.
-      expect(yield* svc.list()).toHaveLength(0)
-      expect(Exit.isFailure(yield* Effect.exit(svc.snapshot(id)))).toBe(true)
-      expect(Exit.isFailure(yield* Effect.exit(svc.command(id, 'pause')))).toBe(true)
-    }).pipe(Effect.provide(TestLive)),
+        expect(yield* svc.list()).toHaveLength(0)
+        expect(Exit.isFailure(yield* Effect.exit(svc.snapshot(id)))).toBe(true)
+        expect(Exit.isFailure(yield* Effect.exit(svc.leaveSession(id, alice.userId)))).toBe(true)
+      }).pipe(Effect.provide(TestLive)),
+  )
+
+  it.effect(
+    'leaveSession removes every one of the leaver’s subscriptions once — later stream releases never double-decrement',
+    () =>
+      Effect.gen(function* () {
+        const svc = yield* LiveSessions
+        const { id } = yield* startFixture(svc)
+        // Pause so the ticker idles and only the abandonment clock is in play.
+        yield* svc.command(id, 'pause')
+
+        const a = yield* openWatch(svc, id, alice)
+        const b1 = yield* openWatch(svc, id, bob)
+        const b2 = yield* openWatch(svc, id, bob)
+        // bob is deduped to one participant despite two live subscriptions.
+        expect((yield* svc.snapshot(id)).participants).toHaveLength(2)
+
+        // Leaving detaches both of bob's subscriptions and drops him from the list.
+        yield* svc.leaveSession(id, bob.userId)
+        expect(participantIds(yield* svc.snapshot(id))).toEqual([alice.userId])
+        expect(Exit.isFailure(yield* Effect.exit(b1.pull))).toBe(true)
+        expect(Exit.isFailure(yield* Effect.exit(b2.pull))).toBe(true)
+
+        // Releasing bob's now-interrupted subscriptions must not decrement again.
+        yield* Scope.close(b1.scope, Exit.void)
+        yield* Scope.close(b2.scope, Exit.void)
+        expect(participantIds(yield* svc.snapshot(id))).toEqual([alice.userId])
+
+        // alice's lone live subscription still holds rawSubs above zero, so 90s
+        // does not GC — proof the double release did not drive rawSubs to zero.
+        yield* TestClock.adjust('90 seconds')
+        expect(yield* svc.list()).toHaveLength(1)
+        yield* Scope.close(a.scope, Exit.void)
+      }).pipe(Effect.provide(TestLive)),
   )
 
   it.effect('a session with zero subscribers for 60 consecutive seconds ends and disappears', () =>

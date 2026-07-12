@@ -265,7 +265,7 @@
     {
       "id": "session-leave",
       "title": "Per-participant leave — LeaveSession rpc, per-stint completion rows with progress, session ends when the last participant leaves",
-      "status": "designed",
+      "status": "validated",
       "depends_on": [
         "live-session",
         "session-history"

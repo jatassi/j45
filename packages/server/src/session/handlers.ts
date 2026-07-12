@@ -29,14 +29,16 @@ const asDefect = (error: SqlError): Effect.Effect<never> => Effect.die(error)
  * Presence join/leave is the watch stream's own acquire/release inside
  * `LiveSessions.watch` — this layer just hands the caller through as a
  * `Participant`. Commands are identity-agnostic: any authenticated
- * participant may pause/skip/quit, so `SendSessionCommand` does not re-read
- * `CurrentUser`.
+ * participant may pause/skip, so `SendSessionCommand` does not re-read
+ * `CurrentUser`. `LeaveSession`, by contrast, is inherently about who you are,
+ * so its handler reads `CurrentUser` and leaves the session as that user.
  */
 export const SessionHandlersLive: Layer.Layer<
   | Rpc.Handler<'StartSession'>
   | Rpc.Handler<'ListActiveSessions'>
   | Rpc.Handler<'WatchSession'>
-  | Rpc.Handler<'SendSessionCommand'>,
+  | Rpc.Handler<'SendSessionCommand'>
+  | Rpc.Handler<'LeaveSession'>,
   never,
   WorkoutsRepo | LiveSessions
 > = SessionRpcs.toLayer(
@@ -81,6 +83,9 @@ export const SessionHandlersLive: Layer.Layer<
         ),
 
       SendSessionCommand: ({ id, command }) => liveSessions.command(id, command),
+
+      LeaveSession: ({ id }) =>
+        Effect.flatMap(CurrentUser, (user) => liveSessions.leaveSession(id, user.id)),
     }
   }),
 )

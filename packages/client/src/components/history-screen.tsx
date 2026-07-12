@@ -45,6 +45,11 @@ function HistoryRow({ completion, callerId }: HistoryRowProps) {
         >
           {participantNames}
         </span>
+        {completion.progress ? (
+          <span className="text-muted-foreground" data-testid={`history-progress-${completion.id}`}>
+            {completion.progress.segmentsCompleted}/{completion.progress.totalSegments}
+          </span>
+        ) : null}
       </div>
     </li>
   )

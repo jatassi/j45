@@ -51,10 +51,11 @@ export class SessionSummary extends Schema.Class<SessionSummary>('SessionSummary
 
 /**
  * Host-only control over a running session's timer. Maps 1:1 onto the
- * pure timer transitions in `./timer.js` (`pause`/`resume`/`skip`/`prev`
- * plus `quit` which returns the timer to idle and ends the session).
+ * timer-advancing transitions in `./timer.js` (`pause`/`resume`/`skip`/`prev`).
+ * There is no session-ending command — leaving a session is per-participant
+ * (`LeaveSession`), and the session ends when the last participant leaves.
  */
-export const SessionCommand = Schema.Literal('pause', 'resume', 'skip', 'prev', 'quit')
+export const SessionCommand = Schema.Literal('pause', 'resume', 'skip', 'prev')
 export type SessionCommand = typeof SessionCommand.Type
 
 /**

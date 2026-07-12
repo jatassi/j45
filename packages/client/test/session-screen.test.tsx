@@ -225,14 +225,14 @@ describe('SessionScreen — controls', () => {
     })
   })
 
-  it('the done state shows Finish, which sends the quit command', async () => {
+  it('the done state shows Finish, which leaves the session', async () => {
     const id = 'sess-done'
     const sessionId = Schema.decodeSync(SessionId)(id)
-    const commands: unknown[] = []
+    const leaves: unknown[] = []
     renderSession(id, {
       WatchSession: () => liveStream(makeState(sessionId, new TimerDone({}), Date.now())),
-      SendSessionCommand: (payload) => {
-        commands.push(payload)
+      LeaveSession: (payload) => {
+        leaves.push(payload)
         return Effect.succeed(undefined)
       },
     })
@@ -241,7 +241,28 @@ describe('SessionScreen — controls', () => {
     fireEvent.click(screen.getByTestId('session-finish'))
 
     await waitFor(() => {
-      expect(commands).toContainEqual({ id: sessionId, command: 'quit' })
+      expect(leaves).toContainEqual({ id: sessionId })
+    })
+  })
+
+  it('the interim Leave control leaves the session mid-workout', async () => {
+    const id = 'sess-leave'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const leaves: unknown[] = []
+    const timer = new TimerRunning({ segmentIndex: 1, endsAtMillis: Date.now() + 30_000 })
+    renderSession(id, {
+      WatchSession: () => liveStream(makeState(sessionId, timer, Date.now())),
+      LeaveSession: (payload) => {
+        leaves.push(payload)
+        return Effect.succeed(undefined)
+      },
+    })
+
+    await screen.findByTestId('session-leave')
+    fireEvent.click(screen.getByTestId('session-leave'))
+
+    await waitFor(() => {
+      expect(leaves).toContainEqual({ id: sessionId })
     })
   })
 })
