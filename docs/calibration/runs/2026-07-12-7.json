@@ -1,0 +1,139 @@
+{
+  "run": {
+    "prepared_at": "2026-07-12T08:10:55.187Z",
+    "target": "redesign",
+    "scope": [
+      "home-dashboard",
+      "library-screens"
+    ],
+    "tokens": {
+      "spent": 1488293,
+      "by_role": {
+        "plan": 131729,
+        "build": 0,
+        "drive": 382327,
+        "validate": 52298
+      },
+      "attribution": "overlapped"
+    },
+    "halted": null
+  },
+  "features": [
+    {
+      "id": "home-dashboard",
+      "workflow_path": "standard",
+      "outcome": "validated",
+      "reason": null,
+      "reslice": null,
+      "agents": {
+        "plan": 1,
+        "build": 0,
+        "drive": 4,
+        "validate": 1
+      },
+      "tasks": [
+        {
+          "id": "home-data",
+          "size": "s",
+          "judgment_level": "rote",
+          "footprint": [
+            "packages/client/src/lib/home.ts",
+            "packages/client/test/home-data.test.ts"
+          ]
+        },
+        {
+          "id": "home-hero",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/home-hero.tsx",
+            "packages/client/test/home-hero.test.tsx"
+          ]
+        },
+        {
+          "id": "home-screen",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/home-screen.tsx",
+            "packages/client/test/home-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "home-e2e",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/home.spec.ts",
+            "e2e/nav-shell.spec.ts",
+            "e2e/live-session.spec.ts"
+          ]
+        }
+      ],
+      "actual": {
+        "files_touched": 10,
+        "insertions": 1817,
+        "deletions": 106,
+        "commits": 1,
+        "duration_minutes": 42
+      }
+    },
+    {
+      "id": "library-screens",
+      "workflow_path": "standard",
+      "outcome": "validated",
+      "reason": null,
+      "reslice": null,
+      "agents": {
+        "plan": 1,
+        "build": 0,
+        "drive": 3,
+        "validate": 1
+      },
+      "tasks": [
+        {
+          "id": "library-list",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/library-screen.tsx",
+            "packages/client/src/components/library-segments.tsx",
+            "packages/client/src/components/focus-badge.tsx",
+            "packages/client/test/library-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "exercises-catalog",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/exercise-library-screen.tsx",
+            "packages/client/src/components/exercise-dialogs.tsx",
+            "packages/client/src/app.tsx",
+            "packages/client/test/exercise-library-screen.test.tsx",
+            "e2e/exercises.spec.ts"
+          ]
+        },
+        {
+          "id": "workout-detail",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/workout-detail-screen.tsx",
+            "packages/client/test/workout-detail-screen.test.tsx",
+            "e2e/library.spec.ts",
+            "e2e/plan-editing.spec.ts",
+            "e2e/flow-control.spec.ts"
+          ]
+        }
+      ],
+      "actual": {
+        "files_touched": 18,
+        "insertions": 1391,
+        "deletions": 1037,
+        "commits": 1,
+        "duration_minutes": 43
+      }
+    }
+  ]
+}
