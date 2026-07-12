@@ -1,0 +1,105 @@
+{
+  "run": {
+    "prepared_at": "2026-07-10T01:51:49.162Z",
+    "target": "main",
+    "scope": [
+      "live-session"
+    ],
+    "tokens": {
+      "spent": 490008,
+      "by_role": {
+        "plan": 0,
+        "build": 0,
+        "drive": 137734,
+        "validate": 0
+      },
+      "attribution": "serial"
+    },
+    "halted": null
+  },
+  "features": [
+    {
+      "id": "live-session",
+      "workflow_path": "standard",
+      "outcome": "validated",
+      "reason": null,
+      "reslice": null,
+      "agents": {
+        "plan": 0,
+        "build": 0,
+        "drive": 3,
+        "validate": 0
+      },
+      "tasks": [
+        {
+          "id": "domain-session",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/domain/src/session.ts",
+            "packages/domain/src/rpc.ts",
+            "packages/domain/src/index.ts",
+            "packages/domain/test/session.test.ts"
+          ]
+        },
+        {
+          "id": "live-sessions-service",
+          "size": "m",
+          "judgment_level": "complex",
+          "footprint": [
+            "packages/server/src/session/live-sessions.ts",
+            "packages/server/test/session/live-sessions.test.ts"
+          ]
+        },
+        {
+          "id": "session-handlers",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/server/src/session/handlers.ts",
+            "packages/domain/src/rpc.ts",
+            "packages/server/src/server.ts",
+            "packages/server/test/session/handlers.test.ts"
+          ]
+        },
+        {
+          "id": "session-screen",
+          "size": "m",
+          "judgment_level": "complex",
+          "footprint": [
+            "packages/client/src/components/session-screen.tsx",
+            "packages/client/src/lib/session.ts",
+            "packages/client/src/router.tsx",
+            "packages/client/test/session-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "session-entry-points",
+          "size": "s",
+          "judgment_level": "standard",
+          "footprint": [
+            "packages/client/src/components/workout-detail-screen.tsx",
+            "packages/client/src/components/library-screen.tsx",
+            "packages/client/test/workout-detail-screen.test.tsx",
+            "packages/client/test/library-screen.test.tsx"
+          ]
+        },
+        {
+          "id": "e2e-live-session",
+          "size": "m",
+          "judgment_level": "standard",
+          "footprint": [
+            "e2e/live-session.spec.ts"
+          ]
+        }
+      ],
+      "actual": {
+        "files_touched": 20,
+        "insertions": 3046,
+        "deletions": 89,
+        "commits": 1,
+        "duration_minutes": 1284
+      }
+    }
+  ]
+}
