@@ -95,10 +95,11 @@ test('serves the landing page at "/" and the glass demo at "/glass"', async ({ p
   const baseUrl = getBaseUrl()
 
   // The app content is auth-gated (auth-accounts), so an anonymous visit to
-  // "/" renders the login screen — the point here is that the normal app
-  // mounts with zero glass surfaces, not what's behind the gate.
+  // "/" renders the login screen. `App` installs the document backdrop for
+  // every route (glass is app-wide), so exactly one backdrop element exists
+  // here too — never a second one.
   await page.goto(baseUrl)
-  await expect(page.locator('[data-glass-backdrop]')).toHaveCount(0)
+  await expect(page.locator('[data-glass-backdrop]')).toHaveCount(1)
   await expect(page.getByTestId('login-screen')).toBeVisible()
 
   await page.goto(`${baseUrl}/glass`)

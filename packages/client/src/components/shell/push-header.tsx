@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react'
+import { useRef } from 'react'
 
 import { useRouter, type RouterHistory } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
+
+import { useLiquidGlass } from '@/glass/use-liquid-glass'
 
 type PushHeaderProps = {
   readonly title: string
@@ -24,6 +27,8 @@ type PushHeaderProps = {
  * real `RouterHistory` surface before calling it.
  */
 function PushHeader({ title, action, onBack }: PushHeaderProps) {
+  const surfaceRef = useRef<HTMLDivElement>(null)
+  useLiquidGlass(surfaceRef)
   const router = useRouter()
 
   const handleBack = () => {
@@ -40,21 +45,26 @@ function PushHeader({ title, action, onBack }: PushHeaderProps) {
   }
 
   return (
-    <div className="sticky top-0 z-20 border-b border-border/40 bg-background/80 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 backdrop-blur-md">
-      <div className="grid grid-cols-[2.75rem_1fr_2.75rem] items-center gap-1">
-        <button
-          type="button"
-          data-testid="back-button"
-          onClick={handleBack}
-          className="flex size-11 items-center justify-center rounded-full text-foreground hover:bg-muted/50"
-          aria-label="Go back"
-        >
-          <ChevronLeft className="size-6" strokeWidth={2} aria-hidden />
-        </button>
-        <h1 className="truncate text-center font-heading text-[17px] font-bold tracking-tight text-foreground">
-          {title}
-        </h1>
-        <div className="flex min-h-11 items-center justify-end">{action}</div>
+    <div className="sticky top-0 z-20">
+      <div
+        ref={surfaceRef}
+        className="glass-surface rounded-none border-x-0 border-t-0 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2"
+      >
+        <div className="grid grid-cols-[2.75rem_1fr_2.75rem] items-center gap-1">
+          <button
+            type="button"
+            data-testid="back-button"
+            onClick={handleBack}
+            className="flex size-11 items-center justify-center rounded-full text-foreground hover:bg-muted/50"
+            aria-label="Go back"
+          >
+            <ChevronLeft className="size-6" strokeWidth={2} aria-hidden />
+          </button>
+          <h1 className="truncate text-center font-heading text-[17px] font-bold tracking-tight text-foreground">
+            {title}
+          </h1>
+          <div className="flex min-h-11 items-center justify-end">{action}</div>
+        </div>
       </div>
     </div>
   )

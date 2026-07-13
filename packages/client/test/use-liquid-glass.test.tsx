@@ -207,11 +207,11 @@ describe('useLiquidGlass — geometry trigger (refract tier)', () => {
     const params = mocks.surfaceTex.render.mock.calls.at(0)?.[0]
 
     expect(params?.radiusCss).toBe(28)
-    expect(params?.bevel).toBe(34)
-    expect(params?.strength).toBe(11)
-    expect(params?.curvature).toBe(3)
-    expect(params?.chroma).toBe(0.24)
-    expect(params?.reflect).toBe(0.24)
+    expect(params?.bevel).toBe(GLASS_DEFAULTS.bevel)
+    expect(params?.strength).toBe(GLASS_DEFAULTS.strength)
+    expect(params?.curvature).toBe(GLASS_DEFAULTS.curvature)
+    expect(params?.chroma).toBe(GLASS_DEFAULTS.chroma)
+    expect(params?.reflect).toBe(GLASS_DEFAULTS.reflect)
   })
 
   it('re-renders only on geometry change: a stable resize is a no-op, a moving one renders (rAF-coalesced)', () => {
@@ -405,15 +405,15 @@ describe('useLiquidGlass — degraded paths and teardown', () => {
 })
 
 describe('GLASS_DEFAULTS', () => {
-  it('are the personal-site port values plus the reflect + maxTier defaults', () => {
+  it('are the /glass-lab-tuned material values plus the maxTier default', () => {
     expect(GLASS_DEFAULTS).toEqual({
-      bevel: 34,
-      strength: 11,
-      curvature: 3,
-      chroma: 0.24,
+      bevel: 13,
+      strength: 17,
+      curvature: 2.2,
+      chroma: 0.13,
       blur: 1.5,
-      saturate: 1.5,
-      reflect: 0.24,
+      saturate: 1,
+      reflect: 0.27,
       maxTier: 'refract',
     })
   })

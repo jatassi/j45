@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { useLiquidGlass } from '@/glass/use-liquid-glass'
 import { decodeDraftDetailed, summarizeDraft, type DraftFieldError } from '@/lib/workout-draft'
 import * as Editor from '@/lib/workout-editor-state'
 
@@ -34,14 +35,18 @@ type EditorFormProps = {
 
 /** The sticky `works · MM:SS` chip; hidden while the draft fails to decode. */
 function SummaryChip({ summary }: { readonly summary: string | null }) {
+  const surfaceRef = React.useRef<HTMLDivElement>(null)
+  useLiquidGlass(surfaceRef)
   if (summary === null) {
     return null
   }
   return (
-    <div className="sticky top-[calc(env(safe-area-inset-top)+3rem)] z-10 border-b border-border/40 bg-background/80 px-6 py-2 backdrop-blur-md">
-      <span data-testid="editor-summary" className="text-sm text-muted-foreground">
-        {summary}
-      </span>
+    <div className="sticky top-[calc(env(safe-area-inset-top)+3rem)] z-10">
+      <div ref={surfaceRef} className="glass-surface rounded-none border-x-0 border-t-0 px-6 py-2">
+        <span data-testid="editor-summary" className="text-sm text-muted-foreground">
+          {summary}
+        </span>
+      </div>
     </div>
   )
 }

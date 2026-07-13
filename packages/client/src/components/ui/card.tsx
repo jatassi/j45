@@ -1,14 +1,36 @@
 import type * as React from 'react'
+import { useRef } from 'react'
 
+import { useSceneSurface } from '@/glass/use-scene-surface'
 import { cn } from '@/lib/utils'
 
+/**
+ * Every card registers itself as a glass scene proxy (colour and radius
+ * measured from computed style), so fixed glass chrome — the tab bar, sticky
+ * headers, the control dock — refracts the content scrolling beneath it.
+ * Cards inside a `.glass-surface` (e.g. `GlassCard`, dialog/drawer content)
+ * are skipped by the hook itself.
+ */
 function Card({
   className,
   size = 'default',
+  ref,
   ...props
 }: React.ComponentProps<'div'> & { size?: 'default' | 'sm' }) {
+  const sceneRef = useRef<HTMLDivElement | null>(null)
+  useSceneSurface(sceneRef)
   return (
     <div
+      ref={(node) => {
+        sceneRef.current = node
+        if (typeof ref === 'function') {
+          return ref(node)
+        }
+        if (ref) {
+          ref.current = node
+        }
+        return undefined
+      }}
       data-slot="card"
       data-size={size}
       className={cn(

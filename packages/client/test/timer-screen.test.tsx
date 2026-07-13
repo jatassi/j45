@@ -14,7 +14,10 @@ import { router } from '@/router'
 
 // Glass hooks touch canvas / ResizeObserver during mount; the timer screen only
 // needs the immersive kit DOM contracts in these unit tests.
-vi.mock('@/glass/use-liquid-glass', () => ({ useLiquidGlass: vi.fn() }))
+vi.mock('@/glass/use-liquid-glass', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useLiquidGlass: vi.fn(),
+}))
 vi.mock('@/glass/use-scene-surface', () => ({ useSceneSurface: vi.fn() }))
 
 afterEach(() => {

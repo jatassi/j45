@@ -1,27 +1,12 @@
+import type { CSSProperties, ReactNode } from 'react'
 import { useRef } from 'react'
 
 import { Link, useLocation } from '@tanstack/react-router'
-import { History, Home, LibraryBig, Sparkles, type LucideIcon } from 'lucide-react'
 
+import type { GlassOptions } from '@/glass/use-liquid-glass'
 import { useLiquidGlass } from '@/glass/use-liquid-glass'
-import { cn } from '@/lib/utils'
 
-type TabId = 'home' | 'library' | 'generate' | 'history'
-
-type TabDef = {
-  readonly id: TabId
-  readonly testId: string
-  readonly to: '/' | '/library' | '/generate' | '/history'
-  readonly label: string
-  readonly Icon: LucideIcon
-}
-
-const TABS: readonly TabDef[] = [
-  { id: 'home', testId: 'tab-home', to: '/', label: 'Home', Icon: Home },
-  { id: 'library', testId: 'tab-library', to: '/library', label: 'Library', Icon: LibraryBig },
-  { id: 'generate', testId: 'tab-generate', to: '/generate', label: 'Generate', Icon: Sparkles },
-  { id: 'history', testId: 'tab-history', to: '/history', label: 'History', Icon: History },
-]
+import { tabItemClass, TABS, type TabDef, type TabId } from './tab-defs'
 
 /** True when `pathname` is `base` or a sub-path under it. */
 function matchesPath(pathname: string, base: string): boolean {
@@ -49,21 +34,52 @@ function activeTabForPath(pathname: string): TabId | null {
   return null
 }
 
-function TabLink({ tab, active }: { readonly tab: TabDef; readonly active: boolean }) {
-  const { Icon, label, testId, to } = tab
+/** Icon + label of one tab — the look, minus the interactive wrapper. */
+function TabItemBody({ tab, active }: { readonly tab: TabDef; readonly active: boolean }) {
+  const { Icon, label } = tab
   return (
-    <Link
-      to={to}
-      data-testid={testId}
-      aria-current={active ? 'page' : undefined}
-      data-active={active ? 'true' : undefined}
-      className={cn(
-        'flex min-h-11 flex-1 flex-col items-center justify-center gap-1 py-0.5 transition-colors',
-        active ? 'text-primary' : 'text-white/45',
-      )}
-    >
+    <>
       <Icon className="size-[22px]" strokeWidth={active ? 2.4 : 1.9} aria-hidden />
       <span className="text-[9px] font-medium tracking-wide uppercase">{label}</span>
+    </>
+  )
+}
+
+/**
+ * The tab bar's chrome: fixed bottom wrapper + the glass surface, with the
+ * tab items supplied by the caller. `glass`/`style` exist for the glass lab
+ * (`/glass-lab`) to tune the material; the app's `TabBar` passes neither.
+ */
+function TabBarSurface(props: {
+  readonly glass?: Partial<GlassOptions>
+  readonly style?: CSSProperties
+  readonly children: ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useLiquidGlass(ref, props.glass)
+  return (
+    <div className="fixed inset-x-3 bottom-0 z-20 pb-[env(safe-area-inset-bottom)]">
+      <div
+        ref={ref}
+        style={props.style}
+        className="glass-surface mb-3 flex items-stretch rounded-full px-2 py-2.5"
+      >
+        {props.children}
+      </div>
+    </div>
+  )
+}
+
+function TabLink({ tab, active }: { readonly tab: TabDef; readonly active: boolean }) {
+  return (
+    <Link
+      to={tab.to}
+      data-testid={tab.testId}
+      aria-current={active ? 'page' : undefined}
+      data-active={active ? 'true' : undefined}
+      className={tabItemClass(active)}
+    >
+      <TabItemBody tab={tab} active={active} />
     </Link>
   )
 }
@@ -73,20 +89,16 @@ function TabLink({ tab, active }: { readonly tab: TabDef; readonly active: boole
  * Active tab is derived from the router location — no props.
  */
 function TabBar() {
-  const ref = useRef<HTMLDivElement>(null)
-  useLiquidGlass(ref)
   const { pathname } = useLocation()
   const active = activeTabForPath(pathname)
 
   return (
-    <div className="fixed inset-x-3 bottom-0 z-20 pb-[env(safe-area-inset-bottom)]">
-      <div ref={ref} className="glass-surface mb-3 flex items-stretch rounded-3xl px-2 py-2.5">
-        {TABS.map((tab) => (
-          <TabLink key={tab.id} tab={tab} active={active === tab.id} />
-        ))}
-      </div>
-    </div>
+    <TabBarSurface>
+      {TABS.map((tab) => (
+        <TabLink key={tab.id} tab={tab} active={active === tab.id} />
+      ))}
+    </TabBarSurface>
   )
 }
 
-export { TabBar }
+export { TabBar, TabBarSurface, TabItemBody }

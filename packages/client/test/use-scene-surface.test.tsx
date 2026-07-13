@@ -5,7 +5,6 @@ import { useRef } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { SliceGeometry } from '@/glass/backdrop'
 import type { DocRect, SceneProxy, SceneProxyHandle } from '@/glass/scene'
 import { sceneRegistry } from '@/glass/scene'
 import { useSceneSurface } from '@/glass/use-scene-surface'
@@ -56,43 +55,6 @@ function stubPaintCtx(): CanvasRenderingContext2D & {
     stroke: ReturnType<typeof vi.fn>
   }
 }
-
-type Call = { op: string; args: unknown[] }
-function stubCompositeCtx(calls: Call[]): CanvasRenderingContext2D {
-  const rec =
-    (op: string) =>
-    (...args: unknown[]) => {
-      calls.push({ op, args })
-    }
-  return {
-    fillStyle: '',
-    scale: rec('scale'),
-    translate: rec('translate'),
-    save: rec('save'),
-    restore: rec('restore'),
-    beginPath: rec('beginPath'),
-    rect: rec('rect'),
-    clip: rec('clip'),
-    fillRect: rec('fillRect'),
-    createRadialGradient: (...args: unknown[]) => {
-      calls.push({ op: 'createRadialGradient', args })
-      return {
-        addColorStop: (...a: unknown[]) => {
-          calls.push({ op: 'addColorStop', args: a })
-        },
-      }
-    },
-  } as unknown as CanvasRenderingContext2D
-}
-
-const slice = (o: Partial<SliceGeometry> = {}): SliceGeometry => ({
-  sliceLeft: 0,
-  sliceTop: 0,
-  bufferWidth: 300,
-  bufferHeight: 200,
-  dpr: 1,
-  ...o,
-})
 
 function firstProxy(register: {
   mock: { calls: readonly (readonly [SceneProxy, ...unknown[]])[] }
@@ -254,48 +216,14 @@ describe('useSceneSurface — document-space + resize-driven update', () => {
 })
 
 describe('useSceneSurface — glass-surface source guard', () => {
-  it('calls register with source but real registry refuses paint', () => {
+  it('never registers an element that is itself a glass surface (silent skip, no warn)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const realRegister = sceneRegistry.register.bind(sceneRegistry)
-    const paintHits = vi.fn()
-    let capturedHandle: SceneProxyHandle | undefined
-    const register = vi.spyOn(sceneRegistry, 'register').mockImplementation((proxy) => {
-      const handle = realRegister({
-        ...proxy,
-        paint: (ctx) => {
-          paintHits()
-          proxy.paint(ctx)
-        },
-      })
-      capturedHandle = handle
-      return handle
-    })
+    const register = vi.spyOn(sceneRegistry, 'register')
 
     render(<Probe options={{ color: '#f00', z: 2 }} className="glass-surface" />)
-    const el = screen.getByTestId('surface')
 
-    expect(register).toHaveBeenCalledTimes(1)
-    const proxy = firstProxy(register)
-    expect(proxy.source).toBe(el)
-
-    expect(capturedHandle).toBeDefined()
-    expect(() => {
-      capturedHandle?.update({ z: 9 })
-      capturedHandle?.invalidate()
-      capturedHandle?.dispose()
-    }).not.toThrow()
-
-    const calls: Call[] = []
-    const ctx = stubCompositeCtx(calls)
-    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx)
-    sceneRegistry.compositeSlice({
-      slice: slice({ bufferWidth: 100, bufferHeight: 100, dpr: 1 }),
-      viewport: { width: 100, height: 100 },
-      documentWidth: 100,
-      document,
-    })
-    expect(paintHits).not.toHaveBeenCalled()
-    getContext.mockRestore()
+    expect(register).not.toHaveBeenCalled()
+    expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 })

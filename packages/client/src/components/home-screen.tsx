@@ -16,6 +16,7 @@ import { HomeHero } from '@/components/home-hero'
 import { QueryBoundary } from '@/components/query-boundary'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useSceneSurface } from '@/glass/use-scene-surface'
 import { listHistoryAtom, pickHero, recentRows, startWorkoutAtom } from '@/lib/home'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import { cn } from '@/lib/utils'
@@ -72,35 +73,42 @@ function useStartWorkout(workoutId: WorkoutId) {
   }
 }
 
+/** One quick-start tile: scene-registered so glass chrome refracts it. */
+function QuickTile(props: {
+  readonly to: '/timer' | '/generate' | '/workouts/new'
+  readonly testId: string
+  readonly label: string
+  readonly Icon: typeof Timer
+}) {
+  const ref = React.useRef<HTMLAnchorElement>(null)
+  useSceneSurface(ref)
+  const { Icon } = props
+  return (
+    <Link
+      ref={ref}
+      to={props.to}
+      data-testid={props.testId}
+      className="flex min-h-11 flex-col items-center justify-center gap-1.5 rounded-2xl bg-card p-3 ring-1 ring-foreground/10 transition-colors hover:bg-muted/40"
+    >
+      <Icon className="size-6 text-foreground/85" strokeWidth={2} aria-hidden />
+      <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+        {props.label}
+      </span>
+    </Link>
+  )
+}
+
 /** Timer · Generate · New — three equal quick-start tiles with 44px+ targets. */
 function QuickStartRow() {
-  const tileClass =
-    'flex min-h-11 flex-col items-center justify-center gap-1.5 rounded-2xl bg-card p-3 ring-1 ring-foreground/10 transition-colors hover:bg-muted/40'
-
   return (
     <section className="flex w-full max-w-sm flex-col gap-3" aria-label="Quick start">
       <p className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
         Quick start
       </p>
       <nav className="grid grid-cols-3 gap-3">
-        <Link to="/timer" data-testid="home-timer-link" className={tileClass}>
-          <Timer className="size-6 text-foreground/85" strokeWidth={2} aria-hidden />
-          <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-            Timer
-          </span>
-        </Link>
-        <Link to="/generate" data-testid="home-generate-link" className={tileClass}>
-          <Sparkles className="size-6 text-foreground/85" strokeWidth={2} aria-hidden />
-          <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-            Generate
-          </span>
-        </Link>
-        <Link to="/workouts/new" data-testid="home-new-workout-link" className={tileClass}>
-          <Plus className="size-6 text-foreground/85" strokeWidth={2} aria-hidden />
-          <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-            New
-          </span>
-        </Link>
+        <QuickTile to="/timer" testId="home-timer-link" label="Timer" Icon={Timer} />
+        <QuickTile to="/generate" testId="home-generate-link" label="Generate" Icon={Sparkles} />
+        <QuickTile to="/workouts/new" testId="home-new-workout-link" label="New" Icon={Plus} />
       </nav>
     </section>
   )
@@ -108,6 +116,30 @@ function QuickStartRow() {
 
 type RecentRowProps = {
   readonly libraryWorkout: LibraryWorkout
+}
+
+/** The row's start affordance — drives `startWorkoutAtom` without navigating. */
+function RecentStartButton({ libraryWorkout }: RecentRowProps) {
+  const { workout, id } = libraryWorkout
+  const { busy, start } = useStartWorkout(id)
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size="icon"
+      className="size-11 shrink-0 rounded-full"
+      data-testid={`recent-start-${id}`}
+      disabled={busy}
+      aria-label={`Start ${workout.name}`}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        start()
+      }}
+    >
+      <Play className="size-4" fill="currentColor" />
+    </Button>
+  )
 }
 
 /**
@@ -119,10 +151,14 @@ function RecentRow({ libraryWorkout }: RecentRowProps) {
   const { workout, id } = libraryWorkout
   const { workTotal, totalDurationMillis } = compile(workout)
   const focus = workout.focus
-  const { busy, start } = useStartWorkout(id)
+  const sceneRef = React.useRef<HTMLLIElement>(null)
+  useSceneSurface(sceneRef)
 
   return (
-    <li className="flex items-center gap-2 rounded-2xl bg-card p-2 ring-1 ring-foreground/10">
+    <li
+      ref={sceneRef}
+      className="flex items-center gap-2 rounded-2xl bg-card p-2 ring-1 ring-foreground/10"
+    >
       <Link
         to="/workouts/$workoutId"
         params={{ workoutId: id }}
@@ -147,22 +183,7 @@ function RecentRow({ libraryWorkout }: RecentRowProps) {
           </p>
         </div>
       </Link>
-      <Button
-        type="button"
-        variant="secondary"
-        size="icon"
-        className="size-11 shrink-0 rounded-full"
-        data-testid={`recent-start-${id}`}
-        disabled={busy}
-        aria-label={`Start ${workout.name}`}
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          start()
-        }}
-      >
-        <Play className="size-4" fill="currentColor" />
-      </Button>
+      <RecentStartButton libraryWorkout={libraryWorkout} />
     </li>
   )
 }

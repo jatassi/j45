@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ControlDock } from '@/components/player/control-dock'
 import { useLiquidGlass } from '@/glass/use-liquid-glass'
 
-vi.mock('@/glass/use-liquid-glass', () => ({ useLiquidGlass: vi.fn() }))
+vi.mock('@/glass/use-liquid-glass', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useLiquidGlass: vi.fn(),
+}))
 
 afterEach(() => {
   cleanup()

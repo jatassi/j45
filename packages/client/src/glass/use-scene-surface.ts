@@ -5,7 +5,13 @@ import type { DocRect } from './scene'
 import { sceneRegistry } from './scene'
 
 export type SceneSurfaceOptions = {
-  color: string
+  /** Fill colour. Omitted → measured from the element's computed
+   *  `background-color` at mount (a fully transparent computed colour
+   *  paints nothing). */
+  color?: string
+  /** Corner radius, CSS px. Omitted → measured from computed
+   *  `border-radius`, clamped to half the shorter side (so `rounded-full`
+   *  pills paint the radius the browser paints). */
   radius?: number
   z?: number
   hairline?: string
@@ -20,6 +26,20 @@ function readDocRect(el: HTMLElement): DocRect {
     width: rect.width,
     height: rect.height,
   }
+}
+
+/** Measured corner radius in CSS px, clamped like the glass hook's. */
+function measureRadius(el: HTMLElement, rect: DocRect): number {
+  const value = Number.parseFloat(getComputedStyle(el).borderTopLeftRadius)
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+  return Math.min(value, Math.min(rect.width, rect.height) / 2)
+}
+
+/** True when the computed colour string is fully transparent. */
+function isTransparent(color: string): boolean {
+  return color === 'transparent' || /rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0\s*\)/.test(color)
 }
 
 /**
@@ -45,27 +65,30 @@ function observe(el: HTMLElement, onChange: () => void): () => void {
 /**
  * Register `ref`'s element as an opaque card proxy with the scene registry.
  * Geometry is document-space; paint draws a filled rounded rect (optional
- * hairline) at the proxy origin. The registry's own `.glass-surface` guard
- * refuses sources inside glass — the hook always registers and lets that
- * guard decide.
+ * hairline) at the proxy origin. `color`/`radius` omitted are measured from
+ * computed style, so a plain content card registers with no configuration.
+ * Elements inside a `.glass-surface` are silently skipped — glass never
+ * refracts glass, and content laid over glass belongs to that surface, not
+ * to the scene behind it.
  */
 export function useSceneSurface(
   ref: RefObject<HTMLElement | null>,
-  options: SceneSurfaceOptions,
+  options: SceneSurfaceOptions = {},
 ): void {
-  const { color, radius = 0, z = 0, hairline } = options
+  const { color, radius, z = 0, hairline } = options
 
   useEffect(() => {
     const el = ref.current
-    if (!el) {
+    if (!el || el.closest('.glass-surface')) {
       return undefined
     }
 
+    const rect = readDocRect(el)
     // Mutable so paint always uses the latest geometry after resize updates.
     const live = {
-      rect: readDocRect(el),
-      color,
-      radius,
+      rect,
+      color: color ?? getComputedStyle(el).backgroundColor,
+      radius: radius ?? measureRadius(el, rect),
       hairline,
     }
 
@@ -74,6 +97,9 @@ export function useSceneSurface(
       z,
       source: el,
       paint(ctx) {
+        if (isTransparent(live.color)) {
+          return
+        }
         ctx.beginPath()
         ctx.roundRect(0, 0, live.rect.width, live.rect.height, live.radius)
         ctx.fillStyle = live.color
@@ -87,9 +113,9 @@ export function useSceneSurface(
     })
 
     const syncRect = (): void => {
-      const rect = readDocRect(el)
-      live.rect = rect
-      handle.update({ rect })
+      live.rect = readDocRect(el)
+      live.radius = radius ?? measureRadius(el, live.rect)
+      handle.update({ rect: live.rect })
     }
 
     const stopObserving = observe(el, syncRect)

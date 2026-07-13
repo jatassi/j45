@@ -16,8 +16,9 @@ import { glassScheduler } from './scheduler'
  * `curvature`/`chroma`/`reflect`) or applied as the layer canvas's CSS filter
  * (`blur`/`saturate`). The corner radius is measured from computed
  * `border-radius`, never passed. `maxTier` caps a surface at the CSS tier even
- * when WebGL2 is available (the phone-gate escape hatch). Defaults are the
- * personal-site port's.
+ * when WebGL2 is available (the phone-gate escape hatch). Defaults were tuned
+ * on `/glass-lab` (2026-07); the personal-site port's originals were
+ * bevel 34 / strength 11 / curvature 3 / chroma 0.24 / saturate 1.5.
  */
 export type GlassOptions = {
   bevel: number
@@ -33,13 +34,13 @@ export type GlassOptions = {
 }
 
 export const GLASS_DEFAULTS: GlassOptions = {
-  bevel: 34,
-  strength: 11,
-  curvature: 3,
-  chroma: 0.24,
+  bevel: 13,
+  strength: 17,
+  curvature: 2.2,
+  chroma: 0.13,
   blur: 1.5,
-  saturate: 1.5,
-  reflect: 0.24,
+  saturate: 1,
+  reflect: 0.27,
   maxTier: 'refract',
 }
 
@@ -75,14 +76,18 @@ function measureRadius(el: HTMLElement): number {
   return Number.isFinite(value) ? value : 0
 }
 
-/** Snapshot the surface's document-space geometry — the render trigger's input. */
+/** Snapshot the surface's document-space geometry — the render trigger's input.
+ *  The measured radius is clamped to half the shorter side, mirroring how CSS
+ *  resolves overlapping corners — so `rounded-full` pills (border-radius:
+ *  9999px) feed the SDF the radius the browser actually paints. */
 function readGeometryInput(el: HTMLElement): GeometryInput {
   const rect = el.getBoundingClientRect()
+  const radiusCap = Math.min(rect.width, rect.height) / 2
   return {
     rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
     scroll: { x: window.scrollX, y: window.scrollY },
     dpr: window.devicePixelRatio || 1,
-    radius: measureRadius(el),
+    radius: Math.min(measureRadius(el), radiusCap),
   }
 }
 
