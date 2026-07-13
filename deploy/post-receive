@@ -46,7 +46,10 @@ git --work-tree="$APP_DIR" checkout -f "$RELEASE_SHA"
 cd "$APP_DIR"
 
 # 2. install dependencies — frozen so a deploy can never mutate the lockfile.
-bun install --frozen-lockfile
+# --ignore-scripts: the only native-build script in the tree is better-sqlite3,
+# a devDependency of the node test driver; production runs bun:sqlite and
+# never imports it, and the deploy box may lack a working node-gyp toolchain.
+bun install --frozen-lockfile --ignore-scripts
 
 # 3. build the client (server runs its TS directly under Bun, no build).
 bun run build
