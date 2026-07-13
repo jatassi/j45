@@ -285,10 +285,20 @@ test.describe('home dashboard (chromium + webkit)', () => {
         .toBe(true)
       await join.click()
       await expect(pageB).toHaveURL(new RegExp(`/session/${sessionId}`))
-      const phaseA = await page.getByTestId('session-phase').textContent()
-      await expect(pageB.getByTestId('session-phase')).toHaveText(phaseA ?? '')
-      const contextA = await page.getByTestId('session-context').textContent()
-      await expect(pageB.getByTestId('session-context')).toHaveText(contextA ?? '')
+      // The live timer ticks phases in real time, so a value read from A goes
+      // stale before B can be asserted against it — read both together and
+      // poll until the pair agrees.
+      await expect
+        .poll(async () => {
+          const [phaseA, phaseB, contextA, contextB] = await Promise.all([
+            page.getByTestId('session-phase').textContent(),
+            pageB.getByTestId('session-phase').textContent(),
+            page.getByTestId('session-context').textContent(),
+            pageB.getByTestId('session-context').textContent(),
+          ])
+          return Boolean(phaseA) && phaseA === phaseB && contextA === contextB
+        })
+        .toBe(true)
       await clickSessionControl(pageB, 'session-leave')
       await clickSessionControl(page, 'session-leave')
     } finally {

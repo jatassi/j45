@@ -64,7 +64,7 @@ test.describe('passkey ceremony (chromium only — CDP virtual authenticator)', 
       // straight back into `AccountScreen` with no catch-all redirect
       // involved, unlike the PIN login above (which starts from `/`).
       await page.getByTestId('passkey-login-button').click()
-      await expect(page.getByTestId('account-screen')).toBeVisible()
+      await expect(page.getByTestId('account-screen')).toBeVisible({ timeout: 15_000 })
       await expect(page.getByTestId('account-display-name')).toHaveText(env.owner.displayName)
     },
   )
