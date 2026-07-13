@@ -52,7 +52,9 @@ cd "$APP_DIR"
 bun install --frozen-lockfile --ignore-scripts
 
 # 3. build the client (server runs its TS directly under Bun, no build).
-bun run build
+# --bun: vite's bin shebang is `#!/usr/bin/env node`, and the deploy box's
+# system node (if any) is not something this pipeline may depend on.
+bun run --bun build
 
 # 4. write release.env for the server (systemd EnvironmentFile in prod).
 mkdir -p "$(dirname "$RELEASE_ENV")"
