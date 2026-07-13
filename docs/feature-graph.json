@@ -4,7 +4,7 @@
     {
       "id": "walking-skeleton",
       "title": "Monorepo + Effect v3 skeleton with one rpc end-to-end, SQLite, shadcn, test harnesses, and git-push deploy",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [],
       "acceptance": [
         "Given a fresh clone on a machine with Bun installed, `bun install`, `bun run check`, and `bun run test` all exit 0.",
@@ -19,7 +19,7 @@
     {
       "id": "workout-domain",
       "title": "Shared-schema workout domain model, segment compiler, and timer math (pure, TestClock-tested)",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "walking-skeleton"
       ],
@@ -35,7 +35,7 @@
     {
       "id": "auth-accounts",
       "title": "Invite-gated accounts — passkey-first with username+PIN fallback, long-lived sessions",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "walking-skeleton"
       ],
@@ -54,7 +54,7 @@
     {
       "id": "plan-library",
       "title": "Per-user workout libraries with the 3-week program migrated in as seed plans",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "workout-domain",
         "auth-accounts"
@@ -73,7 +73,7 @@
     {
       "id": "live-session",
       "title": "Server-authoritative live sessions — streaming sync, multi-phone controls, beeps/wake-lock, one-tap join",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "plan-library",
         "manual-timer"
@@ -93,7 +93,7 @@
     {
       "id": "plan-editing",
       "title": "Plan editing at parity — exercises, day structure, pods, work/rest",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "plan-library"
       ],
@@ -109,7 +109,7 @@
     {
       "id": "flow-control",
       "title": "Structural reflow (sets↔laps, pod regrouping) at edit-time and launch-time",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "live-session",
         "plan-editing"
@@ -127,7 +127,7 @@
     {
       "id": "session-history",
       "title": "Per-participant completion log and history view",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "live-session",
         "flow-control"
@@ -145,7 +145,7 @@
     {
       "id": "exercise-library",
       "title": "First-class tagged exercise library seeded from program content",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "plan-library"
       ],
@@ -161,7 +161,7 @@
     {
       "id": "workout-generation",
       "title": "Rule-based workout generator — templates + constraints incl. no-repeat-recently",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "session-history",
         "exercise-library"
@@ -179,7 +179,7 @@
     {
       "id": "manual-timer",
       "title": "Quick ad-hoc countdown timer on the domain timer machinery",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "workout-domain"
       ],
@@ -195,7 +195,7 @@
     {
       "id": "liquid-glass-ui",
       "title": "Liquid-glass visual layer — WebGL refraction port over shadcn, iOS-Safari-proof, CSS fallback",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "walking-skeleton"
       ],
@@ -212,7 +212,7 @@
     {
       "id": "design-system",
       "title": "Design-system foundation — evolved tokens, ui/ kit on shadcn/ui Base UI, domain vocabulary labels, /design gallery, client CLAUDE.md",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "liquid-glass-ui",
         "exercise-library",
@@ -231,7 +231,7 @@
     {
       "id": "glass-live-refraction",
       "title": "Glass material upgrade — scene-registry live refraction, sub-texture invalidation, rim reflection, tier-capped surfaces",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "design-system"
       ],
@@ -249,7 +249,7 @@
     {
       "id": "nav-shell",
       "title": "Navigation shell — glass bottom tab bar, sticky headers, avatar chip, route restructure with push layouts",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "design-system"
       ],
@@ -265,7 +265,7 @@
     {
       "id": "session-leave",
       "title": "Per-participant leave — LeaveSession rpc, per-stint completion rows with progress, session ends when the last participant leaves",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "live-session",
         "session-history"
@@ -283,7 +283,7 @@
     {
       "id": "home-dashboard",
       "title": "Action-first Home — hero card (join live / start last / browse), quick-start tiles, recent list",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "nav-shell"
       ],
@@ -298,7 +298,7 @@
     {
       "id": "library-screens",
       "title": "Library tab interiors — workout list, exercises segment with drawer editing, workout detail",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "nav-shell"
       ],
@@ -314,7 +314,7 @@
     {
       "id": "editor-screens",
       "title": "Workout editor rebuilt on the kit — new/edit/launch modes, drawers for structural moves, per-field validation",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "library-screens"
       ],
@@ -331,7 +331,7 @@
     {
       "id": "player-screens",
       "title": "Immersive session player and manual timer — ring countdown on phase-tinted ground, glass control dock, leave UX",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "glass-live-refraction",
         "session-leave",
@@ -350,7 +350,7 @@
     {
       "id": "generate-screen",
       "title": "Generate tab rebuilt on the kit — constraint form with labeled controls, preview card, inline infeasibility",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "nav-shell"
       ],
@@ -365,7 +365,7 @@
     {
       "id": "auth-screens",
       "title": "Auth surfaces on the design system — passkey-hero login, invite registration, enroll prompt",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "design-system"
       ],
@@ -380,7 +380,7 @@
     {
       "id": "secondary-screens",
       "title": "History and Account on the design system — completion cards with progress, accordion snapshots, account/invites drawers",
-      "status": "validated",
+      "status": "shipped",
       "depends_on": [
         "nav-shell",
         "session-leave"
