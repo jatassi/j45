@@ -31,14 +31,14 @@ describe('Username', () => {
 })
 
 describe('Pin', () => {
-  it('accepts 4-8 digits', () => {
+  it('accepts exactly 4 digits', () => {
     expect(Either.isRight(Schema.decodeUnknownEither(Pin)('1234'))).toBe(true)
-    expect(Either.isRight(Schema.decodeUnknownEither(Pin)('12345678'))).toBe(true)
+    expect(Either.isRight(Schema.decodeUnknownEither(Pin)('0000'))).toBe(true)
   })
 
   it('rejects too-short, too-long, and non-digit values', () => {
     expect(Either.isLeft(Schema.decodeUnknownEither(Pin)('123'))).toBe(true)
-    expect(Either.isLeft(Schema.decodeUnknownEither(Pin)('123456789'))).toBe(true)
+    expect(Either.isLeft(Schema.decodeUnknownEither(Pin)('12345'))).toBe(true)
     expect(Either.isLeft(Schema.decodeUnknownEither(Pin)('12a4'))).toBe(true)
   })
 })

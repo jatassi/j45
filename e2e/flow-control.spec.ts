@@ -140,7 +140,7 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
         code,
         username: `e2e-flow-${projectName}`,
         displayName: `Flow Control (${projectName})`,
-        pin: '314159',
+        pin: '3141',
       })
 
       const workoutId = await createSource(page, env.baseUrl, 'Reflow Start Source')
@@ -203,7 +203,7 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
         code,
         username: `e2e-flow2-${projectName}`,
         displayName: `Flow Control Save (${projectName})`,
-        pin: '271828',
+        pin: '2718',
       })
 
       const workoutId = await createSource(page, env.baseUrl, 'Reflow Save Source')

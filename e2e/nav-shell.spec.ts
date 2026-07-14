@@ -28,7 +28,6 @@ async function loginAsOwner(
   await expect(page.getByTestId('login-screen')).toBeVisible()
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
   await expect(page.getByTestId('home-screen')).toBeVisible()
 }
 

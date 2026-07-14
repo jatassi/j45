@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 import { RegistryProvider, Result } from '@effect-atom/atom-react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthGate } from '@/components/auth-gate'
 import { enrollPasskeyAtom } from '@/lib/passkeys'
+
+import { stubLoginScreenGlobals } from './login-screen-globals.js'
+
+beforeEach(() => {
+  stubLoginScreenGlobals()
+})
 
 afterEach(() => {
   cleanup()

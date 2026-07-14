@@ -43,7 +43,6 @@ async function mintTwoInviteCodes(
   await page.goto(baseUrl)
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
   await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.getByTestId('avatar-chip').click()
   await expect(page.getByTestId('account-screen')).toBeVisible()
@@ -216,7 +215,7 @@ test.describe('history (chromium + webkit)', () => {
         code: codeA,
         username: `e2e-hist-a-${projectName}`,
         displayName: displayA,
-        pin: '192837',
+        pin: '1928',
       })
 
       const contextB = await browser.newContext()
@@ -226,7 +225,7 @@ test.describe('history (chromium + webkit)', () => {
           code: codeB,
           username: `e2e-hist-b-${projectName}`,
           displayName: displayB,
-          pin: '192838',
+          pin: '1928',
         })
         await expect(pageB.getByTestId('home-screen')).toBeVisible()
 
@@ -330,7 +329,7 @@ test.describe('history (chromium + webkit)', () => {
         code,
         username: `e2e-hist-e-${projectName}`,
         displayName: `Hist Empty ${projectName}`,
-        pin: '246813',
+        pin: '2468',
       })
 
       // Via the tab bar (not `page.goto`), like `assertHistoryRow`.
@@ -368,7 +367,7 @@ test.describe('history (chromium + webkit)', () => {
         code,
         username: `e2e-hist-f-${projectName}`,
         displayName: `Hist Fail ${projectName}`,
-        pin: '135790',
+        pin: '1357',
       })
 
       // The rpc transport is a WebSocket at /rpc (see `lib/rpc-client.ts`), so

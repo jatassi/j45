@@ -6,16 +6,24 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/app'
 import { AccountScreen } from '@/components/account-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import { router } from '@/router'
 
+import { stubLoginScreenGlobals } from './login-screen-globals.js'
+
 vi.mock('@simplewebauthn/browser', () => ({
   startRegistration: vi.fn(() => Promise.resolve({ id: 'webauthn-response' })),
 }))
+
+// Logging out returns the gate to the anonymous `LoginScreen`, which needs
+// these globals to mount.
+beforeEach(() => {
+  stubLoginScreenGlobals()
+})
 
 afterEach(() => {
   cleanup()

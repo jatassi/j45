@@ -38,7 +38,6 @@ test.describe('passkey ceremony (chromium only — CDP virtual authenticator)', 
       await expect(page.getByTestId('login-screen')).toBeVisible()
       await page.locator('#login-username').fill(env.owner.username)
       await page.locator('#login-pin').fill(env.owner.pin)
-      await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 
       // Authenticated now lands on the routed library home, not
       // `AccountScreen` directly — reach it the way a user does, via `/account`.
@@ -54,9 +53,10 @@ test.describe('passkey ceremony (chromium only — CDP virtual authenticator)', 
       await page.getByTestId('logout-button').click()
       await expect(page.getByTestId('login-screen')).toBeVisible()
 
-      // Criterion 4: the username/PIN fields are untouched — the passkey
-      // button alone authenticates the visitor.
-      await expect(page.locator('#login-username')).toHaveValue('')
+      // Criterion 4: nothing is typed — the earlier PIN sign-in left a
+      // remembered-user card where the username field was, the PIN slots are
+      // empty, and the passkey button alone authenticates the visitor.
+      await expect(page.getByTestId('remembered-user-card')).toContainText(`@${env.owner.username}`)
       await expect(page.locator('#login-pin')).toHaveValue('')
 
       // Logging out reloads the *current* page — still `/account` (a real,
@@ -86,7 +86,6 @@ test.describe('passkey ceremony (chromium only — CDP virtual authenticator)', 
     await expect(page.getByTestId('login-screen')).toBeVisible()
     await page.locator('#login-username').fill(env.owner.username)
     await page.locator('#login-pin').fill(env.owner.pin)
-    await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 
     await expect(page.getByTestId('home-screen')).toBeVisible()
     await page.goto(`${env.baseUrl}/account`)

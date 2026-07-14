@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test'
 
 import { readE2eEnv } from './support/state.js'
 
-/** A PIN that never matches the owner's real one (`readE2eEnv().owner.pin`), but still fits `Pin`'s 4-8 digit shape. */
-const WRONG_PIN = '000000'
+/** A PIN that never matches the owner's real one (`readE2eEnv().owner.pin`), but still fits `Pin`'s 4-digit shape. */
+const WRONG_PIN = '0000'
 
 /**
  * PIN login against the one owner account `global-setup.ts` registers
@@ -21,7 +21,6 @@ test('PIN login succeeds with the correct PIN and shows InvalidCredentials with 
 
   await page.locator('#login-username').fill(env.owner.username)
   await page.locator('#login-pin').fill(env.owner.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 
   // Authenticated now lands on the routed library home, not `AccountScreen`
   // directly — reach the account screen the way a user does, via `/account`.
@@ -33,10 +32,20 @@ test('PIN login succeeds with the correct PIN and shows InvalidCredentials with 
   await page.getByTestId('logout-button').click()
   await expect(page.getByTestId('login-screen')).toBeVisible()
 
-  await page.locator('#login-username').fill(env.owner.username)
+  // The PIN sign-in above was remembered: the username field gives way to an
+  // identity card, so the second attempt types only a (wrong) PIN.
+  await expect(page.getByTestId('remembered-user-card')).toBeVisible()
+  await expect(page.getByTestId('remembered-user-card')).toContainText(env.owner.displayName)
+  await expect(page.getByTestId('remembered-user-card')).toContainText(`@${env.owner.username}`)
+  await expect(page.locator('#login-username')).toHaveCount(0)
+
   await page.locator('#login-pin').fill(WRONG_PIN)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 
   await expect(page.getByTestId('login-error-invalid-credentials')).toBeVisible()
   await expect(page.getByTestId('login-screen')).toBeVisible()
+
+  // "Not you?" forgets the remembered identity and restores the plain field.
+  await page.getByTestId('remembered-user-forget').click()
+  await expect(page.getByTestId('remembered-user-card')).toHaveCount(0)
+  await expect(page.locator('#login-username')).toHaveValue('')
 })

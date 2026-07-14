@@ -97,7 +97,6 @@ test.describe('owner invites + owner-only rpc access (chromium + webkit)', () =>
       await page.goto(env.baseUrl)
       await page.locator('#login-username').fill(env.owner.username)
       await page.locator('#login-pin').fill(env.owner.pin)
-      await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 
       // Authenticated now lands on the routed library home, not
       // `AccountScreen` directly — reach `PeopleInvites` the way a user
@@ -145,7 +144,7 @@ test.describe('owner invites + owner-only rpc access (chromium + webkit)', () =>
         await memberPage.goto(`${env.baseUrl}/register?invite=${code}`)
         await memberPage.locator('#register-username').fill(username)
         await memberPage.locator('#register-display-name').fill(displayName)
-        await memberPage.locator('#register-pin').fill('864209')
+        await memberPage.locator('#register-pin').fill('8642')
         await memberPage.getByRole('button', { name: 'Create account' }).click()
         await expect(memberPage.getByTestId('enroll-passkey-prompt')).toBeVisible()
         await memberPage.getByTestId('enroll-passkey-skip').click()

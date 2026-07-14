@@ -53,7 +53,6 @@ async function mintOneInviteCode(
   await page.goto(baseUrl)
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
   await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.getByTestId('avatar-chip').click()
   await expect(page.getByTestId('account-screen')).toBeVisible()
@@ -192,7 +191,7 @@ test.describe('generate (chromium + webkit)', () => {
         code,
         username: `e2e-gen-${projectName}`,
         displayName: `Generate Flow (${projectName})`,
-        pin: '517390',
+        pin: '5173',
       })
 
       // --- 1. Generate preview via tab bar + form knobs ---
@@ -279,7 +278,7 @@ test.describe('generate (chromium + webkit)', () => {
         code,
         username: `e2e-gen-inf-${projectName}`,
         displayName: `Generate Infeasible (${projectName})`,
-        pin: '517391',
+        pin: '5173',
       })
 
       await page.goto(env.baseUrl)

@@ -24,7 +24,7 @@ const FIRST_RUN_INVITE = 'E2EFRUN01'
 /** The one owner account `global-setup.ts` registers — every spec file authenticates as this user for PIN login, and mints further invites off of it. */
 const OWNER_USERNAME = 'e2e-owner'
 const OWNER_DISPLAY_NAME = 'E2E Owner'
-const OWNER_PIN = '135790'
+const OWNER_PIN = '1357'
 
 /** The two Playwright projects sharing the one server (`playwright.config.ts`). */
 const PROJECT_NAMES: readonly E2eProjectName[] = ['chromium', 'webkit']

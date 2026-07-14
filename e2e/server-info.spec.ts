@@ -20,7 +20,6 @@ test('renders the rpc-delivered server SHA in the account footer detail', async 
 
   await page.locator('#login-username').fill(env.owner.username)
   await page.locator('#login-pin').fill(env.owner.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 
   // Authenticated now lands on the routed library home, not `AccountScreen`
   // directly — `ServerInfoCard` is mounted there, reached via `/account`.

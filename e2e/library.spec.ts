@@ -55,7 +55,6 @@ async function loginWithPin(
   await expect(page.getByTestId('login-screen')).toBeVisible()
   await page.locator('#login-username').fill(input.username)
   await page.locator('#login-pin').fill(input.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
 }
 
 /** Every `workout-card-<id>` `Link` currently rendered on the library list. */
@@ -94,7 +93,7 @@ test.describe('library (chromium + webkit)', () => {
       const [code] = env.libraryInvitesByProject[projectName]
       const username = `e2e-lib-${projectName}`
       const displayName = `Library Flow (${projectName})`
-      const pin = '319753'
+      const pin = '3197'
 
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
 
@@ -184,7 +183,7 @@ test.describe('library (chromium + webkit)', () => {
       const [, code] = env.libraryInvitesByProject[projectName]
       const username = `e2e-lib2-${projectName}`
       const displayName = `Library Deep Link (${projectName})`
-      const pin = '975319'
+      const pin = '9753'
 
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
 

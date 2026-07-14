@@ -1,9 +1,11 @@
 import * as React from 'react'
 
+import { PIN_LENGTH } from '@j45/domain'
 import * as Effect from 'effect/Effect'
 
 import { AuthLayout } from '@/components/auth-layout'
 import { EnrollPasskeyPrompt } from '@/components/enroll-passkey-prompt'
+import { PinField } from '@/components/pin-field'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -160,18 +162,19 @@ function RegisterForm(state: RegisterFormProps) {
           onChange={state.setDisplayName}
           autoComplete="name"
         />
-        <AuthField
+        <PinField
           id="register-pin"
-          label="PIN"
-          type="password"
-          inputMode="numeric"
           value={state.pin}
           onChange={state.setPin}
           autoComplete="new-password"
         />
       </FieldGroup>
       <RegisterErrorMessage error={state.error} />
-      <Button type="submit" className="w-full" disabled={state.submitting}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={state.submitting || state.pin.length !== PIN_LENGTH}
+      >
         Create account
       </Button>
     </form>

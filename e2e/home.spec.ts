@@ -43,7 +43,6 @@ async function mintInviteCodes(
   await page.goto(baseUrl)
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
   await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.getByTestId('avatar-chip').click()
   await expect(page.getByTestId('people-invites')).toBeVisible()
@@ -212,7 +211,7 @@ test.describe('home dashboard (chromium + webkit)', () => {
     await expect(page.getByTestId('register-screen')).toBeVisible()
     await page.locator('#register-username').fill(`e2e-ht-${projectName}`)
     await page.locator('#register-display-name').fill(`Home Tiles ${projectName}`)
-    await page.locator('#register-pin').fill('135792')
+    await page.locator('#register-pin').fill('1357')
     await page.getByRole('button', { name: 'Create account' }).click()
     await page.getByTestId('enroll-passkey-skip').click()
     await expect(page.getByTestId('home-hero-skeleton')).toBeVisible()
@@ -257,7 +256,7 @@ test.describe('home dashboard (chromium + webkit)', () => {
       code: codeA,
       username: `e2e-h1a-${projectName}`,
       displayName: displayA,
-      pin: '246801',
+      pin: '2468',
     })
     const contextB = await browser.newContext()
     const pageB = await contextB.newPage()
@@ -266,7 +265,7 @@ test.describe('home dashboard (chromium + webkit)', () => {
         code: codeB,
         username: `e2e-h1b-${projectName}`,
         displayName: `Home Guest ${projectName}`,
-        pin: '246802',
+        pin: '2468',
       })
       const sessionId = await startApexSession(page)
       const join = pageB.getByTestId(`session-card-${sessionId}`)
@@ -317,7 +316,7 @@ test.describe('home dashboard (chromium + webkit)', () => {
       code,
       username: `e2e-hf-${projectName}`,
       displayName: `Home Fresh ${projectName}`,
-      pin: '135791',
+      pin: '1357',
     })
     await expect(page.getByTestId('home-screen')).toBeVisible()
     // Wait for foreign live sessions to idle-GC (60s) so browse pick wins.
@@ -337,7 +336,7 @@ test.describe('home dashboard (chromium + webkit)', () => {
       code,
       username: `e2e-hl-${projectName}`,
       displayName: `Home Last ${projectName}`,
-      pin: '135790',
+      pin: '1357',
     })
     await startApexSession(page)
     await progressAndSkipToDone(page)

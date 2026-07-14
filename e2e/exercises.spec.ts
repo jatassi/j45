@@ -96,7 +96,7 @@ test.describe('exercises (chromium + webkit)', () => {
       const code = env.exercisesInvitesByProject[projectName]
       const username = `e2e-ex-${projectName}`
       const displayName = `Exercises Flow (${projectName})`
-      const pin = '642875'
+      const pin = '6428'
       const createdName = `E2E Wall Ball (${projectName})`
 
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })

@@ -54,7 +54,7 @@ test.describe('registration (chromium + webkit)', () => {
       // Criterion 2: the invite deep link prefills the code field before the
       // visitor types anything.
       await expect(page.locator('#register-code')).toHaveValue(code)
-      await fillRegisterForm(page, { username, displayName, pin: '246810' })
+      await fillRegisterForm(page, { username, displayName, pin: '2468' })
 
       await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
       await page.getByTestId('enroll-passkey-skip').click()
@@ -98,7 +98,7 @@ test.describe('registration (chromium + webkit)', () => {
     await fillRegisterForm(page, {
       username: `e2e-unknown-${projectName}`,
       displayName: 'Unknown Invite',
-      pin: '111111',
+      pin: '1111',
     })
     await expect(page.getByTestId('register-error-invalid-invite')).toBeVisible()
     await expect(page.getByTestId('register-screen')).toBeVisible()
@@ -109,7 +109,7 @@ test.describe('registration (chromium + webkit)', () => {
     await fillRegisterForm(page, {
       username: `e2e-spent-${projectName}`,
       displayName: 'Spent Invite',
-      pin: '222222',
+      pin: '2222',
     })
     await expect(page.getByTestId('register-error-invalid-invite')).toBeVisible()
     await expect(page.getByTestId('register-screen')).toBeVisible()
@@ -128,7 +128,7 @@ test.describe('registration (chromium + webkit)', () => {
     await fillRegisterForm(page, {
       username: `e2e-twice-${projectName}-a`,
       displayName: 'Twice A',
-      pin: '333333',
+      pin: '3333',
     })
     await expect(page.getByTestId('enroll-passkey-prompt')).toBeVisible()
     await page.getByTestId('enroll-passkey-skip').click()
@@ -147,7 +147,7 @@ test.describe('registration (chromium + webkit)', () => {
     await fillRegisterForm(page, {
       username: `e2e-twice-${projectName}-b`,
       displayName: 'Twice B',
-      pin: '444444',
+      pin: '4444',
     })
     await expect(page.getByTestId('register-error-invalid-invite')).toBeVisible()
     expect(await hasSessionCookie(context)).toBe(false)

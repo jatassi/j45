@@ -164,7 +164,7 @@ test.describe('timer (chromium + webkit)', () => {
       const [code] = env.timerInvitesByProject[projectName]
       const username = `e2e-timer-${projectName}`
       const displayName = `Timer Flow (${projectName})`
-      const pin = '864200'
+      const pin = '8642'
 
       await registerAndReachHome(page, env.baseUrl, { code, username, displayName, pin })
 
@@ -250,7 +250,7 @@ test.describe('timer (chromium + webkit)', () => {
       const [, code] = env.timerInvitesByProject[projectName]
       const username = `e2e-tmr2-${projectName}`
       const displayName = `Timer Audio (${projectName})`
-      const pin = '753190'
+      const pin = '7531'
 
       await registerAndReachHome(page, env.baseUrl, { code, username, displayName, pin })
 

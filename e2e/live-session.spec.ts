@@ -43,7 +43,6 @@ async function mintTwoInviteCodes(
   await page.goto(baseUrl)
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
   await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.goto(`${baseUrl}/account`)
   await expect(page.getByTestId('people-invites')).toBeVisible()
@@ -282,7 +281,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         code: codeA,
         username: 'e2e-ls1-a',
         displayName: displayA,
-        pin: '864201',
+        pin: '8642',
       })
 
       const contextB = await browser.newContext()
@@ -292,7 +291,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
           code: codeB,
           username: 'e2e-ls1-b',
           displayName: displayB,
-          pin: '864202',
+          pin: '8642',
         })
         await expect(pageB.getByTestId('home-screen')).toBeVisible()
 
@@ -403,7 +402,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         code: codeA,
         username: 'e2e-ls2-a',
         displayName: 'Live Audio A',
-        pin: '753191',
+        pin: '7531',
       })
 
       const contextB = await browser.newContext()
@@ -416,7 +415,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
           code: codeB,
           username: 'e2e-ls2-b',
           displayName: 'Live Audio B',
-          pin: '753192',
+          pin: '7531',
         })
 
         const sessionId = await startApexSession(page)

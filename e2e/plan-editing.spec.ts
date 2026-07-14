@@ -60,7 +60,6 @@ async function mintOneInviteCode(
   await page.goto(baseUrl)
   await page.locator('#login-username').fill(owner.username)
   await page.locator('#login-pin').fill(owner.pin)
-  await page.getByRole('button', { name: 'Sign in with PIN' }).click()
   await expect(page.getByTestId('home-screen')).toBeVisible()
   await page.getByTestId('avatar-chip').click()
   await expect(page.getByTestId('account-screen')).toBeVisible()
@@ -130,7 +129,7 @@ test.describe('plan-editing (chromium + webkit)', () => {
       const [code] = env.planEditingInvitesByProject[projectName]
       const username = `e2e-plan-${projectName}`
       const displayName = `Plan Editing (${projectName})`
-      const pin = '246810'
+      const pin = '2468'
       const workoutName = 'Sprint Circuit'
 
       await registerAccount(page, env.baseUrl, { code, username, displayName, pin })
@@ -191,7 +190,7 @@ test.describe('plan-editing (chromium + webkit)', () => {
       const [, code] = env.planEditingInvitesByProject[projectName]
       const username = `e2e-plan2-${projectName}`
       const displayName = `Plan Editing Edit (${projectName})`
-      const pin = '864209'
+      const pin = '8642'
       const renamedStation = 'Rower Sprint Renamed'
       const movedStation = 'Dumbbell squat + alternating shoulder press'
 
@@ -301,7 +300,7 @@ test.describe('plan-editing (chromium + webkit)', () => {
       // Username schema is 3–20 chars (`^[a-z0-9][a-z0-9._-]{2,19}$/i`).
       const username = `e2e-pdisc-${projectName}`
       const displayName = `Plan Discard (${projectName})`
-      const pin = '135790'
+      const pin = '1357'
       const originalTitle = 'Athletica (copy)'
       const dirtyName = 'Should Not Persist'
 

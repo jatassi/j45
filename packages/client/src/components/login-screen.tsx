@@ -1,15 +1,21 @@
 import * as React from 'react'
 
+import { PIN_LENGTH } from '@j45/domain'
 import * as Effect from 'effect/Effect'
+import * as Option from 'effect/Option'
 import { Fingerprint } from 'lucide-react'
 
 import { AuthLayout } from '@/components/auth-layout'
+import { PinField } from '@/components/pin-field'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldGroup, FieldLabel, FieldSeparator } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import * as AuthApi from '@/lib/auth-api'
+import { displayInitials } from '@/lib/initials'
+import * as LastUser from '@/lib/last-user'
 import * as Passkeys from '@/lib/passkeys'
 
 type PinError =
@@ -21,46 +27,101 @@ type LoginScreenProps = {
   readonly onAuthenticated: () => void
 }
 
-type LoginHandlers<E> = {
+type LoginHandlers<A, E> = {
   readonly onFailure: (error: E) => void
-  readonly onAuthenticated: () => void
+  readonly onSuccess: (value: A) => void
   readonly onSettled: () => void
 }
 
 /** Runs a login `Effect`, routing its typed failure/success into React state. */
-function runLogin<E>(effect: Effect.Effect<unknown, E>, handlers: LoginHandlers<E>): void {
+function runLogin<A, E>(effect: Effect.Effect<A, E>, handlers: LoginHandlers<A, E>): void {
   void Effect.runPromise(
     effect.pipe(
       Effect.match({
         onFailure: handlers.onFailure,
-        onSuccess: () => {
-          handlers.onAuthenticated()
-        },
+        onSuccess: handlers.onSuccess,
       }),
     ),
   ).finally(handlers.onSettled)
 }
 
+/**
+ * The remembered identity (`lib/last-user.ts`) and the username it seeds.
+ * Loaded once per mount — the login screen unmounts on authentication, so
+ * there's no path that changes storage while this screen is showing.
+ */
+function useRememberedUser() {
+  const [remembered, setRemembered] = React.useState(LastUser.load)
+  const [username, setUsername] = React.useState(() =>
+    Option.match(remembered, {
+      onNone: () => '',
+      onSome: (last) => last.username,
+    }),
+  )
+
+  /** "Not you?" — drop the remembered identity and fall back to the field. */
+  const forgetRemembered = () => {
+    LastUser.clear()
+    setRemembered(Option.none())
+    setUsername('')
+  }
+
+  return { remembered, username, setUsername, forgetRemembered }
+}
+
 function usePinLogin(onAuthenticated: () => void) {
-  const [username, setUsername] = React.useState('')
+  const { remembered, username, setUsername, forgetRemembered } = useRememberedUser()
   const [pin, setPin] = React.useState('')
   const [error, setError] = React.useState<PinError | undefined>(undefined)
   const [submitting, setSubmitting] = React.useState(false)
 
-  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const login = (pinValue: string) => {
+    if (submitting) {
+      return
+    }
     setSubmitting(true)
     setError(undefined)
-    runLogin(AuthApi.loginPin({ username, pin }), {
+    runLogin(AuthApi.loginPin({ username, pin: pinValue }), {
       onFailure: setError,
-      onAuthenticated,
+      onSuccess: (user) => {
+        LastUser.save({ username: user.username, displayName: user.displayName })
+        onAuthenticated()
+      },
       onSettled: () => {
         setSubmitting(false)
       },
     })
   }
 
-  return { username, setUsername, pin, setPin, error, submitting, handleSubmit }
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    login(pin)
+  }
+
+  /**
+   * iOS-passcode style: the fourth digit submits on its own — but only once
+   * there's a username to pair it with (typing the PIN before the username
+   * must not fire a doomed attempt).
+   */
+  const handlePinComplete = (pinValue: string) => {
+    if (username === '') {
+      return
+    }
+    login(pinValue)
+  }
+
+  return {
+    remembered,
+    forgetRemembered,
+    username,
+    setUsername,
+    pin,
+    setPin,
+    error,
+    submitting,
+    handleSubmit,
+    handlePinComplete,
+  }
 }
 
 function usePasskeyLogin(onAuthenticated: () => void) {
@@ -74,7 +135,9 @@ function usePasskeyLogin(onAuthenticated: () => void) {
       onFailure: () => {
         setFailed(true)
       },
-      onAuthenticated,
+      onSuccess: () => {
+        onAuthenticated()
+      },
       onSettled: () => {
         setSubmitting(false)
       },
@@ -115,33 +178,35 @@ function PasskeySignIn({ submitting, failed, onClick }: PasskeySignInProps) {
   )
 }
 
-type AuthFieldProps = {
-  readonly id: string
-  readonly label: string
-  readonly value: string
-  readonly onChange: (value: string) => void
-  readonly type?: string
-  readonly inputMode?: React.ComponentProps<'input'>['inputMode']
-  readonly autoComplete: string
+type RememberedUserCardProps = {
+  readonly user: LastUser.LastUser
+  readonly onForget: () => void
 }
 
-/** A labeled kit field — username / PIN share this shape. */
-function AuthField({ id, label, value, onChange, type, inputMode, autoComplete }: AuthFieldProps) {
+/** Stands in for the username field when a previous PIN sign-in is remembered. */
+function RememberedUserCard({ user, onForget }: RememberedUserCardProps) {
   return (
-    <Field orientation="vertical">
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Input
-        id={id}
-        type={type}
-        inputMode={inputMode}
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value)
-        }}
-        autoComplete={autoComplete}
-        required
-      />
-    </Field>
+    <div
+      className="flex items-center gap-3 rounded-md border border-input p-3"
+      data-testid="remembered-user-card"
+    >
+      <Avatar>
+        <AvatarFallback>{displayInitials(user.displayName)}</AvatarFallback>
+      </Avatar>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium">{user.displayName}</span>
+        <span className="truncate text-xs text-muted-foreground">@{user.username}</span>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        data-testid="remembered-user-forget"
+        onClick={onForget}
+      >
+        Not you?
+      </Button>
+    </div>
   )
 }
 
@@ -173,25 +238,38 @@ function PinLoginForm(state: PinLoginFormProps) {
   return (
     <form className="flex flex-col gap-4" onSubmit={state.handleSubmit}>
       <FieldGroup className="gap-3">
-        <AuthField
-          id="login-username"
-          label="Username"
-          value={state.username}
-          onChange={state.setUsername}
-          autoComplete="username"
-        />
-        <AuthField
+        {Option.match(state.remembered, {
+          onNone: () => (
+            <Field orientation="vertical">
+              <FieldLabel htmlFor="login-username">Username</FieldLabel>
+              <Input
+                id="login-username"
+                value={state.username}
+                onChange={(event) => {
+                  state.setUsername(event.target.value)
+                }}
+                autoComplete="username"
+                required
+              />
+            </Field>
+          ),
+          onSome: (last) => <RememberedUserCard user={last} onForget={state.forgetRemembered} />,
+        })}
+        <PinField
           id="login-pin"
-          label="PIN"
-          type="password"
-          inputMode="numeric"
           value={state.pin}
           onChange={state.setPin}
+          onComplete={state.handlePinComplete}
           autoComplete="current-password"
         />
       </FieldGroup>
       <PinLoginError error={state.error} />
-      <Button type="submit" variant="outline" className="w-full" disabled={state.submitting}>
+      <Button
+        type="submit"
+        variant="outline"
+        className="w-full"
+        disabled={state.submitting || state.pin.length !== PIN_LENGTH}
+      >
         Sign in with PIN
       </Button>
     </form>
@@ -201,6 +279,8 @@ function PinLoginForm(state: PinLoginFormProps) {
 /**
  * Primary passkey sign-in, a username+PIN fallback form, and an invite-code
  * entry point for first-timers — the anonymous state `AuthGate` renders.
+ * A remembered PIN sign-in (`lib/last-user.ts`) replaces the username field
+ * with an identity card; "Not you?" falls back to the plain field.
  */
 export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
   const passkey = usePasskeyLogin(onAuthenticated)

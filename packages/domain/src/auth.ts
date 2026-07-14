@@ -17,8 +17,13 @@ export const Username = Schema.String.pipe(
 )
 export type Username = typeof Username.Type
 
-/** 4–8 digits. */
-export const Pin = Schema.String.pipe(Schema.pattern(/^\d{4,8}$/), Schema.brand('Pin'))
+/** PINs are exactly this many digits; the auth screens render this many OTP slots. */
+export const PIN_LENGTH = 4
+
+export const Pin = Schema.String.pipe(
+  Schema.pattern(new RegExp(`^\\d{${PIN_LENGTH}}$`)),
+  Schema.brand('Pin'),
+)
 export type Pin = typeof Pin.Type
 
 /** 8-char Crockford base32 invite/reset code (charset enforced by minting). */
