@@ -19,6 +19,17 @@ export const ReleaseShaConfig: Config.Config<string> = Config.string('RELEASE_SH
 )
 
 /**
+ * Whether the wildcard route serves the built client from `ClientDistDir`.
+ * True in production, where the single Bun process is the one origin for the
+ * client, `/rpc`, and `/healthz`. The server's `dev` script sets it false:
+ * in dev the live client is Vite on :5173 (see `AppOriginConfig`), and
+ * serving a stale `packages/client/dist` from :3000 would only mislead.
+ */
+export const ServeClientConfig: Config.Config<boolean> = Config.boolean('SERVE_CLIENT').pipe(
+  Config.withDefault(true),
+)
+
+/**
  * The origin the client is served from (scheme + host[:port], no path).
  * Determines whether the session cookie's `Set-Cookie` sets `Secure`
  * (`auth/cookie.ts`, iff this is `https`) and is WebAuthn's rpID/expected-

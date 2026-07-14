@@ -55,7 +55,11 @@ const waitForHealthz = (port: number) =>
  * http/rpc *clients* below run fine under Node against it. The child is
  * killed automatically when the enclosing scope closes.
  */
-const bootServer = (options: { readonly releaseSha: string; readonly clientDistDir?: string }) =>
+const bootServer = (options: {
+  readonly releaseSha: string
+  readonly clientDistDir?: string
+  readonly serveClient?: boolean
+}) =>
   Effect.gen(function* () {
     const port = yield* getFreePort
     const command = Command.make('bun', 'run', 'src/main.ts').pipe(
@@ -64,6 +68,7 @@ const bootServer = (options: { readonly releaseSha: string; readonly clientDistD
         PORT: String(port),
         RELEASE_SHA: options.releaseSha,
         ...(options.clientDistDir !== undefined && { CLIENT_DIST_DIR: options.clientDistDir }),
+        ...(options.serveClient !== undefined && { SERVE_CLIENT: String(options.serveClient) }),
       }),
     )
     yield* Command.start(command)
@@ -139,6 +144,32 @@ describe('server', () => {
         )
         expect(fallback.status).toBe(200)
         expect(yield* Effect.tryPromise(() => fallback.text())).toBe('<h1>fallback</h1>')
+      }),
+    { timeout: 20_000 },
+  )
+
+  it.scopedLive(
+    'SERVE_CLIENT=false disables static serving even when a build exists',
+    () =>
+      Effect.gen(function* () {
+        const distDir = yield* Effect.tryPromise(() =>
+          mkdtemp(path.join(tmpdir(), 'j45-client-dist-')),
+        )
+        yield* Effect.tryPromise(() =>
+          writeFile(path.join(distDir, 'index.html'), '<h1>stale</h1>'),
+        )
+
+        const port = yield* bootServer({
+          releaseSha: 'test-sha-no-static',
+          clientDistDir: distDir,
+          serveClient: false,
+        })
+
+        // bootServer already saw /healthz respond 200 — the ops surface
+        // survives; the client build must not.
+        const root = yield* Effect.tryPromise(() => fetch(`http://localhost:${port}/`))
+        expect(root.status).toBe(404)
+        expect(yield* Effect.tryPromise(() => root.text())).not.toContain('stale')
       }),
     { timeout: 20_000 },
   )

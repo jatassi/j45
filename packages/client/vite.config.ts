@@ -1,4 +1,5 @@
 import path from 'path'
+
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
@@ -12,6 +13,10 @@ export default defineConfig({
     },
   },
   server: {
+    // Listen on all interfaces so the dev client is reachable from phones on
+    // the LAN. Passkeys won't work there (WebAuthn needs a secure context and
+    // an rpID matching APP_ORIGIN's localhost) — sign in with username/PIN.
+    host: true,
     port: 5173,
     proxy: {
       '/rpc': {

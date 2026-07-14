@@ -7,7 +7,7 @@ import * as Effect from 'effect/Effect'
 import type * as Layer from 'effect/Layer'
 
 import { ClientDistDir } from './client-dist.js'
-import { ReleaseShaConfig } from './config.js'
+import { ReleaseShaConfig, ServeClientConfig } from './config.js'
 import { version } from './version.js'
 
 /**
@@ -71,10 +71,29 @@ const staticFileHandler = (resolvedDistDir: string) =>
  * prioritizes literal segments over the `*` wildcard regardless of
  * registration order). Falls back to `index.html` for client-side routing;
  * responds 404 when `ClientDistDir` has no build yet.
+ *
+ * With `SERVE_CLIENT=false` (the dev script) the wildcard instead 404s with
+ * a pointer to the Vite dev server, so a stale local build is never served.
  */
 export const StaticRouteLive: Layer.Layer<never, never, ClientDistDir> = HttpRouter.Default.use(
   (router) =>
     Effect.gen(function* () {
+      // A malformed SERVE_CLIENT is a launch misconfiguration, not a
+      // client-facing failure — surface it as a defect.
+      const isServingClient = yield* Effect.orDie(ServeClientConfig)
+      if (!isServingClient) {
+        yield* router.get(
+          '*',
+          Effect.succeed(
+            HttpServerResponse.text(
+              'client serving is off (SERVE_CLIENT=false); in dev the client is Vite on :5173\n',
+              { status: 404 },
+            ),
+          ),
+        )
+        return
+      }
+
       // Resolved once, outside the per-request handler, so the handler
       // itself only needs the router's default services.
       const { path: distDir } = yield* ClientDistDir

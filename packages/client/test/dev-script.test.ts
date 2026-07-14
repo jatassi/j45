@@ -72,5 +72,10 @@ describe('bun run dev', () => {
     const info = (await healthz.json()) as { sha?: unknown }
     expect(typeof info.sha).toBe('string')
     expect((info.sha as string).length).toBeGreaterThan(0)
+
+    // In dev the server is API-only: the live client is Vite on :5173, and a
+    // stale packages/client/dist must never be served from :3000.
+    const serverRoot = await fetch('http://localhost:3000/')
+    expect(serverRoot.status).toBe(404)
   }, 50_000)
 })

@@ -2,15 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "j45-server",
-      "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "--filter", "@j45/server", "dev"],
-      "port": 3000
-    },
-    {
       "name": "j45",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "--filter", "@j45/client", "dev"],
+      "runtimeArgs": ["run", "dev"],
       "port": 5173
     }
   ]
