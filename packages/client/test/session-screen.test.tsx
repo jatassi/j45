@@ -155,10 +155,6 @@ const push = (queue: Queue.Queue<SessionState>, state: SessionState) =>
     await Effect.runPromise(Queue.offer(queue, state))
   })
 
-/** The demo chip — the always-present `data-slot="exercise-demo"` element. */
-const demoChip = (): HTMLElement | null =>
-  document.querySelector<HTMLElement>('[data-slot="exercise-demo"]')
-
 describe('SessionScreen — stream retry discrimination', () => {
   it('SessionNotFound stops retrying and navigates home', async () => {
     const id = 'sess-not-found'
@@ -183,7 +179,7 @@ describe('SessionScreen — stream retry discrimination', () => {
 })
 
 describe('SessionScreen — server-state render', () => {
-  it('renders phase, exercise, demo detail, context line, next-up, progress cells, and participants', async () => {
+  it('renders phase, exercise, station detail, context line, next-up, progress cells, and participants', async () => {
     const id = 'sess-render'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const now = Date.now()
@@ -193,7 +189,7 @@ describe('SessionScreen — server-state render', () => {
     await screen.findByTestId('session-screen')
     expect(screen.getByTestId('session-phase').textContent).toBe('Work')
     expect(screen.getByTestId('session-exercise-name').textContent).toBe('Rower')
-    expect(demoChip()?.textContent).toContain('10 cal')
+    expect(screen.getByTestId('session-exercise-detail').textContent).toBe('10 cal')
     expect(screen.getByTestId('session-context').textContent).toBe(
       'Pod 1/1 · Lap 1/2 · Station 1/2',
     )
@@ -235,7 +231,7 @@ describe('SessionScreen — server-state render', () => {
     expect(screen.getByTestId('session-count').textContent).toBe('0:18')
   })
 
-  it('keeps a non-broken demo chip present even when the exercise has no detail', async () => {
+  it('omits the station-detail line when the exercise has no detail', async () => {
     const id = 'sess-no-detail'
     const sessionId = Schema.decodeSync(SessionId)(id)
     // Segment 3 is work Br1 — Burpee, which carries no `detail`.
@@ -244,9 +240,7 @@ describe('SessionScreen — server-state render', () => {
 
     await screen.findByTestId('session-screen')
     expect(screen.getByTestId('session-exercise-name').textContent).toBe('Burpee')
-    const chip = demoChip()
-    expect(chip).not.toBeNull()
-    expect(chip?.textContent).not.toContain('10 cal')
+    expect(screen.queryByTestId('session-exercise-detail')).toBeNull()
   })
 
   it('counts down against the server clock offset, never the raw phone clock', async () => {

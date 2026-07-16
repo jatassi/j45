@@ -179,13 +179,14 @@ const workoutDetailRoute = createRoute({
 
 // ── Push-layout leaves ─────────────────────────────────────────────────
 
-/** `/session/$sessionId` — the live workout player, keyed off the `sessionId` path param. */
+/**
+ * `/session/$sessionId` — the live workout player, keyed off the `sessionId`
+ * path param. Headerless: the immersive player owns its whole viewport (its
+ * own Leave / audio chrome lives in `TopStrip`), so no shared `PushHeader`.
+ */
 const sessionRoute = createRoute({
-  getParentRoute: () => pushLayoutRoute,
+  getParentRoute: () => pushHeaderlessRoute,
   path: '/session/$sessionId',
-  beforeLoad: () => {
-    setPushTitle('Session')
-  },
   component: SessionScreen,
 })
 
@@ -306,8 +307,13 @@ const routeTree = rootRoute.addChildren([
     // higher, so `new` is never captured as a `$workoutId`.
     workoutDetailRoute,
   ]),
-  pushLayoutRoute.addChildren([sessionRoute, timerRoute, accountRoute]),
-  pushHeaderlessRoute.addChildren([workoutNewRoute, workoutEditRoute, workoutReflowRoute]),
+  pushLayoutRoute.addChildren([timerRoute, accountRoute]),
+  pushHeaderlessRoute.addChildren([
+    sessionRoute,
+    workoutNewRoute,
+    workoutEditRoute,
+    workoutReflowRoute,
+  ]),
   exercisesRedirectRoute,
   notFoundRedirectRoute,
 ])

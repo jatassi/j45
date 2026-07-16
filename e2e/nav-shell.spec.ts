@@ -240,13 +240,19 @@ test.describe('nav-shell (chromium + webkit)', () => {
     await page.getByTestId('back-button').click()
     await expect(page.getByTestId('home-screen')).toBeVisible()
 
-    // /session/<id> (push) after starting a live session from a seed workout.
+    // /session/<id> (headerless) after starting a live session from a seed
+    // workout. The immersive player owns the whole viewport — no tab bar and
+    // no push header/back-button — so browser back returns to detail.
     await page.getByTestId('tab-library').click()
     await expect(page.getByTestId('library-screen')).toBeVisible()
     const sessionId = await startApexSession(page)
     await expect(page).toHaveURL(new RegExp(`/session/${sessionId}`))
-    await expectPushLayout(page)
-    await page.getByTestId('back-button').click()
+    await expect(page.getByTestId('session-screen')).toBeVisible()
+    for (const id of TAB_IDS) {
+      await expect(page.getByTestId(id)).toHaveCount(0)
+    }
+    await expect(page.getByTestId('back-button')).toHaveCount(0)
+    await page.goBack()
     await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
   })
 

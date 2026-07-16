@@ -16,7 +16,7 @@ bun run test     # vitest
 
 ## Toolchain
 
-On **TypeScript 7** (the native compiler) — plain `tsc` everywhere.
+**TypeScript 7** (native compiler) — plain `tsc` everywhere.
 
 Linting is **oxlint**, not ESLint. Rules live in `.oxlintrc.json`;
 import sorting is a Prettier plugin (`bun run format`).

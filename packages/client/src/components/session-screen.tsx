@@ -9,7 +9,6 @@ import * as Schema from 'effect/Schema'
 import { PhaseBackdrop } from '@/components/player/phase-backdrop'
 import {
   CenterStack,
-  DemoChip,
   Participants,
   ProgressDots,
   SessionDock,
@@ -129,7 +128,7 @@ function SessionView({ state }: { readonly state: SessionState }) {
 
   return (
     <div
-      className="relative flex min-h-svh flex-col items-center gap-5 px-5 pt-10 pb-32"
+      className="relative flex h-svh flex-col items-center gap-4 overflow-hidden px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-36"
       data-testid="session-screen"
       data-phase={phase}
     >
@@ -139,7 +138,7 @@ function SessionView({ state }: { readonly state: SessionState }) {
         showLeave={state.timer._tag !== 'done'}
         onLeave={onLeave}
       />
-      <div className="flex flex-1 flex-col items-center justify-center gap-5">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
         <CenterStack
           state={state}
           phase={phase}
@@ -147,7 +146,6 @@ function SessionView({ state }: { readonly state: SessionState }) {
           count={count}
           context={ctx === undefined ? '' : contextLine(ctx, totals)}
         />
-        <DemoChip detail={ctx?.station.detail} />
         <ProgressDots groups={groups} currentWorkIndex={ctx?.workIndex} />
         <Participants participants={state.participants} />
       </div>

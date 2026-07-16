@@ -263,7 +263,7 @@ const APEX_STATION_2 = 'Sandbag/dumbbell clean'
 
 test.describe('live session (chromium only — two logged-in browser contexts)', () => {
   test(
-    'A starts Apex; B joins the same segment; phase/data-phase/next-up/demo sync; B pause ' +
+    'A starts Apex; B joins the same segment; phase/data-phase/next-up sync; B pause ' +
       'shows Paused on A; A leaves via confirm (B keeps running); B finishes; both see history',
     async ({ page, browser, browserName }) => {
       test.skip(
@@ -329,11 +329,9 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
 
         await assertBothPhase([page, pageB], { data: 'work', label: 'Work' })
 
-        // Next-up names following work; demo chip non-broken (Apex stations have no `detail`).
+        // Next-up names following work; no detail line (Apex stations have no `detail`).
         await assertBothNextUp(page, pageB, APEX_STATION_2)
-        const demo = page.locator('[data-slot="exercise-demo"]')
-        await expect(demo).toBeVisible()
-        await expect(demo).toContainText('Form guide coming soon')
+        await expect(page.getByTestId('session-exercise-detail')).toHaveCount(0)
 
         // B's pause freezes both screens on 'Paused' while data-phase stays work.
         await clickSessionControl(pageB, 'session-pause')

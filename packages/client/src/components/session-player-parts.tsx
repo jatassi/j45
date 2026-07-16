@@ -1,16 +1,7 @@
 import { useReducer } from 'react'
 
 import type { Participant, SessionCommand, SessionState, WorkContext } from '@j45/domain'
-import {
-  Dumbbell,
-  LogOut,
-  Pause,
-  Play,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX,
-} from 'lucide-react'
+import { LogOut, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 
 import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
@@ -49,9 +40,11 @@ const EYEBROW = 'text-[10px] font-medium tracking-wide text-muted-foreground upp
 
 /**
  * The immersive centrepiece: the phase-tinted progress ring wrapping the huge
- * tabular-nums countdown and its phase eyebrow, with the exercise name and the
- * pod/lap/station context line beneath. The ring depletes from the same
- * interpolated `remainingMillis` the digits show, so a pause freezes both.
+ * tabular-nums countdown and its phase eyebrow, with the exercise name (plus
+ * its optional `detail`, e.g. "10 cal") and the pod/lap/station context line
+ * beneath. The ring depletes from the same interpolated `remainingMillis` the
+ * digits show, so a pause freezes both. The ring diameter is clamped by both
+ * viewport axes so the whole stack fits on-screen without scrolling.
  */
 export function CenterStack({
   state,
@@ -69,8 +62,8 @@ export function CenterStack({
   const digits = formatDuration(count)
   const fraction = ringFraction(state, count)
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-4">
-      <div className="size-[min(76vw,320px)] [&>*]:size-full">
+    <div className="flex w-full max-w-sm flex-col items-center gap-3">
+      <div className="size-[min(76vw,38svh,320px)] [&>*]:size-full">
         <ProgressRing fraction={fraction} phase={phase} dirtyValue={digits}>
           <span
             data-testid="session-phase"
@@ -92,34 +85,32 @@ export function CenterStack({
           </span>
         </ProgressRing>
       </div>
-      <p className="font-heading text-2xl font-bold" data-testid="session-exercise-name">
-        {ctx?.station.name ?? '—'}
-      </p>
-      <p className="text-sm text-muted-foreground" data-testid="session-context">
-        {context}
-      </p>
+      <WorkMeta ctx={ctx} context={context} />
     </div>
   )
 }
 
-/**
- * The reserved demo slot — always in the layout, rendering the exercise
- * `detail` when present and a graceful (never broken) empty chip otherwise.
- * The placeholder for a future exercise-form animation.
- */
-export function DemoChip({ detail }: { readonly detail: string | undefined }) {
+/** The exercise name, its optional `detail` (e.g. "10 cal"), and the context line. */
+function WorkMeta({
+  ctx,
+  context,
+}: {
+  readonly ctx: WorkContext | undefined
+  readonly context: string
+}) {
   return (
-    <div
-      data-slot="exercise-demo"
-      className="flex items-center gap-2.5 rounded-2xl bg-input/30 py-2 pr-4 pl-2 ring-1 ring-border"
-    >
-      <span className="flex size-9 items-center justify-center rounded-xl bg-foreground/5 text-muted-foreground">
-        <Dumbbell className="size-4" />
-      </span>
-      <div className="leading-tight">
-        <p className="text-[9px] font-medium tracking-wide text-muted-foreground uppercase">Demo</p>
-        <p className="text-xs text-muted-foreground">{detail ?? 'Form guide coming soon'}</p>
-      </div>
+    <div className="flex flex-col items-center gap-0.5 text-center">
+      <p className="font-heading text-2xl font-bold" data-testid="session-exercise-name">
+        {ctx?.station.name ?? '—'}
+      </p>
+      {ctx?.station.detail !== undefined && (
+        <p className="text-xs text-muted-foreground" data-testid="session-exercise-detail">
+          {ctx.station.detail}
+        </p>
+      )}
+      <p className="text-sm text-muted-foreground" data-testid="session-context">
+        {context}
+      </p>
     </div>
   )
 }
@@ -349,7 +340,8 @@ export function TopStrip({
  * The bottom glass dock. While the timer runs it carries the NEXT UP line and
  * Prev / Pause·Resume / Skip; when done it carries a single Finish button that
  * calls `LeaveSession` directly — no confirm, since a completed workout loses
- * nothing. `maxTier: 'css'` keeps the dock off the GPU while the timer runs.
+ * nothing. Runs at the full refract glass tier so the dock genuinely refracts
+ * the phase-tinted backdrop behind it (not the CSS-only frost).
  */
 export function SessionDock({
   state,
@@ -362,7 +354,7 @@ export function SessionDock({
 }) {
   if (state.timer._tag === 'done') {
     return (
-      <ControlDock maxTier="css" info={<span className={EYEBROW}>Workout complete</span>}>
+      <ControlDock info={<span className={EYEBROW}>Workout complete</span>}>
         <Button
           type="button"
           data-testid="session-finish"
@@ -377,7 +369,6 @@ export function SessionDock({
   }
   return (
     <ControlDock
-      maxTier="css"
       info={
         <>
           <span className={EYEBROW}>Next up</span>

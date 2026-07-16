@@ -141,21 +141,23 @@ function grandparentLayoutId(fullPath: string): string | undefined {
 }
 
 /**
- * The three editor leaves own their header in a later task; this commit only
- * strips the shared push-layout `PushHeader` by parenting them under a
- * headerless pathless group. Other push leaves stay under `/push`.
+ * The editor leaves own their header in a later task, and the live session
+ * player is a chrome-free immersive screen — both parent under the headerless
+ * pathless group, never the push layout with `PushHeader`. Other push leaves
+ * stay under `/push`.
  */
 describe('router.tsx headerless editor group', () => {
-  const editorFullPaths = [
+  const headerlessFullPaths = [
     '/workouts/new',
     '/workouts/$workoutId/edit',
     '/workouts/$workoutId/reflow',
+    '/session/$sessionId',
   ] as const
 
-  const headedPushFullPaths = ['/timer', '/account', '/session/$sessionId'] as const
+  const headedPushFullPaths = ['/timer', '/account'] as const
 
-  it('parents editor leaves under a headerless group, not the push layout with PushHeader', () => {
-    for (const fullPath of editorFullPaths) {
+  it('parents editor and session leaves under a headerless group, not the push layout with PushHeader', () => {
+    for (const fullPath of headerlessFullPaths) {
       const parentId = parentLayoutId(fullPath)
       expect(parentId, `missing route for ${fullPath}`).toBeDefined()
       // Must not sit under the pathless push layout that renders PushHeader.

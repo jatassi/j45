@@ -128,12 +128,23 @@
    so this stays palette-agnostic. CSS-only, GPU-cheap, and silenced under
    `prefers-reduced-motion`. */
 .player-phase-backdrop {
-  background: radial-gradient(
-    120% 90% at 50% 0%,
-    color-mix(in oklab, var(--phase-hue) 26%, transparent) 0%,
-    color-mix(in oklab, var(--phase-hue) 9%, transparent) 42%,
-    transparent 78%
-  );
+  background:
+    radial-gradient(
+      120% 90% at 50% 0%,
+      color-mix(in oklab, var(--phase-hue) 46%, transparent) 0%,
+      color-mix(in oklab, var(--phase-hue) 18%, transparent) 45%,
+      transparent 80%
+    ),
+    radial-gradient(
+      130% 60% at 50% 100%,
+      color-mix(in oklab, var(--phase-hue) 28%, transparent) 0%,
+      transparent 70%
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--phase-hue) 10%, transparent),
+      color-mix(in oklab, var(--phase-hue) 5%, transparent)
+    );
   animation: player-phase-pulse 5s ease-in-out infinite alternate;
 }
 @keyframes player-phase-pulse {
