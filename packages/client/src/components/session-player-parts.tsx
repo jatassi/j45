@@ -20,13 +20,10 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
-  cellState,
   nextWorkStationName,
   phaseLabel,
   ringFraction,
   timerUrgency,
-  type CellState,
-  type PodGroup,
   type TimerUrgency,
 } from '@/lib/session'
 import { cn } from '@/lib/utils'
@@ -126,54 +123,6 @@ function WorkMeta({
       <p className="text-sm text-muted-foreground" data-testid="session-context">
         {context}
       </p>
-    </div>
-  )
-}
-
-const dotClass: Record<CellState, string> = {
-  done: 'size-2 bg-primary/50',
-  active: 'player-dot-pulse size-2.5 bg-primary',
-  upcoming: 'size-2 bg-input/60',
-}
-
-/** One pod's row of progress dots, one per work, keyed by its stable `workIndex`. */
-function PodRow({
-  group,
-  currentWorkIndex,
-}: {
-  readonly group: PodGroup
-  readonly currentWorkIndex: number | undefined
-}) {
-  return (
-    <div className="flex items-center gap-1.5" data-testid={`session-pod-group-${group.podIndex}`}>
-      {group.works.map((work) => {
-        const state = cellState(work.workIndex, currentWorkIndex)
-        return (
-          <span
-            key={work.workIndex}
-            data-testid={`session-progress-cell-${work.workIndex}`}
-            data-state={state}
-            className={cn('rounded-full', dotClass[state])}
-          />
-        )
-      })}
-    </div>
-  )
-}
-
-/** Every work as a progress dot, grouped by pod — legacy-parity completion strip. */
-export function ProgressDots({
-  groups,
-  currentWorkIndex,
-}: {
-  readonly groups: readonly PodGroup[]
-  readonly currentWorkIndex: number | undefined
-}) {
-  return (
-    <div className="flex items-center justify-center gap-3.5" data-testid="session-progress">
-      {groups.map((group) => (
-        <PodRow key={group.podIndex} group={group} currentWorkIndex={currentWorkIndex} />
-      ))}
     </div>
   )
 }

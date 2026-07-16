@@ -7,10 +7,10 @@ import { useNavigate, useParams } from '@tanstack/react-router'
 import * as Schema from 'effect/Schema'
 
 import { PhaseBackdrop } from '@/components/player/phase-backdrop'
+import { ProgressDots } from '@/components/player/progress-dots'
 import {
   CenterStack,
   Participants,
-  ProgressDots,
   SessionDock,
   TopStrip,
   type Dispatch,
