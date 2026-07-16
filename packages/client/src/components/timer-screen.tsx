@@ -328,7 +328,9 @@ export function TimerScreen() {
   const vm = viewModel(timer, isIdle ? inputs.readSettings() : timer.session)
   const shell = isIdle
     ? 'relative flex min-h-svh flex-col items-center gap-6 p-6'
-    : 'relative flex min-h-svh flex-col overflow-hidden'
+    : // dvh, not svh: the immersive shell (and the dock anchored to its
+      // bottom) must track iOS Safari's toolbar as it expands/collapses.
+      'relative flex min-h-dvh flex-col overflow-hidden'
   return (
     <div className={shell} data-testid="timer-screen">
       {isIdle ? (

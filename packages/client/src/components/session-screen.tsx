@@ -32,13 +32,14 @@ import {
 } from '@/lib/session'
 import { beepCountdown, beepDone, beepReady, beepRest, beepWork } from '@/player/audio'
 import { useCountdown } from '@/player/use-countdown'
+import { useVisualViewportHeight } from '@/player/use-visual-viewport-height'
 import { useWakeLock } from '@/player/wake-lock'
 
 /** A whole-screen centered status message (connecting / navigating away). */
 function StatusScreen({ testId, message }: { readonly testId: string; readonly message: string }) {
   return (
     <div
-      className="flex min-h-svh flex-col items-center justify-center gap-2 p-6"
+      className="flex min-h-dvh flex-col items-center justify-center gap-2 p-6"
       data-testid={testId}
     >
       <p className="text-sm text-muted-foreground">{message}</p>
@@ -125,10 +126,15 @@ function SessionView({ state }: { readonly state: SessionState }) {
   const groups = useMemo(() => podGroups(works), [works])
   const ctx = currentWorkContext(state)
   const phase = sessionPhase(state)
+  // Tracks iOS Safari's toolbar live (see the hook): the container — and with
+  // it the bottom-anchored dock and the flexing center stack — resizes with
+  // every visualViewport change instead of waiting for `dvh` to re-resolve.
+  const viewportHeight = useVisualViewportHeight()
 
   return (
     <div
-      className="relative flex h-svh flex-col items-center gap-4 overflow-hidden px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-36"
+      className="relative flex h-dvh flex-col items-center gap-4 overflow-hidden px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[calc(7.25rem+max(2rem,env(safe-area-inset-bottom)+0.75rem))]"
+      style={viewportHeight === undefined ? undefined : { height: viewportHeight }}
       data-testid="session-screen"
       data-phase={phase}
     >

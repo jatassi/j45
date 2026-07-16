@@ -36,7 +36,11 @@ export function ControlDock(props: ControlDockProps): JSX.Element {
   return (
     <div
       data-testid="player-control-dock"
-      className={cn('pointer-events-none absolute inset-x-0 bottom-0 px-5 pb-8')}
+      className={cn(
+        // Bottom padding clears the iOS home indicator / Safari toolbar inset
+        // when present (viewport-fit=cover), never dropping below the 2rem rest.
+        'pointer-events-none absolute inset-x-0 bottom-0 px-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+0.75rem))]',
+      )}
     >
       <div
         ref={surfaceRef}

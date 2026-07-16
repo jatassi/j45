@@ -57,7 +57,16 @@ export function PhaseBackdrop(props: PhaseBackdropProps): JSX.Element {
       // -z-[1] (not lower): the glass scene backdrop is an opaque z-index -1
       // element prepended to <body>; this element sits later in tree order at
       // the same z, so it paints above that backdrop yet behind all content.
-      className={cn('player-phase-backdrop pointer-events-none fixed inset-0 -z-[1]')}
+      // Sized to the *large* viewport (100lvh + the bottom safe-area), not
+      // `inset-0`: `bottom: 0` on a fixed element tracks the layout viewport,
+      // which on iOS Safari ends at the top of the bottom toolbar — the tint
+      // would stop there and show an abrupt seam when the toolbar collapses.
+      // Painting to the largest viewport keeps the gradient continuous under
+      // the toolbar in every toolbar state (overdraw past the screen is
+      // simply clipped).
+      className={cn(
+        'player-phase-backdrop pointer-events-none fixed inset-x-0 top-0 -z-[1] h-[calc(100lvh+env(safe-area-inset-bottom))]',
+      )}
       style={style}
     />
   )
