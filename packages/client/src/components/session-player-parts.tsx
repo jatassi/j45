@@ -7,6 +7,7 @@ import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PHASE_HUE } from '@/components/player/phase'
 import { ProgressRing } from '@/components/player/progress-ring'
+import { RollingDigits } from '@/components/player/rolling-digits'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,8 +24,10 @@ import {
   nextWorkStationName,
   phaseLabel,
   ringFraction,
+  timerUrgency,
   type CellState,
   type PodGroup,
+  type TimerUrgency,
 } from '@/lib/session'
 import { cn } from '@/lib/utils'
 import { formatDuration } from '@/lib/workouts'
@@ -37,6 +40,13 @@ export type Leave = () => void
 
 /** The tiny uppercase eyebrow label shared by the chrome (Live / Next up / …). */
 const EYEBROW = 'text-[10px] font-medium tracking-wide text-muted-foreground uppercase'
+
+/** Urgency tier (or none) → the `--digit-color` the glyph sheen gradient is built from. */
+const URGENCY_DIGIT_COLOR: Record<TimerUrgency | 'none', string> = {
+  none: '[--digit-color:var(--foreground)]',
+  warn: '[--digit-color:var(--timer-warn)]',
+  critical: '[--digit-color:var(--timer-critical)]',
+}
 
 /**
  * The immersive centrepiece: the phase-tinted progress ring wrapping the huge
@@ -61,6 +71,7 @@ export function CenterStack({
 }) {
   const digits = formatDuration(count)
   const fraction = ringFraction(state, count)
+  const urgency = timerUrgency(phase, count)
   return (
     <div className="flex w-full max-w-sm flex-col items-center gap-3">
       <div className="size-[min(76vw,38svh,320px)] [&>*]:size-full">
@@ -79,9 +90,13 @@ export function CenterStack({
           </span>
           <span
             data-testid="session-count"
-            className="mt-1 text-[64px] leading-none font-semibold text-foreground tabular-nums"
+            data-urgency={urgency}
+            className={cn(
+              'player-digits mt-1 inline-flex text-[64px] leading-none font-semibold tabular-nums',
+              URGENCY_DIGIT_COLOR[urgency ?? 'none'],
+            )}
           >
-            {digits}
+            <RollingDigits value={digits} />
           </span>
         </ProgressRing>
       </div>
@@ -117,7 +132,7 @@ function WorkMeta({
 
 const dotClass: Record<CellState, string> = {
   done: 'size-2 bg-primary/50',
-  active: 'size-2.5 bg-primary',
+  active: 'player-dot-pulse size-2.5 bg-primary',
   upcoming: 'size-2 bg-input/60',
 }
 

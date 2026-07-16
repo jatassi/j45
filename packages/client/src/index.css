@@ -44,6 +44,8 @@
   --color-hue-hybrid: var(--hue-hybrid);
   --color-hue-work: var(--hue-work);
   --color-hue-rest: var(--hue-rest);
+  --color-timer-warn: var(--timer-warn);
+  --color-timer-critical: var(--timer-critical);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -104,6 +106,10 @@
   --hue-hybrid: oklch(0.719 0.169 13.428);
   --hue-work: oklch(0.723 0.192 149.579);
   --hue-rest: oklch(0.769 0.165 70.08);
+  /* Countdown urgency: digits turn warn-orange at ≤15s left, critical deep
+     red at ≤5s (session-player-parts.tsx's timerUrgency). */
+  --timer-warn: oklch(0.705 0.213 47.604);
+  --timer-critical: oklch(0.577 0.245 27.325);
   /* Motion language: state transitions / enter-exit / default easing. */
   --duration-state: 150ms;
   --duration-enter: 250ms;
@@ -155,9 +161,108 @@
     opacity: 1;
   }
 }
+
+/* Immersive player: the countdown glyphs carry a subtle vertical sheen —
+   lighter crown, deeper base — instead of a flat fill. The base colour rides
+   `--digit-color` (set per urgency tier in session-player-parts.tsx);
+   registering it lets tier changes glide instead of snapping. The gradient
+   lives on each glyph span, not the digits row: `background-clip: text`
+   painted by a parent doesn't reliably follow a descendant's transform/
+   opacity animation, and the roll animates exactly those. */
+@property --digit-color {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: white;
+}
+/* `--digit-color` itself is set by the component via utility classes —
+   defining a default here would out-cascade those same-specificity
+   utilities and pin every tier to it. */
+.player-digits {
+  transition: --digit-color 500ms;
+}
+.player-digit-glyph {
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--digit-color) 80%, white),
+    var(--digit-color) 52%,
+    color-mix(in oklab, var(--digit-color) 82%, black)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Immersive player: odometer-rolled countdown digits. Each character cell
+   (rolling-digits.tsx) clips one glyph; on change the old glyph drifts down
+   and fades out while the new one fades in from above — the decrement
+   direction of a countdown. Kept subtle: partial travel with a crossfade,
+   not a full-height mechanical roll. */
+.player-digit-in {
+  animation: player-digit-in 450ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.player-digit-out {
+  animation: player-digit-out 450ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes player-digit-in {
+  from {
+    transform: translateY(-45%);
+    opacity: 0;
+  }
+}
+@keyframes player-digit-out {
+  to {
+    transform: translateY(45%);
+    opacity: 0;
+  }
+}
+
+/* Immersive player: the active progress dot pings — an expanding, fading
+   primary-tinted ring — while its fill breathes from the primary orange up
+   to `--dot-peak` and back, in phase with the ping. On HDR-capable
+   display/browser pairs the peak sits above SDR reference white
+   (rec2100-hlg values past ~0.75 render brighter than plain `white`);
+   everywhere else it falls back to plain white. */
+.player-dot-pulse {
+  --dot-peak: white;
+  animation:
+    player-dot-pulse 1.6s ease-out infinite,
+    player-dot-shift 1.6s ease-in-out infinite;
+}
+@supports (color: color(rec2100-hlg 0.8 0.8 0.8)) {
+  .player-dot-pulse {
+    --dot-peak: color(rec2100-hlg 0.92 0.92 0.92);
+    dynamic-range-limit: no-limit;
+  }
+}
+@keyframes player-dot-pulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 60%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--primary) 0%, transparent);
+  }
+}
+@keyframes player-dot-shift {
+  0%,
+  100% {
+    background-color: var(--primary);
+  }
+  50% {
+    background-color: var(--dot-peak);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .player-phase-backdrop {
+  .player-phase-backdrop,
+  .player-digit-in,
+  .player-dot-pulse {
     animation: none;
+  }
+  /* Hidden, not merely frozen: the out-glyph overlay unmounts on its own
+     `animationend`, which never fires when the animation is suppressed. */
+  .player-digit-out {
+    animation: none;
+    display: none;
   }
 }
 

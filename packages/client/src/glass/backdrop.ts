@@ -31,6 +31,30 @@ function backdropGradient(radiusPx: number): string {
   return `radial-gradient(circle ${radiusPx}px at 50% 0px, ${stops})`
 }
 
+/** Documents whose backdrop repaint is already wired to size changes. */
+const wiredDocuments = new WeakSet<Document>()
+
+/**
+ * Keep the full-document element sized to the document it covers: repaint on
+ * viewport resizes (the gradient radius reads the viewport dimensions) and on
+ * document-size changes (content growing past the fold). Wired once per
+ * document — without this the element keeps its install-time size, and a
+ * window widened afterwards shows the gradient seam at the stale right edge.
+ * `ResizeObserver` is absent in some test environments (jsdom); the resize
+ * listener alone covers those.
+ */
+function wireBackdropRepaint(doc: Document): void {
+  if (wiredDocuments.has(doc)) return
+  wiredDocuments.add(doc)
+  const repaint = (): void => {
+    installBackdrop(doc)
+  }
+  doc.defaultView?.addEventListener('resize', repaint)
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(repaint).observe(doc.documentElement)
+  }
+}
+
 /**
  * Idempotent: paints the full-document backdrop element, creating it (and
  * prepending it to `<body>`) on first call, then repainting that same
@@ -45,6 +69,7 @@ export function installBackdrop(doc: Document = document): HTMLElement {
     el.setAttribute('aria-hidden', 'true')
     doc.body.prepend(el)
   }
+  wireBackdropRepaint(doc)
 
   const view = doc.defaultView
   const width = doc.documentElement.scrollWidth

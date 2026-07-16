@@ -232,6 +232,23 @@ export const displayMillis = (state: SessionState, liveRemaining: number | null)
   }
 }
 
+/** Countdown urgency tier — colours the player digits via the `--timer-*` tokens. */
+export type TimerUrgency = 'warn' | 'critical'
+
+/**
+ * Urgency for the displayed count: `warn` (orange) in the final 15s,
+ * `critical` (deep red) in the final 5s, measured in the same ceilinged whole
+ * seconds `formatDuration` displays. Never urgent when done or idle
+ * (count 0) — a resting `0:00` is not an emergency.
+ */
+export const timerUrgency = (phase: PlayerPhase, count: number): TimerUrgency | undefined => {
+  if (phase === 'done' || count <= 0) return undefined
+  const seconds = Math.ceil(count / 1000)
+  if (seconds <= 5) return 'critical'
+  if (seconds <= 15) return 'warn'
+  return undefined
+}
+
 /** One cell's state relative to the work in focus. */
 export type CellState = 'done' | 'active' | 'upcoming'
 
