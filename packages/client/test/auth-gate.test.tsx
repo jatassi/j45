@@ -132,6 +132,30 @@ describe('LoginScreen', () => {
     expect(Option.getOrThrow(remembered)).toEqual({ username: 'jill', displayName: 'Jill Owner' })
   })
 
+  it("surfaces an undeclared response (e.g. the CSRF guard's Forbidden) as the unexpected-failure alert", async () => {
+    stubFetch((path) => {
+      if (path === '/auth/me') {
+        return jsonResponse(401, { _tag: 'Unauthorized' })
+      }
+      if (path === '/auth/login/pin') {
+        // The origin guard's answer to a non-allowlisted Origin — absent from
+        // loginPin's declared error schema, so it reaches the screen as a
+        // defect, which must still show the user something.
+        return jsonResponse(403, { _tag: 'Forbidden' })
+      }
+      throw new Error(`unexpected fetch to ${path}`)
+    })
+
+    renderGate()
+    await screen.findByTestId('login-screen')
+
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'jill' } })
+    // Completing the fourth digit auto-submits.
+    fireEvent.change(screen.getByLabelText('PIN'), { target: { value: '0000' } })
+
+    await screen.findByTestId('login-error-unexpected')
+  })
+
   it('replaces the username field with the remembered-user card; "Not you?" restores the field', async () => {
     stubFetch(() => jsonResponse(401, { _tag: 'Unauthorized' }))
     LastUser.save({ username: 'jill', displayName: 'Jill Owner' })

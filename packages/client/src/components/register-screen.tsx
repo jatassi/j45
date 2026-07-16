@@ -17,6 +17,7 @@ type RegisterFormError =
   | { readonly _tag: 'InvalidInvite' }
   | { readonly _tag: 'UsernameTaken' }
   | { readonly _tag: 'RateLimited'; readonly retryAfterSeconds: number }
+  | { readonly _tag: 'Unexpected' }
 
 type RegisterScreenProps = {
   /**
@@ -54,9 +55,15 @@ function useRegisterForm(onRegistered: () => void) {
           },
         }),
       ),
-    ).finally(() => {
-      setSubmitting(false)
-    })
+    )
+      // A defect (network failure, an undeclared response shape) must still
+      // surface — same posture as login-screen.tsx's runLogin.
+      .catch(() => {
+        setError({ _tag: 'Unexpected' })
+      })
+      .finally(() => {
+        setSubmitting(false)
+      })
   }
 
   return {
@@ -104,7 +111,7 @@ function AuthField({ id, label, value, onChange, type, inputMode, autoComplete }
   )
 }
 
-/** Renders `InvalidInvite`/`UsernameTaken`/`RateLimited` distinctly, each with its own testid and copy. */
+/** Renders `InvalidInvite`/`UsernameTaken`/`RateLimited`/`Unexpected` distinctly, each with its own testid and copy. */
 function RegisterErrorMessage({ error }: { readonly error: RegisterFormError | undefined }) {
   if (error?._tag === 'InvalidInvite') {
     return (
@@ -127,6 +134,15 @@ function RegisterErrorMessage({ error }: { readonly error: RegisterFormError | u
       <Alert variant="destructive" data-testid="register-error-rate-limited">
         <AlertDescription>
           Too many attempts — try again in {error.retryAfterSeconds}s.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+  if (error?._tag === 'Unexpected') {
+    return (
+      <Alert variant="destructive" data-testid="register-error-unexpected">
+        <AlertDescription>
+          Registration failed unexpectedly — check your connection and try again.
         </AlertDescription>
       </Alert>
     )

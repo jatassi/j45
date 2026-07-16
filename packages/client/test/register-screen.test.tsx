@@ -149,6 +149,28 @@ describe('RegisterScreen', () => {
     expect(screen.getByLabelText<HTMLInputElement>('PIN').value).toBe('4242')
   })
 
+  it("surfaces an undeclared response (e.g. the CSRF guard's Forbidden) as the unexpected-failure alert", async () => {
+    stubFetch((path) => {
+      if (path === '/auth/me') {
+        return jsonResponse(401, { _tag: 'Unauthorized' })
+      }
+      if (path === '/auth/register') {
+        // Not in register's declared error schema — a defect, which must
+        // still show the user something instead of a dead submit button.
+        return jsonResponse(403, { _tag: 'Forbidden' })
+      }
+      throw new Error(`unexpected fetch to ${path}`)
+    })
+
+    renderAt('/register?invite=ABCD-1234')
+    await screen.findByTestId('register-screen')
+
+    fillForm({ username: 'jill', displayName: 'Jill', pin: '4242' })
+    submitRegisterForm()
+
+    await screen.findByTestId('register-error-unexpected')
+  })
+
   it('offers a skippable passkey-enrollment prompt on success, and skipping it proceeds straight to the app', async () => {
     let registered = false
     stubFetch((path) => {

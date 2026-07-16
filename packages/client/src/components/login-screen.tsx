@@ -21,6 +21,7 @@ import * as Passkeys from '@/lib/passkeys'
 type PinError =
   | { readonly _tag: 'InvalidCredentials' }
   | { readonly _tag: 'RateLimited'; readonly retryAfterSeconds: number }
+  | { readonly _tag: 'Unexpected' }
 
 type LoginScreenProps = {
   /** Called once a login attempt (passkey or PIN) produces a session. */
@@ -30,10 +31,16 @@ type LoginScreenProps = {
 type LoginHandlers<A, E> = {
   readonly onFailure: (error: E) => void
   readonly onSuccess: (value: A) => void
+  /** A defect — the network failing, an undeclared response shape (e.g. the CSRF guard's `Forbidden`). */
+  readonly onDefect: () => void
   readonly onSettled: () => void
 }
 
-/** Runs a login `Effect`, routing its typed failure/success into React state. */
+/**
+ * Runs a login `Effect`, routing its typed failure/success into React state.
+ * A defect routes to `onDefect` rather than vanishing as an unhandled
+ * rejection — a login attempt must always resolve to something visible.
+ */
 function runLogin<A, E>(effect: Effect.Effect<A, E>, handlers: LoginHandlers<A, E>): void {
   void Effect.runPromise(
     effect.pipe(
@@ -42,7 +49,9 @@ function runLogin<A, E>(effect: Effect.Effect<A, E>, handlers: LoginHandlers<A, 
         onSuccess: handlers.onSuccess,
       }),
     ),
-  ).finally(handlers.onSettled)
+  )
+    .catch(handlers.onDefect)
+    .finally(handlers.onSettled)
 }
 
 /**
@@ -86,6 +95,9 @@ function usePinLogin(onAuthenticated: () => void) {
       onSuccess: (user) => {
         LastUser.save({ username: user.username, displayName: user.displayName })
         onAuthenticated()
+      },
+      onDefect: () => {
+        setError({ _tag: 'Unexpected' })
       },
       onSettled: () => {
         setSubmitting(false)
@@ -137,6 +149,9 @@ function usePasskeyLogin(onAuthenticated: () => void) {
       },
       onSuccess: () => {
         onAuthenticated()
+      },
+      onDefect: () => {
+        setFailed(true)
       },
       onSettled: () => {
         setSubmitting(false)
@@ -210,7 +225,7 @@ function RememberedUserCard({ user, onForget }: RememberedUserCardProps) {
   )
 }
 
-/** Renders `InvalidCredentials`/`RateLimited` distinctly (each gets its own testid and copy). */
+/** Renders `InvalidCredentials`/`RateLimited`/`Unexpected` distinctly (each gets its own testid and copy). */
 function PinLoginError({ error }: { readonly error: PinError | undefined }) {
   if (error?._tag === 'InvalidCredentials') {
     return (
@@ -224,6 +239,15 @@ function PinLoginError({ error }: { readonly error: PinError | undefined }) {
       <Alert variant="destructive" data-testid="login-error-rate-limited">
         <AlertDescription>
           Too many attempts — try again in {error.retryAfterSeconds}s.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+  if (error?._tag === 'Unexpected') {
+    return (
+      <Alert variant="destructive" data-testid="login-error-unexpected">
+        <AlertDescription>
+          Sign-in failed unexpectedly — check your connection and try again.
         </AlertDescription>
       </Alert>
     )

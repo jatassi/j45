@@ -41,6 +41,27 @@ export const AppOriginConfig: Config.Config<string> = Config.string('APP_ORIGIN'
 )
 
 /**
+ * Additional origins the auth routes' CSRF guard accepts alongside
+ * `APP_ORIGIN` — comma-separated, e.g. the LAN address the (LAN-exposed)
+ * Vite dev server is reachable at (`APP_EXTRA_ORIGINS=http://10.0.0.22:5173`)
+ * so a phone on the same network can sign in. Only the origin check reads
+ * this: the session cookie's `Secure` flag and the WebAuthn rpID/expected-
+ * origin still come from `APP_ORIGIN` alone. Defaults to empty — production
+ * stays single-origin.
+ */
+export const ExtraOriginsConfig: Config.Config<readonly string[]> = Config.string(
+  'APP_EXTRA_ORIGINS',
+).pipe(
+  Config.withDefault(''),
+  Config.map((raw) =>
+    raw
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter((origin) => origin !== ''),
+  ),
+)
+
+/**
  * Pins the value of the first-run invite code minted at startup when
  * `users` is empty (a later auth-accounts task) — deterministic for dev
  * and the Playwright e2e harness. Left unset (and so random) on the VPS.

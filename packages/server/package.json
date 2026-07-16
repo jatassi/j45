@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
-    "dev": "PORT=3000 SERVE_CLIENT=false bun --watch src/main.ts",
+    "dev": "PORT=3000 SERVE_CLIENT=false APP_EXTRA_ORIGINS=http://$(ipconfig getifaddr en0 2>/dev/null):5173 bun --watch src/main.ts",
     "start": "bun run src/main.ts"
   },
   "dependencies": {

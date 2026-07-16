@@ -27,7 +27,14 @@ import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { MigratorLive } from '../../src/sql.js'
 
 const TEST_APP_ORIGIN = 'https://app.example.test'
-const testConfigProvider = ConfigProvider.fromMap(new Map([['APP_ORIGIN', TEST_APP_ORIGIN]]))
+const TEST_EXTRA_ORIGIN = 'http://10.0.0.22:5173'
+const testConfigProvider = ConfigProvider.fromMap(
+  new Map([
+    ['APP_ORIGIN', TEST_APP_ORIGIN],
+    // Deliberately messy csv — the config must trim entries and drop blanks.
+    ['APP_EXTRA_ORIGINS', ` ${TEST_EXTRA_ORIGIN} ,, http://lan.example.test:5173`],
+  ]),
+)
 
 /**
  * The exact `MigratorLive` layer the server entrypoint runs at startup,
@@ -206,6 +213,24 @@ describe('AuthRoutesLive — CSRF', () => {
           const mismatched = yield* postWithOrigin(path, 'https://evil.example')
           expect(mismatched.status).toBe(403)
         }
+      }),
+    ),
+  )
+
+  it.effect('accepts an APP_EXTRA_ORIGINS origin (dev LAN address) past the guard', () =>
+    runTest(
+      Effect.gen(function* () {
+        const auth = authClient(yield* HttpClient.HttpClient)
+
+        // Reaching the credential check (401 InvalidCredentials) proves the
+        // CSRF guard passed — a rejected origin would have 403'd first.
+        const fromLan = yield* auth.postJson(
+          '/auth/login/pin',
+          { username: 'nobody', pin: '0000' },
+          { origin: TEST_EXTRA_ORIGIN },
+        )
+        expect(fromLan.status).toBe(401)
+        expect(yield* fromLan.json).toEqual({ _tag: 'InvalidCredentials' })
       }),
     ),
   )

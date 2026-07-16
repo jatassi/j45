@@ -30,7 +30,7 @@ import * as Option from 'effect/Option'
 import type { ParseError } from 'effect/ParseResult'
 import * as Schema from 'effect/Schema'
 
-import { AppOriginConfig } from '../config.js'
+import { AppOriginConfig, ExtraOriginsConfig } from '../config.js'
 import { Accounts } from './accounts.js'
 import { AuthSessions, SESSION_LIFETIME } from './auth-sessions.js'
 import { SESSION_COOKIE_NAME, sessionClearCookie, sessionSetCookie } from './cookie.js'
@@ -102,14 +102,19 @@ const authResponse = (result: { readonly user: User; readonly token: string }, a
     ),
   )
 
-/** CSRF posture: every `/auth` POST requires `Origin` to equal `APP_ORIGIN`. */
+/**
+ * CSRF posture: every `/auth` POST requires `Origin` to be `APP_ORIGIN` or
+ * one of `APP_EXTRA_ORIGINS` (dev's LAN addresses — empty in production).
+ */
 const requireValidOrigin = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const appOrigin = yield* appOriginOrDie
+  const extraOrigins = yield* Effect.orDie(ExtraOriginsConfig)
+  const allowedOrigins = new Set([appOrigin, ...extraOrigins])
   const origin = Headers.get(request.headers, 'origin')
   const matches = Option.match(origin, {
     onNone: () => false,
-    onSome: (value) => value === appOrigin,
+    onSome: (value) => allowedOrigins.has(value),
   })
   if (!matches) {
     return yield* Effect.fail(new Forbidden())
