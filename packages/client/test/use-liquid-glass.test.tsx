@@ -189,6 +189,11 @@ describe('useLiquidGlass — geometry trigger (refract tier)', () => {
     expect(el.firstElementChild).toBe(canvas)
     expect(canvas?.getAttribute('aria-hidden')).toBe('true')
     expect(canvas?.style.position).toBe('absolute')
+    // A canvas is a replaced element: without an explicit box it lays out at
+    // its intrinsic (drawing-buffer, device-px) size, so on dpr > 1 the
+    // refraction renders dpr x too large and clipped to the top-left corner.
+    expect(canvas?.style.width).toBe('100%')
+    expect(canvas?.style.height).toBe('100%')
     expect(el.dataset.glassTier).toBe('refract')
     expect(el.dataset.glassRenders).toBe('1')
 

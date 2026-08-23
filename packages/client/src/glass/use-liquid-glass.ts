@@ -162,6 +162,14 @@ function ensureLayer(el: HTMLElement, state: SurfaceState): Layer | null {
   Object.assign(canvas.style, {
     position: 'absolute',
     inset: '0',
+    // A canvas is a replaced element: `inset: 0` alone leaves width/height
+    // `auto`, which resolves to the *intrinsic* size — the drawing buffer, in
+    // device px. On a dpr > 1 display that lays the layer out dpr× too large,
+    // so the refraction reads as a magnified backdrop cropped to the card's
+    // top-left corner (and the rim bevel falls outside it). Pin the box to the
+    // surface so one buffer px maps to one device px.
+    width: '100%',
+    height: '100%',
     zIndex: '0',
     pointerEvents: 'none',
   })
