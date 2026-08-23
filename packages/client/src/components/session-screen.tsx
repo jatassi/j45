@@ -133,7 +133,7 @@ function SessionView({ state }: { readonly state: SessionState }) {
 
   return (
     <div
-      className="relative flex h-dvh flex-col items-center gap-4 overflow-hidden px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[calc(7.25rem+max(2rem,env(safe-area-inset-bottom)+0.75rem))]"
+      className="relative flex h-dvh flex-col items-center gap-3 overflow-hidden px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[calc(7.5rem+max(2rem,env(safe-area-inset-bottom)+0.75rem))]"
       style={viewportHeight === undefined ? undefined : { height: viewportHeight }}
       data-testid="session-screen"
       data-phase={phase}
@@ -144,7 +144,7 @@ function SessionView({ state }: { readonly state: SessionState }) {
         showLeave={state.timer._tag !== 'done'}
         onLeave={onLeave}
       />
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
         <CenterStack
           state={state}
           phase={phase}

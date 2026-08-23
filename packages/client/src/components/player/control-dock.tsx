@@ -46,7 +46,7 @@ export function ControlDock(props: ControlDockProps): JSX.Element {
         ref={surfaceRef}
         data-testid="player-control-dock-surface"
         className={cn(
-          'glass-surface pointer-events-auto flex flex-col gap-4 rounded-[28px] px-5 py-4',
+          'glass-surface pointer-events-auto flex flex-col gap-3 rounded-[28px] px-5 py-3',
         )}
       >
         <div data-slot="next-up" className="flex min-h-5 items-center justify-between">

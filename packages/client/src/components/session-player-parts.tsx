@@ -70,8 +70,8 @@ export function CenterStack({
   const fraction = ringFraction(state, count)
   const urgency = timerUrgency(phase, count)
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-3">
-      <div className="size-[min(76vw,38svh,320px)] [&>*]:size-full">
+    <div className="flex w-full max-w-sm flex-col items-center gap-2">
+      <div className="size-[min(76vw,34svh,320px)] [&>*]:size-full">
         <ProgressRing fraction={fraction} phase={phase} dirtyValue={digits}>
           <span
             data-testid="session-phase"
@@ -89,7 +89,7 @@ export function CenterStack({
             data-testid="session-count"
             data-urgency={urgency}
             className={cn(
-              'player-digits mt-1 inline-flex text-[64px] leading-none font-semibold tabular-nums',
+              'player-digits mt-1 inline-flex text-[min(17vw,9.6svh,64px)] leading-none font-semibold tabular-nums',
               URGENCY_DIGIT_COLOR[urgency ?? 'none'],
             )}
           >
@@ -112,7 +112,7 @@ function WorkMeta({
 }) {
   return (
     <div className="flex flex-col items-center gap-0.5 text-center">
-      <p className="font-heading text-2xl font-bold" data-testid="session-exercise-name">
+      <p className="font-heading text-xl font-bold" data-testid="session-exercise-name">
         {ctx?.station.name ?? '—'}
       </p>
       {ctx?.station.detail !== undefined && (
@@ -138,9 +138,9 @@ export function Participants({ participants }: { readonly participants: readonly
         <span
           key={participant.userId}
           data-testid={`session-participant-${participant.userId}`}
-          className="inline-flex items-center gap-2 rounded-full bg-foreground/5 py-1 pr-3 pl-1 text-xs text-foreground/80 ring-1 ring-border"
+          className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 py-0.5 pr-2.5 pl-0.5 text-xs text-foreground/80 ring-1 ring-border"
         >
-          <span className="flex size-6 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+          <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
             {participant.displayName.charAt(0)}
           </span>
           {participant.displayName}
@@ -335,8 +335,11 @@ export function SessionDock({
     <ControlDock
       info={
         <>
-          <span className={EYEBROW}>Next up</span>
-          <span className="text-sm font-semibold text-foreground/85" data-testid="session-next-up">
+          <span className={cn(EYEBROW, 'shrink-0')}>Next up</span>
+          <span
+            className="ml-3 min-w-0 truncate text-sm font-semibold text-foreground/85"
+            data-testid="session-next-up"
+          >
             {nextWorkStationName(state) ?? '—'}
           </span>
         </>
