@@ -35,11 +35,13 @@ import * as Scope from 'effect/Scope'
 import * as Stream from 'effect/Stream'
 import * as SubscriptionRef from 'effect/SubscriptionRef'
 
+import { PlanChanges } from '../library/plan-changes.js'
 import {
   completionRowForUser,
   completionRowsForSession,
   CompletionsRepo,
 } from './completions-repo.js'
+import { applyPlanChange } from './plan-sync.js'
 import {
   addPresence,
   getHandle,
@@ -158,7 +160,9 @@ const endSession = (registry: Registry, handle: SessionHandle): Effect.Effect<vo
       const state = yield* SubscriptionRef.get(handle.stateRef)
       const rows = completionRowsForSession({
         sessionId: handle.id,
-        workoutName: handle.workoutName,
+        // The name as last published — a rename mid-session records the
+        // name that was in force, not the one the session started under.
+        workoutName: state.workoutName,
         workout: handle.workout,
         host: handle.host,
         participants: [...HashMap.values(yield* Ref.get(handle.roster))],
@@ -241,7 +245,6 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
       host: params.host,
       workoutId: params.workoutId,
       reflowLaunched: params.reflowLaunched,
-      workoutName: params.workoutName,
       workout: params.workout,
       compiled: params.compiled,
       startedAt,
@@ -340,7 +343,7 @@ const recordLeaver = (
     const rows = completionRowForUser(
       {
         sessionId: handle.id,
-        workoutName: handle.workoutName,
+        workoutName: state.workoutName,
         workout: handle.workout,
         host: handle.host,
         participants: [...HashMap.values(yield* Ref.get(handle.roster))],
@@ -423,6 +426,12 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
     const sessions = yield* Ref.make(HashMap.empty<SessionId, SessionHandle>())
     const completionsRepo = yield* CompletionsRepo
     const registry: Registry = { sessions, layerScope, completionsRepo }
+
+    // The consuming half of the plan-changed seam. The library announces a
+    // change, and this registry applies it to the sessions that run that
+    // plan. `library/` has no import of `LiveSessions`.
+    const planChanges = yield* PlanChanges
+    yield* planChanges.subscribe((change) => applyPlanChange(registry, change))
 
     return {
       start: (params: StartParams) => start(registry, params),

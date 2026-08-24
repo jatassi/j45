@@ -1,11 +1,19 @@
 import type { Rpc } from '@effect/rpc'
 import type { SqlError } from '@effect/sql/SqlError'
-import { CurrentUser, LibraryRpcs, type LibraryWorkout } from '@j45/domain'
+import {
+  CurrentUser,
+  LibraryRpcs,
+  type LibraryWorkout,
+  type UserId,
+  type WorkoutId,
+  type WorkoutNotFound,
+} from '@j45/domain'
 import * as Arr from 'effect/Array'
 import * as Effect from 'effect/Effect'
 import type * as Layer from 'effect/Layer'
 import * as Order from 'effect/Order'
 
+import { PlanChanges } from './plan-changes.js'
 import { WorkoutsRepo } from './workouts-repo.js'
 
 /**
@@ -30,6 +38,41 @@ const asDefect = (error: SqlError): Effect.Effect<never> => Effect.die(error)
 const sortByNameCaseInsensitive = (workouts: readonly LibraryWorkout[]) =>
   Arr.sortWith(workouts, (workout) => workout.workout.name.toLowerCase(), Order.string)
 
+/** `RenameWorkout`'s target: whose workout, which one, and its new name. */
+type RenameInput = {
+  readonly id: WorkoutId
+  readonly name: string
+  readonly ownerId: UserId
+}
+
+/**
+ * Renames the caller's own workout, then announces the change.
+ *
+ * A stored plan that a live session runs must not go stale, so the new name
+ * is published through `PlanChanges`. Whoever runs that plan consumes the
+ * announcement; this module keeps its dependency set and does not know that
+ * live sessions exist. It mirrors the session-ended seam, which runs the
+ * other way.
+ *
+ * The announcement follows the write, so a consumer never sees a name that
+ * the store does not hold. It carries the stored name back from the repo for
+ * the same reason.
+ */
+const renameAndAnnounce = (
+  workoutsRepo: WorkoutsRepo,
+  planChanges: PlanChanges,
+  input: RenameInput,
+): Effect.Effect<LibraryWorkout, WorkoutNotFound | SqlError> =>
+  Effect.gen(function* () {
+    const renamed = yield* workoutsRepo.rename(input.id, input.ownerId, input.name)
+    yield* planChanges.publish({
+      _tag: 'renamed',
+      workoutId: renamed.id,
+      name: renamed.workout.name,
+    })
+    return renamed
+  })
+
 /**
  * Implements every `LibraryRpcs` member in one `toLayer` — like
  * `OwnerHandlersLive`, no other task contributes to this group. Every
@@ -50,10 +93,11 @@ export const LibraryHandlersLive: Layer.Layer<
   | Rpc.Handler<'CreateWorkout'>
   | Rpc.Handler<'UpdateWorkout'>,
   never,
-  WorkoutsRepo
+  WorkoutsRepo | PlanChanges
 > = LibraryRpcs.toLayer(
   Effect.gen(function* () {
     const workoutsRepo = yield* WorkoutsRepo
+    const planChanges = yield* PlanChanges
 
     return {
       ListWorkouts: () =>
@@ -78,7 +122,7 @@ export const LibraryHandlersLive: Layer.Layer<
       RenameWorkout: ({ id, name }) =>
         Effect.gen(function* () {
           const user = yield* CurrentUser
-          return yield* workoutsRepo.rename(id, user.id, name)
+          return yield* renameAndAnnounce(workoutsRepo, planChanges, { id, name, ownerId: user.id })
         }).pipe(Effect.catchTag('SqlError', asDefect)),
 
       DeleteWorkout: ({ id }) =>

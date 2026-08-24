@@ -24,6 +24,7 @@ import { GenerationHandlersLive } from './generation/handlers.js'
 import { ExerciseHandlersLive } from './library/exercise-handlers.js'
 import { ExercisesRepo } from './library/exercises-repo.js'
 import { LibraryHandlersLive } from './library/handlers.js'
+import { PlanChanges } from './library/plan-changes.js'
 import { WorkoutsRepo } from './library/workouts-repo.js'
 import { HealthzRouteLive, StaticRouteLive } from './routes.js'
 import { RpcHandlersLive } from './rpc-handlers.js'
@@ -81,7 +82,10 @@ const RpcProtocolLive = RpcServer.layerProtocolWebsocket({ path: '/rpc' }).pipe(
  * completion row per ever-participant when a progressed session ends, so it
  * is built over `CompletionsRepo` too (also exposed as its own sibling here
  * since `HistoryHandlersLive` and `GenerationHandlersLive` need it
- * directly). `SqlLive` is also the very layer `main.ts` merges to run
+ * directly). `PlanChanges` is the plan-changed seam: `LibraryHandlersLive`
+ * publishes into it and `LiveSessions` consumes from it, so both are built
+ * over the one memoized instance and the library layer needs no knowledge
+ * of live sessions. `SqlLive` is also the very layer `main.ts` merges to run
  * migrations, and Effect memoizes layers by reference, so this second
  * reference (alongside `PasskeyRoutesProvided`'s below) opens no second
  * database connection.
@@ -94,7 +98,10 @@ const AuthServicesLive = Layer.mergeAll(
   WorkoutsRepo.Default,
   ExercisesRepo.Default,
   CompletionsRepo.Default,
-  LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default)),
+  PlanChanges.Default,
+  LiveSessions.Default.pipe(
+    Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
+  ),
 ).pipe(Layer.provide(SqlLive))
 
 /**
