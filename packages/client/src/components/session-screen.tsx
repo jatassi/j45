@@ -5,6 +5,7 @@ import { SessionId } from '@j45/domain'
 import type { SessionState } from '@j45/domain'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import * as Schema from 'effect/Schema'
+import { toast } from 'sonner'
 
 import { PhaseBackdrop } from '@/components/player/phase-backdrop'
 import { ProgressDots } from '@/components/player/progress-dots'
@@ -34,6 +35,13 @@ import { beepCountdown, beepDone, beepReady, beepRest, beepWork } from '@/player
 import { useCountdown } from '@/player/use-countdown'
 import { useVisualViewportHeight } from '@/player/use-visual-viewport-height'
 import { useWakeLock } from '@/player/wake-lock'
+
+/**
+ * How long the plan-change notice stays on screen. This is longer than the
+ * toaster's own default. A participant reads the notice during an exercise,
+ * from a distance, and must not have to stop to take it in.
+ */
+const PLAN_NOTICE_MILLIS = 8000
 
 /** A whole-screen centered status message (connecting / navigating away). */
 function StatusScreen({ testId, message }: { readonly testId: string; readonly message: string }) {
@@ -71,6 +79,33 @@ function useSegmentCues(state: SessionState): void {
     else if (segment._tag === 'rest') beepRest()
     else beepReady()
   }, [state])
+}
+
+/**
+ * The transient notice a plan change raises: one toast for each rise of
+ * `planRevision`, and nothing for any other republish.
+ *
+ * The revision is the signal on purpose. The server republishes the snapshot
+ * on every participant join and leave. A client that watched the compiled
+ * workout for changes would raise a notice on those too.
+ *
+ * The count starts at the revision of the first snapshot this screen sees.
+ * A participant who joins after a change thus gets no notice for it.
+ *
+ * No sound goes with the notice. Every beep this player makes carries timing
+ * meaning. A beep that did not would weaken all of them.
+ */
+function usePlanChangeNotice(state: SessionState): void {
+  const seenRef = useRef(state.planRevision)
+  const { planRevision, planChangedBy } = state
+  useEffect(() => {
+    if (planRevision <= seenRef.current) return
+    seenRef.current = planRevision
+    toast('The plan changed', {
+      description: `${planChangedBy ?? 'The host'} updated this workout.`,
+      duration: PLAN_NOTICE_MILLIS,
+    })
+  }, [planRevision, planChangedBy])
 }
 
 /**
@@ -119,6 +154,7 @@ function SessionView({ state }: { readonly state: SessionState }) {
   const count = useServerCountdown(state)
   const { dispatch, onLeave } = useSessionActions(state.id)
   useSegmentCues(state)
+  usePlanChangeNotice(state)
   useWakeLock(state.timer._tag === 'running')
 
   const works = useMemo(() => sessionWorks(state.compiled.segments), [state.compiled.segments])

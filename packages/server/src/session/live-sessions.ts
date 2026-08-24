@@ -7,12 +7,12 @@ import {
   prev as prevTimer,
   resume as resumeTimer,
   SessionId,
-  SessionState,
   skip as skipTimer,
-  start as startTimer,
   type Participant,
+  type Segment,
   type SessionCommand,
   type SessionNotFound,
+  type SessionState,
   type SessionSummary,
   type TimerState,
   type UserId,
@@ -41,10 +41,11 @@ import {
   completionRowsForSession,
   CompletionsRepo,
 } from './completions-repo.js'
-import { applyPlanChange } from './plan-sync.js'
+import { applyPlanChange, snapshotAfterMove } from './plan-sync.js'
 import {
   addPresence,
   getHandle,
+  initialState,
   isProgressed,
   listSessions,
   participantsOf,
@@ -54,6 +55,7 @@ import {
   summaryOf,
   timersEqual,
   withState,
+  type PendingPlan,
   type PresenceEntry,
   type Registry,
   type SessionHandle,
@@ -75,20 +77,28 @@ const freshSessionId = Schema.decodeSync(SessionId)
 // and every command funnel through here, so their writes never interleave. A
 // no-op transition (a spurious ticker wakeup, a command that does not apply)
 // publishes nothing.
+//
+// `f` reads the segments off the snapshot rather than off the handle, because
+// an applied plan change replaces them: the plan in force and the plan the
+// timer moves through are one value.
+//
+// A move that changes segment is also the boundary a waiting plan change
+// asked for, so the published snapshot comes from `snapshotAfterMove`.
 const applyTimer = (
   handle: SessionHandle,
-  f: (timer: TimerState, now: number) => TimerState,
+  f: (timer: TimerState, segments: readonly Segment[], now: number) => TimerState,
 ): Effect.Effect<void> =>
   handle.sem.withPermits(1)(
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const state = yield* SubscriptionRef.get(handle.stateRef)
-      const next = f(state.timer, now)
+      const next = f(state.timer, state.compiled.segments, now)
       if (timersEqual(next, state.timer)) {
         return
       }
-      yield* SubscriptionRef.set(handle.stateRef, withState(state, { serverNow: now, timer: next }))
-      if (isProgressed(next)) {
+      const published = yield* snapshotAfterMove(handle, { state, moved: next, now })
+      yield* SubscriptionRef.set(handle.stateRef, published)
+      if (isProgressed(published.timer)) {
         yield* Ref.set(handle.progressed, true)
       }
       yield* Queue.offer(handle.wakeup, undefined)
@@ -147,6 +157,24 @@ const leave = (handle: SessionHandle, sub: Sub): Effect.Effect<void> =>
     yield* republishParticipants(handle)
   })
 
+// The facts every completion row of one session shares, read at the moment
+// the row is written: the plan and the name last in force while the timer was
+// live, the roster as it stands, and how far the published timer reached.
+// `endSession` and `recordLeaver` both mint rows from this one reading.
+const completionInputs = (handle: SessionHandle, state: SessionState) =>
+  Effect.gen(function* () {
+    return {
+      sessionId: handle.id,
+      workoutName: state.workoutName,
+      workout: yield* Ref.get(handle.workout),
+      host: handle.host,
+      participants: [...HashMap.values(yield* Ref.get(handle.roster))],
+      startedAt: handle.startedAt,
+      endedAt: yield* DateTime.now,
+      progress: progressOf(state.timer, state.compiled.segments.length),
+    } as const
+  })
+
 const endSession = (registry: Registry, handle: SessionHandle): Effect.Effect<void> =>
   Effect.gen(function* () {
     // --- session-ended seam -------------------------------------------------
@@ -158,18 +186,7 @@ const endSession = (registry: Registry, handle: SessionHandle): Effect.Effect<vo
     // failed insert is logged and swallowed, never blocking the reaper.
     if (yield* Ref.get(handle.progressed)) {
       const state = yield* SubscriptionRef.get(handle.stateRef)
-      const rows = completionRowsForSession({
-        sessionId: handle.id,
-        // The name as last published — a rename mid-session records the
-        // name that was in force, not the one the session started under.
-        workoutName: state.workoutName,
-        workout: handle.workout,
-        host: handle.host,
-        participants: [...HashMap.values(yield* Ref.get(handle.roster))],
-        startedAt: handle.startedAt,
-        endedAt: yield* DateTime.now,
-        progress: progressOf(state.timer, handle.compiled.segments.length),
-      })
+      const rows = completionRowsForSession(yield* completionInputs(handle, state))
       yield* Effect.catchAllCause(registry.completionsRepo.insertAll(rows), (cause) =>
         Effect.logError('session completion write failed', cause),
       )
@@ -196,7 +213,7 @@ const ticker = (handle: SessionHandle): Effect.Effect<void> =>
       if (delay > 0) {
         yield* Effect.race(Clock.sleep(Duration.millis(delay)), Queue.take(handle.wakeup))
       }
-      yield* applyTimer(handle, (timer, at) => advanceIfDue(timer, handle.compiled.segments, at))
+      yield* applyTimer(handle, (timer, segments, at) => advanceIfDue(timer, segments, at))
     }
   })
 
@@ -230,25 +247,16 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
     const now = yield* Clock.currentTimeMillis
     const startedAt = yield* DateTime.now
     const id = freshSessionId(randomUUID())
-    const initial = new SessionState({
-      id,
-      host: params.host,
-      workoutName: params.workoutName,
-      compiled: params.compiled,
-      timer: startTimer(params.compiled.segments, now),
-      serverNow: now,
-      participants: [],
-    })
     const scope = yield* Scope.fork(registry.layerScope, ExecutionStrategy.sequential)
     const handle: SessionHandle = {
       id,
       host: params.host,
       workoutId: params.workoutId,
       reflowLaunched: params.reflowLaunched,
-      workout: params.workout,
-      compiled: params.compiled,
+      workout: yield* Ref.make(params.workout),
+      pending: yield* Ref.make(Option.none<PendingPlan>()),
       startedAt,
-      stateRef: yield* SubscriptionRef.make(initial),
+      stateRef: yield* SubscriptionRef.make(initialState(id, params, now)),
       rawSubs: yield* SubscriptionRef.make(0),
       presence: yield* Ref.make(HashMap.empty<UserId, PresenceEntry>()),
       // Seeded with the host: they count as an ever-participant even if they
@@ -307,8 +315,7 @@ const command = (
 ): Effect.Effect<void, SessionNotFound> =>
   Effect.gen(function* () {
     const handle = yield* getHandle(registry, id)
-    const segments = handle.compiled.segments
-    yield* applyTimer(handle, (timer, now) => {
+    yield* applyTimer(handle, (timer, segments, now) => {
       switch (cmd) {
         case 'pause': {
           return pauseTimer(timer, now)
@@ -340,19 +347,7 @@ const recordLeaver = (
       return
     }
     const state = yield* SubscriptionRef.get(handle.stateRef)
-    const rows = completionRowForUser(
-      {
-        sessionId: handle.id,
-        workoutName: state.workoutName,
-        workout: handle.workout,
-        host: handle.host,
-        participants: [...HashMap.values(yield* Ref.get(handle.roster))],
-        startedAt: handle.startedAt,
-        endedAt: yield* DateTime.now,
-        progress: progressOf(state.timer, handle.compiled.segments.length),
-      },
-      userId,
-    )
+    const rows = completionRowForUser(yield* completionInputs(handle, state), userId)
     yield* Effect.catchAllCause(registry.completionsRepo.insertAll(rows), (cause) =>
       Effect.logError('session completion write failed', cause),
     )

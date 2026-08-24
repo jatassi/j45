@@ -12,8 +12,17 @@ got" is dropped; a record proves participation in any capacity, nothing more.
 
 The snapshot is not decoration: it is what powers `workout-generation`'s
 no-repeat-recently constraint (which exercises ran lately) and keeps history
-truthful when the source plan is later edited, deleted, or was never saved in
-that shape at all (a launch-time reflow).
+independent of the library row, which can later be edited or deleted, or may
+never have held that shape at all (a launch-time reflow).
+
+> **Amended by `live-plan-sync`.** This document first said the snapshot keeps
+> history truthful "when the source plan is later edited". A running session
+> now tracks its workout, so an edit that lands while the timer is live
+> becomes part of what the participant actually ran. One rule replaces the
+> promise: a completion records **the last plan applied while the timer was
+> still live**. An edit after the timer is done never reaches the record. The
+> known cost is that a session which ran across two plans is recorded against
+> the later one, not stitched across both.
 
 ## How it fits
 
@@ -35,8 +44,8 @@ feature depends on `flow-control` (both also touch `StartSession` and
 ```ts
 export const CompletionId = Schema.String.pipe(Schema.brand('CompletionId'))
 
-/** One user's record of one ended session. `workout` is the as-run snapshot
- *  (post-reflow), so history stays truthful when the plan later changes. */
+/** One user's record of one ended session. `workout` is the as-run snapshot:
+ *  post-reflow, and the last plan applied while the timer was still live. */
 export class SessionCompletion extends Schema.Class<SessionCompletion>('SessionCompletion')({
   id: CompletionId,
   sessionId: SessionId,

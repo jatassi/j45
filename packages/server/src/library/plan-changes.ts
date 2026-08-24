@@ -1,4 +1,4 @@
-import type { WorkoutId } from '@j45/domain'
+import type { Workout, WorkoutId } from '@j45/domain'
 import * as Effect from 'effect/Effect'
 import * as HashMap from 'effect/HashMap'
 import * as Ref from 'effect/Ref'
@@ -21,12 +21,25 @@ import type * as Scope from 'effect/Scope'
  * publish it from the handler that makes the change, and give it a case in
  * `applyPlanChange`.
  */
-export type PlanChange = {
-  /** The workout kept its content and took a new name. */
-  readonly _tag: 'renamed'
-  readonly workoutId: WorkoutId
-  readonly name: string
-}
+export type PlanChange =
+  | {
+      /** The workout kept its content and took a new name. */
+      readonly _tag: 'renamed'
+      readonly workoutId: WorkoutId
+      readonly name: string
+    }
+  | {
+      /**
+       * The workout's content changed: stations, pods, flow, name, or any
+       * mix of them. The whole stored plan travels, not a diff — the
+       * consumer compiles it and needs no history of how it got there.
+       */
+      readonly _tag: 'edited'
+      readonly workoutId: WorkoutId
+      readonly workout: Workout
+      /** Display name of whoever saved the edit, for the notice to name. */
+      readonly changedBy: string
+    }
 
 /**
  * What a consumer does with one change. The signature has no error channel:

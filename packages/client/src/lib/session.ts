@@ -259,10 +259,20 @@ export const cellState = (workIndex: number, currentWorkIndex: number | undefine
   return workIndex === currentWorkIndex ? 'active' : 'upcoming'
 }
 
-/** A stable cue key per running segment (so a resume never re-fires its beep) and for done. */
+/**
+ * A stable cue key per running segment, so a resume never re-fires its beep,
+ * plus one for done.
+ *
+ * The plan revision is part of the key. An applied plan change re-enters the
+ * timer, and the segment it lands on can carry the index the participant
+ * already had. Without the revision the client would read that as the same
+ * segment and stay silent, which drops a boundary beep the participant
+ * expects. The revision moves only when a change lands, so nothing else in
+ * the player makes a new key.
+ */
 export const cueKey = (state: SessionState): string | null => {
   const { timer } = state
-  if (timer._tag === 'running') return `seg-${timer.segmentIndex}`
+  if (timer._tag === 'running') return `rev-${state.planRevision}-seg-${timer.segmentIndex}`
   if (timer._tag === 'done') return 'done'
   return null
 }

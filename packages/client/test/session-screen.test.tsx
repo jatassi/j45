@@ -1,41 +1,20 @@
 // @vitest-environment jsdom
-import { RegistryProvider, Result } from '@effect-atom/atom-react'
-import {
-  compile,
-  Flow,
-  Participant,
-  Pod,
-  Round,
-  SessionId,
-  SessionNotFound,
-  SessionState,
-  Station,
-  TimerDone,
-  TimerPaused,
-  TimerRunning,
-  UserId,
-  Workout,
-  type TimerState,
-} from '@j45/domain'
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from '@tanstack/react-router'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { SessionId, SessionNotFound, TimerDone, TimerPaused, TimerRunning } from '@j45/domain'
+import type { SessionState, TimerState } from '@j45/domain'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import * as Effect from 'effect/Effect'
 import * as Queue from 'effect/Queue'
-import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
 import * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { SessionScreen } from '@/components/session-screen'
-import { ServerRpcClient } from '@/lib/rpc-client'
 import * as audio from '@/player/audio'
+
+import { liveStream, makeState, push, renderLive, renderSession } from './session-harness'
+
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+}))
 
 vi.mock('@/player/audio', () => ({
   audioState: vi.fn(() => 'on'),
@@ -52,108 +31,6 @@ afterEach(() => {
   vi.clearAllMocks()
   Reflect.deleteProperty(navigator, 'wakeLock')
 })
-
-/** Fake rpc runtime — the shared idiom from `library-screen.test.tsx`. */
-function makeFakeRuntime(handlers: Partial<Record<string, (payload: unknown) => unknown>>) {
-  const client = (tag: string, payload: unknown) => {
-    const handler = handlers[tag]
-    if (handler === undefined) {
-      throw new Error(`unexpected rpc call: ${tag}`)
-    }
-    return handler(payload)
-  }
-  return Runtime.defaultRuntime.pipe(Runtime.provideService(ServerRpcClient, client as never))
-}
-
-/**
- * 1 pod ("Pod 1"), 2 stations (Rower w/ detail, Burpee), laps × 2 rounds of
- * 30″/10″. Compiled segments: ready, work Rr1, rest, work Br1, rest, work
- * Rr2, rest, work Br2 — works at indices 1, 3, 5, 7.
- */
-const compiled = compile(
-  new Workout({
-    name: 'Athletica',
-    focus: 'cardio',
-    pods: [
-      new Pod({
-        name: 'Pod 1',
-        stations: [
-          new Station({ name: 'Rower', detail: '10 cal' }),
-          new Station({ name: 'Burpee' }),
-        ],
-      }),
-    ],
-    flow: new Flow({
-      type: 'laps',
-      rounds: [
-        new Round({ workSeconds: 30, restSeconds: 10 }),
-        new Round({ workSeconds: 30, restSeconds: 10 }),
-      ],
-    }),
-  }),
-)
-
-const host = new Participant({ userId: Schema.decodeSync(UserId)('u-ann'), displayName: 'Ann' })
-const joiner = new Participant({ userId: Schema.decodeSync(UserId)('u-ben'), displayName: 'Ben' })
-
-function makeState(id: SessionId, timer: TimerState, serverNow: number): SessionState {
-  return new SessionState({
-    id,
-    host,
-    workoutName: 'Athletica',
-    compiled,
-    timer,
-    serverNow,
-    participants: [host, joiner],
-  })
-}
-
-/**
- * Mounts `SessionScreen` at `/session/<id>` in a throwaway memory router
- * whose `/` renders a marker, so a navigate-home is observable. Seeds the
- * fake rpc runtime the same way the other screen tests do.
- */
-function renderSession(
-  id: string,
-  handlers: Partial<Record<string, (payload: unknown) => unknown>>,
-) {
-  const fakeRuntime = makeFakeRuntime(handlers)
-  const rootRoute = createRootRoute({ component: Outlet })
-  const indexRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: () => <div data-testid="home-screen" />,
-  })
-  const sessionRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/session/$sessionId',
-    component: SessionScreen,
-  })
-  const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, sessionRoute]),
-    history: createMemoryHistory({ initialEntries: [`/session/${id}`] }),
-  })
-  render(
-    <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
-      <RouterProvider router={testRouter} />
-    </RegistryProvider>,
-  )
-  return testRouter
-}
-
-/** A live single-state render — the common case for a static snapshot. */
-function renderLive(id: string, state: SessionState) {
-  return renderSession(id, { WatchSession: () => liveStream(state) })
-}
-
-/** A stream that emits `state` and then stays open (never `ended`). */
-const liveStream = (state: SessionState) => Stream.make(state).pipe(Stream.concat(Stream.never))
-
-/** Offer one snapshot onto a feed queue inside `act`, flushing React effects. */
-const push = (queue: Queue.Queue<SessionState>, state: SessionState) =>
-  act(async () => {
-    await Effect.runPromise(Queue.offer(queue, state))
-  })
 
 describe('SessionScreen — stream retry discrimination', () => {
   it('SessionNotFound stops retrying and navigates home', async () => {

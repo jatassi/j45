@@ -27,6 +27,15 @@ export class Participant extends Schema.Class<Participant>('Participant')({
  * Full live-session snapshot streamed to watchers. Carries the compiled
  * workout and timer state so a late joiner can render without replaying
  * history, plus `serverNow` so the client can correct for clock skew.
+ *
+ * `compiled` is the plan currently in force, not the plan the session
+ * started under. A session is a live view of its library workout, and an
+ * edit to that workout lands here at the next segment boundary.
+ *
+ * A client reads `planRevision` to learn that a change landed. It must never
+ * compare one `compiled` with the next to find out. The snapshot is
+ * republished on every participant join and leave, so a comparison would
+ * report changes that never happened.
  */
 export class SessionState extends Schema.Class<SessionState>('SessionState')({
   id: SessionId,
@@ -36,6 +45,18 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
   timer: TimerState,
   serverNow: Schema.Number,
   participants: Schema.Array(Participant),
+  /**
+   * How many plan changes this session has applied. `0` at start. It
+   * increases only when a change lands: never on a join, a leave, a timer
+   * advance, or a rename. A rename raises no notice, because the new name is
+   * already on screen. One increase is one notice for the participant.
+   */
+  planRevision: Schema.Int,
+  /**
+   * Who made the change that `planRevision` counts, for the notice to name.
+   * `null` until the first change lands.
+   */
+  planChangedBy: Schema.NullOr(Schema.String),
 }) {}
 
 /**

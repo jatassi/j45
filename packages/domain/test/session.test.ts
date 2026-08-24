@@ -56,6 +56,8 @@ describe('SessionState', () => {
         timer: new TimerRunning({ segmentIndex: 1, endsAtMillis: 12_345 }),
         serverNow: 10_000,
         participants: [host],
+        planRevision: 2,
+        planChangedBy: 'Alex',
       })
 
       const encoded = yield* Schema.encode(SessionState)(original)

@@ -52,7 +52,15 @@ unrecorded wherever they fit.
   that every live Session which tracks that Workout can follow it. The library
   publishes; the live-Session registry consumes. The library never knows that
   live Sessions exist. A rename is applied at once and raises no notice to
-  Participants, because the new name is already on screen.
+  Participants, because the new name is already on screen. A content edit
+  waits for the next Segment boundary, so no interval is cut short, and then
+  re-enters the plan at the same work ordinal.
+- **Plan revision** — the count of plan changes a Session has applied, carried
+  on its snapshot. It rises only when a change actually lands — never on a
+  Participant join or leave, and never on a rename. A client raises its notice
+  on the rise. Clients must not compare compiled plans to find a change: the
+  snapshot is republished on every join and leave, so a comparison would
+  report changes that never happened.
 - **Glass chrome** — persistent UI furniture rendered in the liquid-glass
   material: the bottom tab bar, sticky headers, overlays, and control docks.
   Content cards stay opaque — chrome is one half of glass's decided role.
