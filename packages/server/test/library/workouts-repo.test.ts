@@ -148,7 +148,12 @@ describe('WorkoutsRepo', () => {
           rounds: [new Round({ workSeconds: 30, restSeconds: 10 })],
         }),
       })
-      const updated = yield* workoutsRepo.update(original.id, ownerId, replacement)
+      const updated = yield* workoutsRepo.update({
+        id: original.id,
+        ownerId,
+        workout: replacement,
+        expectedUpdatedAt: original.updatedAt,
+      })
 
       expect(updated.id).toBe(original.id)
       expect(DateTime.toEpochMillis(updated.createdAt)).toBe(
@@ -186,7 +191,12 @@ describe('WorkoutsRepo', () => {
         const replacement = makeWorkout('Hijacked')
 
         const foreignAttempt = yield* Effect.either(
-          workoutsRepo.update(workout.id, ownerB, replacement),
+          workoutsRepo.update({
+            id: workout.id,
+            ownerId: ownerB,
+            workout: replacement,
+            expectedUpdatedAt: workout.updatedAt,
+          }),
         )
         expect(Either.isLeft(foreignAttempt)).toBe(true)
         if (Either.isLeft(foreignAttempt)) {
@@ -198,7 +208,12 @@ describe('WorkoutsRepo', () => {
 
         const absentId = '00000000-0000-4000-8000-000000000099' as WorkoutId
         const absentAttempt = yield* Effect.either(
-          workoutsRepo.update(absentId, ownerA, replacement),
+          workoutsRepo.update({
+            id: absentId,
+            ownerId: ownerA,
+            workout: replacement,
+            expectedUpdatedAt: workout.updatedAt,
+          }),
         )
         expect(Either.isLeft(absentAttempt)).toBe(true)
         if (Either.isLeft(absentAttempt)) {

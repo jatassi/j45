@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { RegistryProvider } from '@effect-atom/atom-react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import * as Option from 'effect/Option'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthGate } from '@/components/auth-gate'
+import { reportAuthSessionExpired } from '@/lib/auth-session-expiry'
 import * as LastUser from '@/lib/last-user'
 
 import { stubLoginScreenGlobals } from './login-screen-globals.js'
@@ -67,6 +68,35 @@ describe('AuthGate', () => {
 
     const content = await screen.findByTestId('app-content')
     expect(content.textContent).toBe('Signed in as Jill Owner')
+  })
+
+  it('a reported session expiry re-probes /auth/me and returns to LoginScreen — no manual reload', async () => {
+    let signedIn = true
+    let probes = 0
+    stubFetch((path) => {
+      if (path !== '/auth/me') {
+        throw new Error(`unexpected fetch to ${path}`)
+      }
+      probes += 1
+      return signedIn
+        ? jsonResponse(200, { user: userJson })
+        : jsonResponse(401, { _tag: 'Unauthorized' })
+    })
+
+    renderGate()
+    await screen.findByTestId('app-content')
+    expect(probes).toBe(1)
+
+    // The cookie is revoked server-side: rpcs start failing Unauthorized, and
+    // the rpc chokepoint reports it. The gate must act on that by itself.
+    signedIn = false
+    act(() => {
+      reportAuthSessionExpired()
+    })
+
+    await screen.findByTestId('login-screen')
+    expect(screen.queryByTestId('app-content')).toBeNull()
+    expect(probes).toBe(2)
   })
 
   it('renders LoginScreen when GET /auth/me is Unauthorized (anonymous)', async () => {

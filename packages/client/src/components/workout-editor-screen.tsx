@@ -7,6 +7,7 @@ import * as Schema from 'effect/Schema'
 import { toast } from 'sonner'
 
 import { WorkoutEditorForm } from '@/components/editor/editor-form'
+import { useWorkoutSave } from '@/components/editor/use-workout-save'
 import { takeInitialDraft } from '@/lib/editor-draft'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import * as Editor from '@/lib/workout-editor-state'
@@ -16,11 +17,11 @@ import { listWorkoutsAtom } from '@/lib/workouts'
 export { ReflowWorkoutScreen } from '@/components/editor/reflow-screen'
 
 /**
- * The whole-document mutations, hoisted to module scope like every other rpc
- * atom in this codebase — a stable atom identity across re-renders.
+ * `CreateWorkout`, hoisted to module scope like every other rpc atom in this
+ * codebase — a stable atom identity across re-renders. `UpdateWorkout` lives
+ * in `editor/use-workout-save.ts`, which both editors save through.
  */
 const createWorkoutAtom = ServerRpcClient.mutation('CreateWorkout')
-const updateWorkoutAtom = ServerRpcClient.mutation('UpdateWorkout')
 
 /**
  * `/workouts/new` — blank draft, or a one-shot pending draft from
@@ -56,23 +57,26 @@ export function NewWorkoutScreen() {
 
 type EditFormProps = { readonly libraryWorkout: LibraryWorkout }
 
-/** Drives `UpdateWorkout`, then refreshes the list + this workout's `GetWorkout` atom and reopens its detail. */
+/**
+ * Drives `UpdateWorkout` through `useWorkoutSave`, which carries the version
+ * this editor loaded as the write's precondition.
+ *
+ * On a conflict the shared hook re-fetches, which leaves this editor holding
+ * the winner's version with the user's own edits still in the draft —
+ * `WorkoutEditorForm` seeds its state at mount, so a refreshed `initial`
+ * never overwrites them. Saving again is then a deliberate second act, and it
+ * carries the fresh version. (Launch mode is the opposite: see
+ * `editor/reflow-screen.tsx`.)
+ */
 function EditWorkoutForm({ libraryWorkout }: EditFormProps) {
   const { id, workout } = libraryWorkout
   const navigate = useNavigate()
-  const refreshList = useAtomRefresh(listWorkoutsAtom)
-  const refreshWorkout = useAtomRefresh(ServerRpcClient.query('GetWorkout', { id }))
-  const [, update] = useAtom(updateWorkoutAtom, { mode: 'promise' })
   const goDetail = () => void navigate({ to: '/workouts/$workoutId', params: { workoutId: id } })
-  const onSave = (next: Workout) => {
-    void update({ payload: { id, workout: next } })
-      .then(() => {
-        refreshList()
-        refreshWorkout()
-        goDetail()
-      })
-      .catch(() => toast.error('Command failed', { description: 'Could not save the workout.' }))
-  }
+  const onSave = useWorkoutSave({
+    source: libraryWorkout,
+    conflictDescription:
+      'This workout changed on another device. Your edits are still here — save again to apply them on top.',
+  })
   return (
     <WorkoutEditorForm
       heading="Edit"

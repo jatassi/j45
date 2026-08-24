@@ -1,25 +1,28 @@
 import * as React from 'react'
 
-import { Result, useAtom, useAtomRefresh, useAtomValue } from '@effect-atom/atom-react'
+import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
 import {
+  ReflowInvalid,
+  ReflowRequest,
   WorkoutId,
   type LibraryWorkout,
   type Reflow,
   type SessionSummary,
-  type Workout,
 } from '@j45/domain'
 import { useNavigate, useParams } from '@tanstack/react-router'
+import * as DateTime from 'effect/DateTime'
 import * as Either from 'effect/Either'
 import * as Schema from 'effect/Schema'
+import { toast } from 'sonner'
 
 import { ReflowFlowSection } from '@/components/editor/reflow-flow-section'
 import { ReflowPodsSection } from '@/components/editor/reflow-pods-section'
+import { useWorkoutSave } from '@/components/editor/use-workout-save'
 import { PushHeader } from '@/components/shell/push-header'
 import { Button } from '@/components/ui/button'
 import { useLiquidGlass } from '@/glass/use-liquid-glass'
 import * as ReflowDraft from '@/lib/reflow-draft'
 import { ServerRpcClient } from '@/lib/rpc-client'
-import { listWorkoutsAtom } from '@/lib/workouts'
 
 /**
  * Launch-mode (reflow) screen rebuilt on the editor kit. Spec-shaped draft
@@ -27,33 +30,35 @@ import { listWorkoutsAtom } from '@/lib/workouts'
  * the New/Edit kit under `components/editor/`.
  */
 
-const updateWorkoutAtom = ServerRpcClient.mutation('UpdateWorkout')
 const startSessionAtom = ServerRpcClient.mutation('StartSession')
 
-/** Drives `StartSession({ workoutId, reflow })`, then navigates to the new `/session/<id>`. */
-function useReflowStart(workoutId: WorkoutId) {
+/**
+ * Drives `StartSession({ workoutId, reflow })`, then navigates to the new
+ * `/session/<id>`.
+ *
+ * The spec is positional indices into *this* copy of the plan's flattened
+ * stations, so it travels as a `ReflowRequest` carrying the version it was
+ * built from. If the plan moved on underneath, the server refuses rather
+ * than launching a session over a valid-but-different set of stations, and
+ * its `ReflowInvalid.reason` is what the launcher gets told.
+ */
+function useReflowStart(source: LibraryWorkout) {
   const navigate = useNavigate()
   const [, start] = useAtom(startSessionAtom, { mode: 'promise' })
   return (reflow: Reflow) =>
-    void start({ payload: { workoutId, reflow } })
+    void start({
+      payload: {
+        workoutId: source.id,
+        reflow: new ReflowRequest({ spec: reflow, sourceUpdatedAt: source.updatedAt }),
+      },
+    })
       .then((summary: SessionSummary) => navigate({ to: `/session/${summary.id}` }))
-      .catch(() => undefined)
-}
-
-/** Applies the reflow client-side via the existing `UpdateWorkout`, then reopens the refreshed detail. */
-function useReflowSave(id: WorkoutId) {
-  const navigate = useNavigate()
-  const refreshList = useAtomRefresh(listWorkoutsAtom)
-  const refreshWorkout = useAtomRefresh(ServerRpcClient.query('GetWorkout', { id }))
-  const [, update] = useAtom(updateWorkoutAtom, { mode: 'promise' })
-  return (workout: Workout) =>
-    void update({ payload: { id, workout } })
-      .then(() => {
-        refreshList()
-        refreshWorkout()
-        return navigate({ to: '/workouts/$workoutId', params: { workoutId: id } })
-      })
-      .catch(() => undefined)
+      .catch((error: unknown) =>
+        toast.error('Couldn’t start the session', {
+          description:
+            error instanceof ReflowInvalid ? error.reason : 'The session could not be started.',
+        }),
+      )
 }
 
 /** Sticky `N works · MM:SS` chip; hidden while the reflow computation is a Left. */
@@ -101,14 +106,30 @@ function StartAction(props: {
  * `applyReflow` + `compile` result per draft state — the chip, Start, and
  * Save all read from it, so they can never diverge; an invalid draft yields a
  * `Left` that disables both exits.
+ *
+ * The draft is seeded once, at mount, and its `sourceIndex`es only mean
+ * anything against the workout it was seeded from — so this component must
+ * never outlive that workout. `ReflowWorkoutScreen` keys it on `updatedAt`
+ * to guarantee that: a re-fetched source remounts the form and re-seeds the
+ * draft, rather than leaving old indices to resolve against a new plan (the
+ * same silent wrong-stations failure the server's version precondition
+ * refuses). Unlike the normal editor's draft — a whole workout body that
+ * stands on its own — a reflow draft simply cannot survive its source
+ * changing.
  */
 function ReflowForm({ libraryWorkout }: { readonly libraryWorkout: LibraryWorkout }) {
-  const { id, workout } = libraryWorkout
+  const { workout } = libraryWorkout
   const [state, setState] = React.useState(() => ReflowDraft.initReflowDraft(workout))
   const result = React.useMemo(() => ReflowDraft.computeReflow(workout, state), [workout, state])
   const summary = Either.isRight(result) ? ReflowDraft.reflowSummary(result.right) : null
-  const onStart = useReflowStart(id)
-  const onSave = useReflowSave(id)
+  const onStart = useReflowStart(libraryWorkout)
+  // On a conflict the shared hook re-fetches; `ReflowWorkoutScreen`'s key then
+  // remounts this form, so the description below is a statement of fact.
+  const onSave = useWorkoutSave({
+    source: libraryWorkout,
+    conflictDescription:
+      'This workout changed on another device — the launch setup was rebuilt from the new version.',
+  })
   return (
     <div className="flex min-h-svh flex-col" data-testid="reflow-editor-screen">
       <PushHeader title="Launch setup" action={<StartAction result={result} onStart={onStart} />} />
@@ -147,6 +168,10 @@ export function ReflowWorkoutScreen() {
         This workout couldn&apos;t be found.
       </p>
     ),
-    onSuccess: ({ value }) => <ReflowForm libraryWorkout={value} />,
+    // Keyed on the source version: see `ReflowForm`'s own doc — a re-fetched
+    // source must re-seed the draft, never re-point it.
+    onSuccess: ({ value }) => (
+      <ReflowForm key={DateTime.toEpochMillis(value.updatedAt)} libraryWorkout={value} />
+    ),
   })
 }

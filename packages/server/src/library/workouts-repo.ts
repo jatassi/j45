@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto'
 
 import { SqlClient } from '@effect/sql'
-import { LibraryWorkout, Workout, WorkoutNotFound, type UserId, type WorkoutId } from '@j45/domain'
+import {
+  LibraryWorkout,
+  Workout,
+  WorkoutConflict,
+  WorkoutNotFound,
+  type UserId,
+  type WorkoutId,
+} from '@j45/domain'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Schema from 'effect/Schema'
@@ -115,16 +122,37 @@ const rename = (sql: SqlClient.SqlClient, input: RenameInput) =>
     return yield* decodeRow(row)
   })
 
-type UpdateInput = {
+/** `WorkoutsRepo.update`'s input: the target, the new body, and the version the caller read. */
+export type UpdateInput = {
   readonly id: WorkoutId
   readonly ownerId: UserId
   readonly workout: Workout
+  readonly expectedUpdatedAt: DateTime.Utc
 }
 
 /**
- * Whole-body replacement: encode the given workout, write it, bump
- * `updated_at`, and let `RETURNING *` prove ownership atomically — no
- * pre-read needed (unlike rename, which must preserve the rest of the body).
+ * Whole-body replacement under an optimistic-concurrency precondition:
+ * encode the given workout, write it, bump `updated_at`, and let
+ * `RETURNING *` prove ownership *and* freshness atomically — no pre-read
+ * needed (unlike rename, which must preserve the rest of the body).
+ *
+ * `WHERE ... AND owner_id = ?` proves the row is the caller's; `AND
+ * updated_at = ?` proves the caller's read is still current. Without the
+ * second clause a whole-body replace built on a stale read silently
+ * discards whatever landed in between. Comparing the stored column against
+ * `DateTime.formatIso` is exact, not approximate: every write path in this
+ * module stamps `updated_at` through that same formatter.
+ *
+ * An empty `RETURNING *` means one of two things, and they are not the same
+ * failure: the row isn't the caller's (or doesn't exist), or it moved on
+ * since the caller read it. `getOwned` tells them apart.
+ *
+ * Known limit of using the timestamp as the version token: two writes landing
+ * inside the same millisecond leave `updated_at` unchanged, so the second
+ * still overwrites the first. Two humans editing one workout from two devices
+ * do not collide that finely, and the alternative (a monotonic `version`
+ * column) is a migration this defect did not warrant — but a caller that ever
+ * writes in a tight programmatic loop cannot rely on this guard.
  */
 const update = (sql: SqlClient.SqlClient, input: UpdateInput) =>
   Effect.gen(function* () {
@@ -133,12 +161,15 @@ const update = (sql: SqlClient.SqlClient, input: UpdateInput) =>
     const rows = yield* sql<WorkoutsTableRow>`
       UPDATE workouts
       SET body = ${JSON.stringify(encoded)}, updated_at = ${DateTime.formatIso(at)}
-      WHERE id = ${input.id} AND owner_id = ${input.ownerId}
+      WHERE id = ${input.id}
+        AND owner_id = ${input.ownerId}
+        AND updated_at = ${DateTime.formatIso(input.expectedUpdatedAt)}
       RETURNING *
     `
     const row = rows[0]
     if (row === undefined) {
-      return yield* Effect.fail(new WorkoutNotFound({ id: input.id }))
+      yield* getOwned(sql, input.id, input.ownerId)
+      return yield* Effect.fail(new WorkoutConflict({ id: input.id }))
     }
     return yield* decodeRow(row)
   })
@@ -200,8 +231,11 @@ export class WorkoutsRepo extends Effect.Service<WorkoutsRepo>()('WorkoutsRepo',
       getOwned: (id: WorkoutId, ownerId: UserId) => getOwned(sql, id, ownerId),
       insert: (ownerId: UserId, workout: Workout) => insert(sql, ownerId, workout),
       rename: (id: WorkoutId, ownerId: UserId, name: string) => rename(sql, { id, ownerId, name }),
-      update: (id: WorkoutId, ownerId: UserId, workout: Workout) =>
-        update(sql, { id, ownerId, workout }),
+      // The one method here taking a record rather than positionals: with the
+      // optimistic-concurrency precondition it carries four arguments, and
+      // `(id, ownerId, workout, expectedUpdatedAt)` is exactly the positional
+      // list a caller can silently mis-order.
+      update: (input: UpdateInput) => update(sql, input),
       delete: (id: WorkoutId, ownerId: UserId) => deleteOwned(sql, id, ownerId),
       duplicate: (id: WorkoutId, ownerId: UserId) => duplicate(sql, id, ownerId),
       seedForUser: (userId: UserId) => seedForUser(sql, userId),

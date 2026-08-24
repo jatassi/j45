@@ -1,4 +1,4 @@
-import type * as React from 'react'
+import * as React from 'react'
 
 import { Atom, Result, useAtomRefresh, useAtomValue } from '@effect-atom/atom-react'
 import type { User } from '@j45/domain'
@@ -6,6 +6,7 @@ import type { User } from '@j45/domain'
 import { LoginScreen } from '@/components/login-screen'
 import { RegisterScreen } from '@/components/register-screen'
 import * as AuthApi from '@/lib/auth-api'
+import { onAuthSessionExpired } from '@/lib/auth-session-expiry'
 
 /**
  * The `GET /auth/me` session probe, fetched once `AuthGate` mounts
@@ -42,10 +43,19 @@ function isRegisterRoute(): boolean {
  * login or registration (passkey prompt included) refreshes the probe,
  * which now succeeds because the session cookie is set — flipping the gate
  * over.
+ *
+ * The same refresh runs the other way too. `AuthMiddleware` re-validates per
+ * rpc call, so a revoked or expired auth session starts failing `Unauthorized`
+ * mid-connection while this gate still holds its mount-time answer;
+ * `lib/auth-session-expiry.ts` reports that from the rpc chokepoint and this
+ * subscription re-probes, which now fails and returns the user to
+ * `LoginScreen`. Logout doesn't need it — it triggers a full page reload.
  */
 export function AuthGate({ children }: AuthGateProps) {
   const me = useAtomValue(meAtom)
   const refreshMe = useAtomRefresh(meAtom)
+
+  React.useEffect(() => onAuthSessionExpired(refreshMe), [refreshMe])
 
   return Result.match(me, {
     onInitial: () => (

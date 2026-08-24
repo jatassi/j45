@@ -11,6 +11,7 @@ import {
   Pod,
   Reflow,
   ReflowPod,
+  ReflowRequest,
   Round,
   SessionRpcs,
   Station,
@@ -259,7 +260,10 @@ describe('history flows via ListHistory (TestClock)', () => {
         const headers = cookieHeaders(yield* authSessions.create(ownerId))
         const sessionClient = yield* RpcTest.makeClient(SessionRpcs)
         const summary = yield* sessionClient.StartSession(
-          { workoutId: library.id, reflow },
+          {
+            workoutId: library.id,
+            reflow: new ReflowRequest({ spec: reflow, sourceUpdatedAt: library.updatedAt }),
+          },
           { headers },
         )
 

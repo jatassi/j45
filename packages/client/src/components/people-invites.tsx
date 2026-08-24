@@ -31,6 +31,24 @@ const revokeInviteAtom = ServerRpcClient.mutation('RevokeInvite')
 
 const toastFailed = (d: string) => toast.error('Command failed', { description: d })
 
+/**
+ * Re-reads both owner lists. `ListUsers` and `ListInvites` are two views of
+ * one roster — minting an invite, revoking one, and issuing a reset code all
+ * move both — so no mutation path here refreshes one without the other.
+ *
+ * Deliberately not covered: an invitee registering on their own device, which
+ * changes both lists with no local mutation to hang a refresh off. That needs
+ * cross-user liveness this app has nowhere except the Home screen's poll.
+ */
+function usePeopleRefresh(): () => void {
+  const refreshUsers = useAtomRefresh(listUsersAtom)
+  const refreshInvites = useAtomRefresh(listInvitesAtom)
+  return () => {
+    refreshUsers()
+    refreshInvites()
+  }
+}
+
 /** Renders an 8-char invite/reset code as the design's grouped `XXXX-XXXX`. */
 function formatCode(code: string): string {
   return `${code.slice(0, 4)}-${code.slice(4)}`
@@ -90,6 +108,7 @@ type UserRowProps = {
 /** One row of the user list: display name, and issue-reset-code. */
 function UserRow({ user }: UserRowProps) {
   const resetInvite = useCreateInvite()
+  const refreshPeople = usePeopleRefresh()
 
   return (
     <li className="flex flex-col gap-1 text-sm" data-testid={`user-${user.id}`}>
@@ -102,7 +121,9 @@ function UserRow({ user }: UserRowProps) {
           disabled={resetInvite.pending}
           data-testid={`issue-reset-code-${user.id}`}
           onClick={() => {
-            void resetInvite.mint(user.id)
+            // A reset code is an unspent invite, so it lands in the invite
+            // list too — both lists move, both get re-read.
+            void resetInvite.mint(user.id).then(refreshPeople)
           }}
         >
           Issue reset code
@@ -230,7 +251,7 @@ function InviteRow({ invite, onRevoked }: InviteRowProps) {
 /** The unspent-invites list (`ListInvites`), each row revocable (`RevokeInvite`). */
 function InviteList() {
   const invites = useAtomValue(listInvitesAtom)
-  const refreshInvites = useAtomRefresh(listInvitesAtom)
+  const refreshPeople = usePeopleRefresh()
 
   return Result.match(invites, {
     onInitial: () => <p className="text-sm text-muted-foreground">Loading invites…</p>,
@@ -245,7 +266,7 @@ function InviteList() {
       ) : (
         <ul className="flex flex-col gap-2" data-testid="invite-list">
           {value.map((invite) => (
-            <InviteRow key={invite.code} invite={invite} onRevoked={refreshInvites} />
+            <InviteRow key={invite.code} invite={invite} onRevoked={refreshPeople} />
           ))}
         </ul>
       ),
@@ -294,14 +315,12 @@ function MintedInvite({ invite }: MintedInviteProps) {
 
 /** Mints a registration invite and offers to copy its shareable link. */
 function MintInvite() {
-  const refreshInvites = useAtomRefresh(listInvitesAtom)
+  const refreshPeople = usePeopleRefresh()
   const invite = useCreateInvite()
   const outcome = invite.outcome
 
   const handleMint = () => {
-    void invite.mint().then(() => {
-      refreshInvites()
-    })
+    void invite.mint().then(refreshPeople)
   }
 
   return (
@@ -328,10 +347,12 @@ function MintInvite() {
  * The owner-only "People & Invites" section `AccountScreen` renders
  * (`user.role === "owner"` only — nothing here is mounted, and no owner rpc
  * is ever called, for a member). `UserList`, `MintInvite`, and `InviteList`
- * each own their slice of `OwnerRpcs`; `MintInvite` refreshes `InviteList`'s
- * `ListInvites` once its own `CreateInvite` settles (mirroring
- * `PasskeyList`'s refresh-after-enroll in `account-screen.tsx`), and
- * `InviteRow`'s `RevokeInvite` does the same on success.
+ * each own their slice of `OwnerRpcs`; every mutation path here re-reads
+ * *both* lists through `usePeopleRefresh` once it settles (mirroring
+ * `PasskeyList`'s refresh-after-enroll in `account-screen.tsx`) — minting,
+ * revoking, and issuing a reset code each move the roster and the invite
+ * list together, so refreshing one without the other just leaves the screen
+ * disagreeing with itself.
  */
 export function PeopleInvites() {
   return (

@@ -34,3 +34,14 @@ const taggedError = Schema.TaggedError
 export class WorkoutNotFound extends taggedError<WorkoutNotFound>()('WorkoutNotFound', {
   id: WorkoutId,
 }) {}
+
+/**
+ * An `UpdateWorkout` built on a stale read: the row's `updated_at` no longer
+ * matches the `updatedAt` the caller carried, so another writer got there
+ * first. The optimistic-concurrency precondition that keeps a whole-body
+ * replace from silently clobbering someone else's save — there is no merge,
+ * the loser re-fetches and re-applies.
+ */
+export class WorkoutConflict extends taggedError<WorkoutConflict>()('WorkoutConflict', {
+  id: WorkoutId,
+}) {}

@@ -159,6 +159,82 @@ describe('PeopleInvites (owner)', () => {
     expect(screen.getByTestId('reset-code-u2').textContent).toBe('WXYZ-5678')
   })
 
+  it('every path that refreshes the invite list refreshes the user list too — minting, revoking, and issuing a reset code', async () => {
+    const owner = makeUser({ id: 'u1', username: 'jill', displayName: 'Jill Owner', role: 'owner' })
+    const member = makeUser({
+      id: 'u2',
+      username: 'alice',
+      displayName: 'Alice Member',
+      role: 'member',
+    })
+
+    let invites: readonly Invite[] = []
+    let listUsersCalls = 0
+    let listInvitesCalls = 0
+    let mintCount = 0
+
+    renderAccountScreen(owner, {
+      ListPasskeys: () => Effect.succeed([]),
+      ListUsers: () => {
+        listUsersCalls += 1
+        return Effect.succeed([owner, member])
+      },
+      ListInvites: () => {
+        listInvitesCalls += 1
+        return Effect.succeed(invites)
+      },
+      CreateInvite: (payload) => {
+        const { resetUserId } = payload as { resetUserId?: string }
+        mintCount += 1
+        const invite = makeInvite({ code: `CODE000${mintCount}`, resetUserId })
+        invites = [...invites, invite]
+        return Effect.succeed(invite)
+      },
+      RevokeInvite: (payload) => {
+        const { code } = payload as { code: string }
+        invites = invites.filter((invite) => invite.code !== code)
+        return Effect.succeed(undefined)
+      },
+    })
+
+    await screen.findByTestId('people-invites')
+    await waitFor(() => {
+      expect(listUsersCalls).toBeGreaterThan(0)
+    })
+
+    /** Both lists changed together, so both must have been re-read. */
+    const expectBothRefreshed = async (usersBefore: number, invitesBefore: number) => {
+      await waitFor(() => {
+        expect(listInvitesCalls).toBeGreaterThan(invitesBefore)
+      })
+      await waitFor(() => {
+        expect(listUsersCalls).toBeGreaterThan(usersBefore)
+      })
+    }
+
+    // Mint.
+    let users = listUsersCalls
+    let invitesRead = listInvitesCalls
+    fireEvent.click(screen.getByTestId('mint-invite-button'))
+    await screen.findByTestId('invite-code-CODE0001')
+    await expectBothRefreshed(users, invitesRead)
+
+    // Revoke.
+    users = listUsersCalls
+    invitesRead = listInvitesCalls
+    fireEvent.click(screen.getByTestId('revoke-invite-CODE0001'))
+    fireEvent.click(await screen.findByTestId('revoke-invite-confirm-CODE0001'))
+    await expectBothRefreshed(users, invitesRead)
+
+    // Issue a reset code — a reset code is an unspent invite, so it lands in
+    // the invite list too; the roster it was issued against reads with it.
+    users = listUsersCalls
+    invitesRead = listInvitesCalls
+    fireEvent.click(screen.getByTestId('issue-reset-code-u2'))
+    await screen.findByTestId('reset-code-u2')
+    await expectBothRefreshed(users, invitesRead)
+  })
+
   it('toasts when CreateInvite rejects', async () => {
     const owner = makeUser({ id: 'u1', username: 'jill', displayName: 'Jill Owner', role: 'owner' })
 
