@@ -28,6 +28,18 @@ export const HealthzRouteLive: Layer.Layer<never> = HttpRouter.Default.use((rout
 )
 
 /**
+ * True only for an existing *regular file*. `fs.exists` also answers true
+ * for directories, and `HttpServerResponse.file` cannot stream one — a
+ * request for e.g. `/assets` must fall through to the `index.html`
+ * fallback rather than 500. Anything unreadable counts as not present.
+ */
+const isRegularFile = (fs: FileSystem.FileSystem, candidate: string) =>
+  fs.stat(candidate).pipe(
+    Effect.map((info) => info.type === 'File'),
+    Effect.orElseSucceed(() => false),
+  )
+
+/**
  * Per-request handler: serve the requested file from the dist directory,
  * fall back to `index.html` for client-side routing, else 404.
  */
@@ -48,17 +60,15 @@ const staticFileHandler = (resolvedDistDir: string) =>
       requestedPath === absoluteDistDir || requestedPath.startsWith(absoluteDistDir + path_.sep)
 
     if (isInsideDist) {
-      const isRequestedExists = yield* fs
-        .exists(requestedPath)
-        .pipe(Effect.orElseSucceed(() => false))
-      if (isRequestedExists) {
+      const isRequestedFile = yield* isRegularFile(fs, requestedPath)
+      if (isRequestedFile) {
         return yield* HttpServerResponse.file(requestedPath)
       }
     }
 
     const indexPath = path_.join(absoluteDistDir, 'index.html')
-    const isIndexExists = yield* fs.exists(indexPath).pipe(Effect.orElseSucceed(() => false))
-    if (isIndexExists) {
+    const isIndexFile = yield* isRegularFile(fs, indexPath)
+    if (isIndexFile) {
       return yield* HttpServerResponse.file(indexPath)
     }
 

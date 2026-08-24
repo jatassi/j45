@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -76,6 +76,21 @@ const bootServer = (options: {
     return port
   }).pipe(Effect.provide(NodeContext.layer))
 
+/**
+ * A temp stand-in for `packages/client/dist`: the entry document, one
+ * hashed asset, and the `assets/` directory Vite emits around it (that
+ * directory is what makes `GET /assets` a directory request).
+ */
+const makeDistDir = Effect.gen(function* () {
+  const distDir = yield* Effect.tryPromise(() => mkdtemp(path.join(tmpdir(), 'j45-client-dist-')))
+  yield* Effect.tryPromise(() => writeFile(path.join(distDir, 'index.html'), '<h1>fallback</h1>'))
+  yield* Effect.tryPromise(() => mkdir(path.join(distDir, 'assets')))
+  yield* Effect.tryPromise(() =>
+    writeFile(path.join(distDir, 'assets', 'app.js'), "console.log('hi')"),
+  )
+  return distDir
+})
+
 describe('server', () => {
   it.scopedLive(
     'GET /healthz returns 200 JSON with sha and version',
@@ -125,17 +140,13 @@ describe('server', () => {
     'serves static files from packages/client/dist, falling back to index.html',
     () =>
       Effect.gen(function* () {
-        const distDir = yield* Effect.tryPromise(() =>
-          mkdtemp(path.join(tmpdir(), 'j45-client-dist-')),
-        )
-        yield* Effect.tryPromise(() =>
-          writeFile(path.join(distDir, 'index.html'), '<h1>fallback</h1>'),
-        )
-        yield* Effect.tryPromise(() => writeFile(path.join(distDir, 'app.js'), "console.log('hi')"))
+        const distDir = yield* makeDistDir
 
         const port = yield* bootServer({ releaseSha: 'test-sha-static', clientDistDir: distDir })
 
-        const asset = yield* Effect.tryPromise(() => fetch(`http://localhost:${port}/app.js`))
+        const asset = yield* Effect.tryPromise(() =>
+          fetch(`http://localhost:${port}/assets/app.js`),
+        )
         expect(asset.status).toBe(200)
         expect(yield* Effect.tryPromise(() => asset.text())).toBe("console.log('hi')")
 
@@ -144,6 +155,23 @@ describe('server', () => {
         )
         expect(fallback.status).toBe(200)
         expect(yield* Effect.tryPromise(() => fallback.text())).toBe('<h1>fallback</h1>')
+      }),
+    { timeout: 20_000 },
+  )
+
+  it.scopedLive(
+    'a request for a directory inside dist falls back to index.html',
+    () =>
+      Effect.gen(function* () {
+        const distDir = yield* makeDistDir
+
+        const port = yield* bootServer({ releaseSha: 'test-sha-dir', clientDistDir: distDir })
+
+        // `assets/` exists but cannot be streamed as a file — it must take
+        // the client-side-routing fallback, not blow up as a 500.
+        const directory = yield* Effect.tryPromise(() => fetch(`http://localhost:${port}/assets`))
+        expect(directory.status).toBe(200)
+        expect(yield* Effect.tryPromise(() => directory.text())).toBe('<h1>fallback</h1>')
       }),
     { timeout: 20_000 },
   )
