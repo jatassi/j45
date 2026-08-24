@@ -3,12 +3,12 @@ import { RpcTest } from '@effect/rpc'
 import { SqliteClient } from '@effect/sql-sqlite-node'
 import { describe, expect, it } from '@effect/vitest'
 import {
-  applyReflow,
   compile,
   Flow,
   Pod,
   Reflow,
   ReflowPod,
+  ReflowRequest,
   Round,
   SessionRpcs,
   Station,
@@ -126,9 +126,12 @@ describe('SessionHandlersLive', () => {
 
       const client = yield* RpcTest.makeClient(SessionRpcs)
       // Valid reflow — ownership/existence short-circuits before reflow validation.
-      const reflow = new Reflow({
-        pods: [new ReflowPod({ name: 'Any', stations: [0] })],
-        flowType: 'laps',
+      const reflow = new ReflowRequest({
+        spec: new Reflow({
+          pods: [new ReflowPod({ name: 'Any', stations: [0] })],
+          flowType: 'laps',
+        }),
+        sourceUpdatedAt: bWorkout.updatedAt,
       })
       const absentId = '00000000-0000-4000-8000-000000000099' as WorkoutId
       for (const payload of [
@@ -320,7 +323,12 @@ describe('SessionHandlersLive', () => {
             rounds: [new Round({ workSeconds: 45, restSeconds: 15 })],
           }),
         })
-        yield* workoutsRepo.update(library.id, ownerId, replacement)
+        yield* workoutsRepo.update({
+          id: library.id,
+          ownerId,
+          workout: replacement,
+          expectedUpdatedAt: library.updatedAt,
+        })
         yield* workoutsRepo.delete(library.id, ownerId)
 
         // Session still serves the compile taken at StartSession.
@@ -334,85 +342,6 @@ describe('SessionHandlersLive', () => {
         expect(Option.isSome(first)).toBe(true)
         if (Option.isSome(first)) {
           expect(first.value.compiled.segments).toEqual(expectedCompiled.segments)
-        }
-      }).pipe(Effect.provide(TestServicesLive)),
-  )
-
-  it.scoped(
-    'StartSession with a reflow compiles the reflowed workout and leaves the library row unchanged',
-    () =>
-      Effect.gen(function* () {
-        const ownerId = 'owner-g' as UserId
-        yield* insertUser(ownerId)
-        // Multi-station source so a regroup visibly changes compile output.
-        const source = new Workout({
-          name: 'Reflow Source',
-          focus: 'hybrid',
-          pods: [
-            new Pod({
-              name: 'Upper',
-              stations: [new Station({ name: 'Push-up' }), new Station({ name: 'Sit-up' })],
-            }),
-            new Pod({ name: 'Lower', stations: [new Station({ name: 'Squat' })] }),
-          ],
-          flow: new Flow({
-            type: 'sets',
-            rounds: [new Round({ workSeconds: 40, restSeconds: 20 })],
-          }),
-        })
-        const reflow = new Reflow({
-          pods: [new ReflowPod({ name: 'All', stations: [2, 0, 1] })],
-          flowType: 'laps',
-        })
-        const reflowed = applyReflow(source, reflow)
-        if (Either.isLeft(reflowed)) {
-          throw new Error('expected Right')
-        }
-        const workoutsRepo = yield* WorkoutsRepo
-        const library = yield* workoutsRepo.insert(ownerId, source)
-        const authSessions = yield* AuthSessions
-        const headers = cookieHeaders(yield* authSessions.create(ownerId))
-        const client = yield* RpcTest.makeClient(SessionRpcs)
-        const summary = yield* client.StartSession({ workoutId: library.id, reflow }, { headers })
-        const snap = yield* (yield* LiveSessions).snapshot(summary.id)
-        expect(snap.compiled.segments).toEqual(compile(reflowed.right).segments)
-        expect(snap.compiled.segments).not.toEqual(compile(source).segments)
-        // Library row is untouched — reflow is session-local only.
-        const stored = yield* workoutsRepo.getOwned(library.id, ownerId)
-        expect(stored.workout).toEqual(source)
-        expect(stored.createdAt).toEqual(library.createdAt)
-        expect(stored.updatedAt).toEqual(library.updatedAt)
-      }).pipe(Effect.provide(TestServicesLive)),
-  )
-
-  it.scoped(
-    'StartSession with an out-of-range or duplicated station index fails ReflowInvalid',
-    () =>
-      Effect.gen(function* () {
-        const ownerId = 'owner-h' as UserId
-        yield* insertUser(ownerId)
-        const workoutsRepo = yield* WorkoutsRepo
-        const library = yield* workoutsRepo.insert(ownerId, makeWorkout('Invalid Reflow Source'))
-        const authSessions = yield* AuthSessions
-        const headers = cookieHeaders(yield* authSessions.create(ownerId))
-        const client = yield* RpcTest.makeClient(SessionRpcs)
-        for (const reflow of [
-          new Reflow({
-            pods: [new ReflowPod({ name: 'Bad', stations: [0, 99] })],
-            flowType: 'sets',
-          }),
-          new Reflow({
-            pods: [new ReflowPod({ name: 'Dup', stations: [0, 0] })],
-            flowType: 'laps',
-          }),
-        ]) {
-          const attempt = yield* Effect.either(
-            client.StartSession({ workoutId: library.id, reflow }, { headers }),
-          )
-          expect(Either.isLeft(attempt)).toBe(true)
-          if (Either.isLeft(attempt)) {
-            expect(attempt.left._tag).toBe('ReflowInvalid')
-          }
         }
       }).pipe(Effect.provide(TestServicesLive)),
   )

@@ -34,6 +34,21 @@ export class Reflow extends Schema.Class<Reflow>('Reflow')({
   rounds: Schema.optional(Schema.NonEmptyArray(Round)),
 }) {}
 
+/**
+ * A reflow spec together with the version of the source workout it was built
+ * against (`LibraryWorkout.updatedAt`). The two travel as one value so a spec
+ * can never reach a resolver without saying which plan it means: `Reflow` is
+ * positional indices into the source's flattened stations, so resolving one
+ * against a *different* version of the plan silently produces a valid-but-wrong
+ * set of stations. Launch-time reflow (`StartSession`) carries this; the
+ * pure `applyReflow` below is version-agnostic by design — it is handed the
+ * source workout directly.
+ */
+export class ReflowRequest extends Schema.Class<ReflowRequest>('ReflowRequest')({
+  spec: Reflow,
+  sourceUpdatedAt: Schema.DateTimeUtc,
+}) {}
+
 /** A spec that does not fit its source workout (index out of range, index
  *  referenced twice). Carries a human-readable reason. */
 export class ReflowInvalid extends taggedError<ReflowInvalid>()('ReflowInvalid', {

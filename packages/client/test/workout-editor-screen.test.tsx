@@ -216,7 +216,8 @@ describe('WorkoutEditorScreen', () => {
 
   it('edit: switches laps→sets via the toggle-group, renames a station and reorders it, and UpdateWorkout receives the changed body while the list + GetWorkout atoms refresh', async () => {
     let current = athletica
-    let updatePayload: { id: WorkoutId; workout: Workout } | undefined
+    let updatePayload: { id: WorkoutId; workout: Workout; updatedAt: DateTime.Utc } | undefined
+    let savedVersionMillis = 0
     let getCalls = 0
     renderApp(
       {
@@ -226,7 +227,8 @@ describe('WorkoutEditorScreen', () => {
         },
         ListWorkouts: () => Effect.succeed([current]),
         UpdateWorkout: (payload) => {
-          updatePayload = payload as { id: WorkoutId; workout: Workout }
+          updatePayload = payload as { id: WorkoutId; workout: Workout; updatedAt: DateTime.Utc }
+          savedVersionMillis = DateTime.toEpochMillis(updatePayload.updatedAt)
           current = libraryWorkoutOf(current.id, updatePayload.workout)
           return Effect.succeed(current)
         },
@@ -247,6 +249,9 @@ describe('WorkoutEditorScreen', () => {
 
     await screen.findByTestId('workout-detail-screen')
     expect(updatePayload?.id).toBe(athletica.id)
+    // The version the editor read travels with the save — the server's
+    // optimistic-concurrency precondition.
+    expect(savedVersionMillis).toBe(DateTime.toEpochMillis(athletica.updatedAt))
     expect(updatePayload?.workout.flow.type).toBe('sets')
     expect(updatePayload?.workout.pods[0].stations.map((s) => s.name)).toEqual([
       'Squat press',

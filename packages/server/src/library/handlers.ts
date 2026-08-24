@@ -93,10 +93,18 @@ export const LibraryHandlersLive: Layer.Layer<
           return yield* workoutsRepo.insert(user.id, workout)
         }).pipe(Effect.catchTag('SqlError', asDefect)),
 
-      UpdateWorkout: ({ id, workout }) =>
+      // `updatedAt` is the version the caller read: the repo makes it a
+      // precondition, so a save built on a stale read fails `WorkoutConflict`
+      // instead of clobbering whoever wrote in between.
+      UpdateWorkout: ({ id, workout, updatedAt }) =>
         Effect.gen(function* () {
           const user = yield* CurrentUser
-          return yield* workoutsRepo.update(id, user.id, workout)
+          return yield* workoutsRepo.update({
+            id,
+            ownerId: user.id,
+            workout,
+            expectedUpdatedAt: updatedAt,
+          })
         }).pipe(Effect.catchTag('SqlError', asDefect)),
     }
   }),

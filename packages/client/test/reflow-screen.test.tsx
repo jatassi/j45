@@ -10,7 +10,7 @@ import {
   Station,
   Workout,
   WorkoutId,
-  type Reflow,
+  type ReflowRequest,
 } from '@j45/domain'
 import {
   createMemoryHistory,
@@ -179,13 +179,13 @@ describe('ReflowWorkoutScreen', () => {
   })
 
   it('station names are read-only text; cross-pod move is drawer-only (no select); pod/flow controls still mutate the draft', async () => {
-    let updatePayload: { id: WorkoutId; workout: Workout } | undefined
+    let updatePayload: { id: WorkoutId; workout: Workout; updatedAt: DateTime.Utc } | undefined
     renderApp(
       {
         GetWorkout: () => Effect.succeed(athletica),
         ListWorkouts: () => Effect.succeed([athletica]),
         UpdateWorkout: (payload) => {
-          updatePayload = payload as { id: WorkoutId; workout: Workout }
+          updatePayload = payload as { id: WorkoutId; workout: Workout; updatedAt: DateTime.Utc }
           return Effect.succeed(libraryWorkoutOf(athletica.id, updatePayload.workout))
         },
       },
@@ -266,8 +266,12 @@ describe('ReflowWorkoutScreen', () => {
   })
 
   it('chip reads reflowSummary format and updates after edit; Start and Save invoke the expected RPCs and navigate', async () => {
-    let startPayload: { workoutId: WorkoutId; reflow: Reflow } | undefined
-    let updatePayload: { id: WorkoutId; workout: Workout } | undefined
+    let startPayload: { workoutId: WorkoutId; reflow: ReflowRequest } | undefined
+    let updatePayload: { id: WorkoutId; workout: Workout; updatedAt: DateTime.Utc } | undefined
+    // Read off the payloads inside the handlers: the assertions below then
+    // need no optional chaining, which this file's complexity budget notices.
+    let startSourceMillis = 0
+    let updateVersionMillis = 0
     let current = athletica
 
     // --- Start path ---
@@ -277,7 +281,8 @@ describe('ReflowWorkoutScreen', () => {
         ListWorkouts: () => Effect.succeed([athletica]),
         ListActiveSessions: () => Effect.succeed([]),
         StartSession: (payload) => {
-          startPayload = payload as { workoutId: WorkoutId; reflow: Reflow }
+          startPayload = payload as { workoutId: WorkoutId; reflow: ReflowRequest }
+          startSourceMillis = DateTime.toEpochMillis(startPayload.reflow.sourceUpdatedAt)
           return Effect.succeed(sampleSession)
         },
       },
@@ -298,10 +303,13 @@ describe('ReflowWorkoutScreen', () => {
     fireEvent.click(screen.getByTestId('reflow-start'))
     await screen.findByTestId(`session-screen-${sampleSession.id}`)
     expect(startPayload?.workoutId).toBe(athletica.id)
-    expect(startPayload?.reflow.flowType).toBe('laps')
-    expect(startPayload?.reflow.rounds).toBeDefined()
-    expect(startPayload?.reflow.rounds?.[0].workSeconds).toBe(30)
-    expect(startPayload?.reflow.pods).toHaveLength(3)
+    expect(startPayload?.reflow.spec.flowType).toBe('laps')
+    expect(startPayload?.reflow.spec.rounds).toBeDefined()
+    expect(startPayload?.reflow.spec.rounds?.[0].workSeconds).toBe(30)
+    expect(startPayload?.reflow.spec.pods).toHaveLength(3)
+    // The spec's indices only mean anything against the version it was built
+    // from, so the launch carries that version with it.
+    expect(startSourceMillis).toBe(DateTime.toEpochMillis(athletica.updatedAt))
 
     cleanup()
 
@@ -311,7 +319,8 @@ describe('ReflowWorkoutScreen', () => {
         GetWorkout: () => Effect.succeed(current),
         ListWorkouts: () => Effect.succeed([current]),
         UpdateWorkout: (payload) => {
-          updatePayload = payload as { id: WorkoutId; workout: Workout }
+          updatePayload = payload as { id: WorkoutId; workout: Workout; updatedAt: DateTime.Utc }
+          updateVersionMillis = DateTime.toEpochMillis(updatePayload.updatedAt)
           current = libraryWorkoutOf(current.id, updatePayload.workout)
           return Effect.succeed(current)
         },
@@ -326,5 +335,6 @@ describe('ReflowWorkoutScreen', () => {
     expect(updatePayload?.id).toBe(athletica.id)
     expect(updatePayload?.workout.flow.type).toBe('sets')
     expect(updatePayload?.workout.name).toBe('Athletica')
+    expect(updateVersionMillis).toBe(DateTime.toEpochMillis(athletica.updatedAt))
   })
 })

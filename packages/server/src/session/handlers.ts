@@ -1,6 +1,14 @@
 import type { Rpc } from '@effect/rpc'
 import type { SqlError } from '@effect/sql/SqlError'
-import { applyReflow, compile, CurrentUser, Participant, SessionRpcs } from '@j45/domain'
+import {
+  applyReflow,
+  compile,
+  CurrentUser,
+  Participant,
+  ReflowInvalid,
+  SessionRpcs,
+} from '@j45/domain'
+import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Either from 'effect/Either'
 import type * as Layer from 'effect/Layer'
@@ -53,7 +61,20 @@ export const SessionHandlersLive: Layer.Layer<
           const library = yield* workoutsRepo.getOwned(workoutId, user.id)
           let workout = library.workout
           if (reflow !== undefined) {
-            const reflowed = applyReflow(library.workout, reflow)
+            // A `Reflow` is positional indices into the source's flattened
+            // stations, so a spec built against one version of the plan
+            // resolves against another to a valid-but-different set of
+            // stations — silently the wrong workout. The version the launch
+            // screen built the spec from has to still be the stored one.
+            if (!DateTime.Equivalence(reflow.sourceUpdatedAt, library.updatedAt)) {
+              return yield* Effect.fail(
+                new ReflowInvalid({
+                  reason:
+                    'This workout changed since the launch setup was built — reopen it and set the launch up again',
+                }),
+              )
+            }
+            const reflowed = applyReflow(library.workout, reflow.spec)
             if (Either.isLeft(reflowed)) {
               return yield* Effect.fail(reflowed.left)
             }

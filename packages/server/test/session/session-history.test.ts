@@ -10,6 +10,7 @@ import {
   Pod,
   Reflow,
   ReflowPod,
+  ReflowRequest,
   Round,
   SessionRpcs,
   Station,
@@ -317,7 +318,13 @@ describe('session-history recording', () => {
       const authSessions = yield* AuthSessions
       const headers = cookieHeaders(yield* authSessions.create(ownerId))
       const client = yield* RpcTest.makeClient(SessionRpcs)
-      const summary = yield* client.StartSession({ workoutId: library.id, reflow }, { headers })
+      const summary = yield* client.StartSession(
+        {
+          workoutId: library.id,
+          reflow: new ReflowRequest({ spec: reflow, sourceUpdatedAt: library.updatedAt }),
+        },
+        { headers },
+      )
 
       // Progress past the ready segment, then the host leaves so a completion is
       // written — the host is the sole ever-participant, so this ends the session.

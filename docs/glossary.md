@@ -28,6 +28,17 @@ unrecorded wherever they fit.
   allowed, never new or duplicated stations), switching flow type (sets↔laps),
   and optionally retiming rounds. Applicable permanently (edit-time) or as a
   one-off overlay at session launch (the saved plan untouched).
+- **Reflow request** — a reflow spec together with the version of the source
+  workout it was built against (`LibraryWorkout.updatedAt`). A reflow is
+  positional indices, so it means nothing without saying which plan it indexes;
+  the two travel as one value so a spec can never reach a resolver unversioned.
+- **Source version** — a `LibraryWorkout.updatedAt` carried by a write or a
+  launch to say which read it was built on. The server makes it a
+  precondition: a whole-body `UpdateWorkout` built on a stale read fails
+  **workout conflict** rather than silently discarding the other writer, and a
+  reflow request whose source version has moved on is refused rather than
+  resolved against a different plan. There is deliberately no merge — the
+  loser re-fetches.
 - **Session** — one live run of a workout: server-owned state (current segment,
   clock, participants), synced to all joined phones. Ephemeral; only its
   completion record persists. (Login state is never called a "session" bare —

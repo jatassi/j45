@@ -208,7 +208,7 @@ describe('LibraryHandlersLive', () => {
           }),
         })
         const updated = yield* client.UpdateWorkout(
-          { id: original.id, workout: replacement },
+          { id: original.id, workout: replacement, updatedAt: original.updatedAt },
           { headers },
         )
 
@@ -260,7 +260,10 @@ describe('LibraryHandlersLive', () => {
         const replacement = makeWorkout('Hijacked')
 
         const foreignAttempt = yield* Effect.either(
-          client.UpdateWorkout({ id: bWorkout.id, workout: replacement }, { headers }),
+          client.UpdateWorkout(
+            { id: bWorkout.id, workout: replacement, updatedAt: bWorkout.updatedAt },
+            { headers },
+          ),
         )
         expect(Either.isLeft(foreignAttempt)).toBe(true)
         if (Either.isLeft(foreignAttempt)) {
@@ -269,7 +272,10 @@ describe('LibraryHandlersLive', () => {
 
         const absentId = '00000000-0000-4000-8000-000000000099' as WorkoutId
         const absentAttempt = yield* Effect.either(
-          client.UpdateWorkout({ id: absentId, workout: replacement }, { headers }),
+          client.UpdateWorkout(
+            { id: absentId, workout: replacement, updatedAt: bWorkout.updatedAt },
+            { headers },
+          ),
         )
         expect(Either.isLeft(absentAttempt)).toBe(true)
         if (Either.isLeft(absentAttempt)) {
@@ -279,6 +285,60 @@ describe('LibraryHandlersLive', () => {
         // Untouched: owner B's workout is still there, under its original name.
         const stillThere = yield* workoutsRepo.getOwned(bWorkout.id, ownerB)
         expect(stillThere.workout.name).toBe('Owner B’s Workout')
+      }).pipe(Effect.provide(TestServicesLive)),
+  )
+
+  it.scoped(
+    'two UpdateWorkout calls built from the same read: the first wins, the second fails WorkoutConflict and the stored body is the first writer’s',
+    () =>
+      Effect.gen(function* () {
+        const ownerId = 'owner-lu' as UserId
+        yield* insertUser(ownerId)
+
+        const workoutsRepo = yield* WorkoutsRepo
+        // The single read both writers build on — two tabs, one GetWorkout each.
+        const read = yield* workoutsRepo.insert(ownerId, makeWorkout('Shared Read'))
+
+        const authSessions = yield* AuthSessions
+        const headers = { cookie: `${SESSION_COOKIE_NAME}=${yield* authSessions.create(ownerId)}` }
+        const client = yield* RpcTest.makeClient(LibraryRpcs)
+
+        // The clock has to move, or the winner's write lands on the same
+        // `updated_at` it read and the loser's precondition would still hold.
+        yield* TestClock.adjust(Duration.seconds(5))
+        const winner = yield* client.UpdateWorkout(
+          { id: read.id, workout: makeWorkout('First Writer'), updatedAt: read.updatedAt },
+          { headers },
+        )
+        expect(winner.workout.name).toBe('First Writer')
+
+        yield* TestClock.adjust(Duration.seconds(5))
+        const loser = yield* Effect.either(
+          client.UpdateWorkout(
+            // Same `updatedAt` the winner used — a write built on a stale read.
+            { id: read.id, workout: makeWorkout('Second Writer'), updatedAt: read.updatedAt },
+            { headers },
+          ),
+        )
+        expect(Either.isLeft(loser)).toBe(true)
+        if (Either.isLeft(loser)) {
+          expect(loser.left._tag).toBe('WorkoutConflict')
+        }
+
+        // The first writer's body survived — no silent clobber.
+        const stored = yield* client.GetWorkout({ id: read.id }, { headers })
+        expect(stored.workout.name).toBe('First Writer')
+        expect(DateTime.toEpochMillis(stored.updatedAt)).toBe(
+          DateTime.toEpochMillis(winner.updatedAt),
+        )
+
+        // Re-fetching heals it: the loser's retry against the fresh version lands.
+        yield* TestClock.adjust(Duration.seconds(5))
+        const retry = yield* client.UpdateWorkout(
+          { id: read.id, workout: makeWorkout('Second Writer'), updatedAt: stored.updatedAt },
+          { headers },
+        )
+        expect(retry.workout.name).toBe('Second Writer')
       }).pipe(Effect.provide(TestServicesLive)),
   )
 })

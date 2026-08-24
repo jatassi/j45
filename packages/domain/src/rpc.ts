@@ -14,8 +14,8 @@ import {
 import { Exercise, ExerciseId, ExerciseNotFound, LibraryExercise } from './exercise.js'
 import { GenerationConstraints, GenerationInfeasible } from './generation.js'
 import { SessionCompletion } from './history.js'
-import { LibraryWorkout, WorkoutId, WorkoutNotFound } from './library.js'
-import { Reflow, ReflowInvalid } from './reflow.js'
+import { LibraryWorkout, WorkoutConflict, WorkoutId, WorkoutNotFound } from './library.js'
+import { ReflowInvalid, ReflowRequest } from './reflow.js'
 import {
   SessionCommand,
   SessionId,
@@ -107,10 +107,17 @@ export class LibraryRpcs extends RpcGroup.make(
   }),
   Rpc.make('DeleteWorkout', { payload: { id: WorkoutId }, error: WorkoutNotFound }),
   Rpc.make('CreateWorkout', { payload: { workout: Workout }, success: LibraryWorkout }),
+  /**
+   * Whole-body replace under an optimistic-concurrency precondition:
+   * `updatedAt` is the version the caller read, and the write only lands if
+   * the stored row is still that version. A write built on a stale read fails
+   * `WorkoutConflict` rather than silently discarding the other writer's save
+   * — there is deliberately no merge, the loser re-fetches.
+   */
   Rpc.make('UpdateWorkout', {
-    payload: { id: WorkoutId, workout: Workout },
+    payload: { id: WorkoutId, workout: Workout, updatedAt: Schema.DateTimeUtc },
     success: LibraryWorkout,
-    error: WorkoutNotFound,
+    error: Schema.Union(WorkoutNotFound, WorkoutConflict),
   }),
 ).middleware(AuthMiddleware) {}
 
@@ -134,8 +141,16 @@ export class ExerciseRpcs extends RpcGroup.make(
  * (`AuthMiddleware` provides `CurrentUser`, fails `Unauthorized`).
  */
 export class SessionRpcs extends RpcGroup.make(
+  /**
+   * Starts a session over the caller's stored plan, optionally under a
+   * launch-time reflow. The reflow arrives as a `ReflowRequest` — spec plus
+   * the source version it was built against — because the spec is positional
+   * indices: resolving one against a plan that changed underneath would start
+   * a session over a valid-but-different set of stations. A version mismatch
+   * fails `ReflowInvalid`, same as an ill-fitting spec.
+   */
   Rpc.make('StartSession', {
-    payload: { workoutId: WorkoutId, reflow: Schema.optional(Reflow) },
+    payload: { workoutId: WorkoutId, reflow: Schema.optional(ReflowRequest) },
     success: SessionSummary,
     error: Schema.Union(WorkoutNotFound, ReflowInvalid),
   }),
