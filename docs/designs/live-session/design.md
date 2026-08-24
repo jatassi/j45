@@ -57,6 +57,7 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
 
 export class SessionSummary extends Schema.Class<SessionSummary>('SessionSummary')({
   id: SessionId,
+  workoutId: WorkoutId,               // the library workout the session was started from
   hostDisplayName: Schema.String,
   workoutName: Schema.NonEmptyTrimmedString,
   startedAt: Schema.DateTimeUtc,

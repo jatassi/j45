@@ -186,6 +186,7 @@ const athletica = makeLibraryWorkout('workout-athletica', 'Athletica', 'cardio')
 
 const liveSession = new SessionSummary({
   id: Schema.decodeSync(SessionId)('session-live-1'),
+  workoutId: ironCircuit.id,
   hostDisplayName: 'Jordan',
   workoutName: 'Iron Circuit',
   startedAt: DateTime.unsafeMake('2026-03-01T09:48:00.000Z'),
@@ -194,6 +195,7 @@ const liveSession = new SessionSummary({
 
 const startedSummary = new SessionSummary({
   id: Schema.decodeSync(SessionId)('session-started-1'),
+  workoutId: ironCircuit.id,
   hostDisplayName: 'You',
   workoutName: ironCircuit.workout.name,
   startedAt: seededAt,

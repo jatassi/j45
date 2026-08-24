@@ -165,6 +165,7 @@ function renderApp(handlers: Handlers, initialPath: string) {
 
 const sampleSession = new SessionSummary({
   id: Schema.decodeSync(SessionId)('session-abc'),
+  workoutId: Schema.decodeSync(WorkoutId)('workout-athletica'),
   hostDisplayName: 'Alex',
   workoutName: 'Athletica',
   startedAt: seededAt,

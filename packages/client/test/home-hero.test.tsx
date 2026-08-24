@@ -94,6 +94,7 @@ const makeLibraryWorkout = (
 
 const makeSession = (args: {
   id: string
+  workoutId: string
   workoutName: string
   startedAt: DateTime.Utc
   hostDisplayName?: string
@@ -101,6 +102,7 @@ const makeSession = (args: {
 }): SessionSummary =>
   new SessionSummary({
     id: Schema.decodeSync(SessionId)(args.id),
+    workoutId: Schema.decodeSync(WorkoutId)(args.workoutId),
     hostDisplayName: args.hostDisplayName ?? 'Jordan',
     workoutName: args.workoutName,
     startedAt: args.startedAt,
@@ -156,11 +158,13 @@ const athletica = makeLibraryWorkout('workout-athletica', 'Athletica', 'cardio')
 
 const liveSession = makeSession({
   id: 'session-live-1',
+  workoutId: 'workout-iron',
   workoutName: 'Iron Circuit',
   startedAt: DateTime.unsafeMake('2026-03-01T09:48:00.000Z'),
 })
 const extraSession = makeSession({
   id: 'session-extra-1',
+  workoutId: 'workout-athletica',
   workoutName: 'Athletica',
   startedAt: DateTime.unsafeMake('2026-03-01T09:30:00.000Z'),
   hostDisplayName: 'Sam',
@@ -169,6 +173,7 @@ const extraSession = makeSession({
 
 const startedSummary = new SessionSummary({
   id: Schema.decodeSync(SessionId)('session-started-1'),
+  workoutId: ironCircuit.id,
   hostDisplayName: 'You',
   workoutName: ironCircuit.workout.name,
   startedAt: seededAt,

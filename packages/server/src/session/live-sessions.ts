@@ -16,6 +16,7 @@ import {
   type SessionSummary,
   type TimerState,
   type UserId,
+  type WorkoutId,
 } from '@j45/domain'
 import * as Clock from 'effect/Clock'
 import * as DateTime from 'effect/DateTime'
@@ -46,6 +47,7 @@ import {
   participantsOf,
   progressOf,
   removePresence,
+  sessionsTracking,
   summaryOf,
   timersEqual,
   withState,
@@ -236,6 +238,8 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
     const handle: SessionHandle = {
       id,
       host: params.host,
+      workoutId: params.workoutId,
+      reflowLaunched: params.reflowLaunched,
       workoutName: params.workoutName,
       workout: params.workout,
       compiled: params.compiled,
@@ -427,6 +431,7 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
     return {
       start: (params: StartParams) => start(registry, params),
       list: () => list(registry),
+      sessionsTracking: (workoutId: WorkoutId) => sessionsTracking(registry, workoutId),
       snapshot: (id: SessionId) => snapshot(registry, id),
       watch: (id: SessionId, participant: Participant) => watch(registry, id, participant),
       command: (id: SessionId, cmd: SessionCommand) => command(registry, id, cmd),

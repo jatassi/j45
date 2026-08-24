@@ -5,6 +5,7 @@ import * as Schema from 'effect/Schema'
 import { expect } from 'vitest'
 
 import { UserId } from '../src/auth.js'
+import { WorkoutId } from '../src/library.js'
 import {
   CompiledWorkout,
   ReadySegment,
@@ -70,6 +71,7 @@ describe('SessionSummary', () => {
     Effect.gen(function* () {
       const original = new SessionSummary({
         id: Schema.decodeSync(SessionId)('session-1'),
+        workoutId: Schema.decodeSync(WorkoutId)('workout-1'),
         hostDisplayName: 'Alex',
         workoutName: 'Athletica',
         startedAt: yield* DateTime.now,

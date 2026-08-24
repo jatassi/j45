@@ -9,6 +9,7 @@ import {
   type TimerState,
   type UserId,
   type Workout,
+  type WorkoutId,
 } from '@j45/domain'
 import type * as DateTime from 'effect/DateTime'
 import type * as Deferred from 'effect/Deferred'
@@ -66,6 +67,12 @@ export type Sub = {
 export type SessionHandle = {
   readonly id: SessionId
   readonly host: Participant
+  // The library workout this session was started from, and whether a
+  // launch-time reflow overlay was applied to it. A reflow-launched session
+  // runs a plan that never existed in the library, so it names its source but
+  // tracks nothing: `sessionsTracking` leaves it out.
+  readonly workoutId: WorkoutId
+  readonly reflowLaunched: boolean
   readonly workoutName: string
   readonly workout: Workout
   readonly compiled: CompiledWorkout
@@ -105,6 +112,8 @@ export type Registry = {
 /** The facts `LiveSessions.start` needs to stand up a fresh session actor. */
 export type StartParams = {
   readonly host: Participant
+  readonly workoutId: WorkoutId
+  readonly reflowLaunched: boolean
   readonly workoutName: string
   readonly workout: Workout
   readonly compiled: CompiledWorkout
@@ -122,6 +131,29 @@ export const getHandle = (
     }),
   )
 
+/**
+ * Every live session that tracks `workoutId`, as lobby summaries — the reverse
+ * of the source id each handle carries. A session started with a launch-time
+ * reflow overlay is left out on purpose: its compiled plan never existed in
+ * the library, so a change to the library workout has nothing to apply to it.
+ *
+ * The answer is derived by a scan of the registry, not held as a second map.
+ * The registry holds one entry per live session, which is a small set, and a
+ * derived answer cannot go stale when a session ends.
+ */
+export const sessionsTracking = (
+  registry: Registry,
+  workoutId: WorkoutId,
+): Effect.Effect<readonly SessionSummary[]> =>
+  Effect.flatMap(Ref.get(registry.sessions), (map) =>
+    Effect.forEach(
+      [...HashMap.values(map)].filter(
+        (handle) => handle.workoutId === workoutId && !handle.reflowLaunched,
+      ),
+      summaryOf,
+    ),
+  )
+
 /** The lobby-listing summary for one session, sized by current presence. */
 export const summaryOf = (handle: SessionHandle): Effect.Effect<SessionSummary> =>
   Effect.map(
@@ -129,6 +161,7 @@ export const summaryOf = (handle: SessionHandle): Effect.Effect<SessionSummary> 
     (map) =>
       new SessionSummary({
         id: handle.id,
+        workoutId: handle.workoutId,
         hostDisplayName: handle.host.displayName,
         workoutName: handle.workoutName,
         startedAt: handle.startedAt,
