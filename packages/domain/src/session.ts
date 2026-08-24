@@ -1,6 +1,7 @@
 import * as Schema from 'effect/Schema'
 
 import { UserId } from './auth.js'
+import { WorkoutId } from './library.js'
 import { CompiledWorkout } from './segments.js'
 import { TimerState } from './timer.js'
 
@@ -40,9 +41,15 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
 /**
  * Lightweight listing row for the lobby. Enough to pick a session to
  * join without downloading the full compiled workout and timer state.
+ *
+ * `workoutId` is the library workout that the session started from. A caller
+ * resolves the session against that id, not against `workoutName`. The id of
+ * a session that a different user hosts is absent from the caller's own
+ * library. That id resolves to nothing, and this is the correct result.
  */
 export class SessionSummary extends Schema.Class<SessionSummary>('SessionSummary')({
   id: SessionId,
+  workoutId: WorkoutId,
   hostDisplayName: Schema.String,
   workoutName: Schema.NonEmptyTrimmedString,
   startedAt: Schema.DateTimeUtc,

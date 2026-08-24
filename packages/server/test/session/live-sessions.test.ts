@@ -10,6 +10,7 @@ import {
   Station,
   UserId,
   Workout,
+  WorkoutId,
   type SessionId,
   type SessionState,
 } from '@j45/domain'
@@ -48,8 +49,17 @@ const userId = (id: string) => Schema.decodeSync(UserId)(id)
 const alice = new Participant({ userId: userId('alice'), displayName: 'Alice' })
 const bob = new Participant({ userId: userId('bob'), displayName: 'Bob' })
 
+const fixtureWorkoutId = Schema.decodeSync(WorkoutId)('workout-fixture')
+
 const startFixture = (svc: LiveSessions) =>
-  svc.start({ host: alice, workoutName: 'Fixture', workout: fixtureWorkout, compiled })
+  svc.start({
+    host: alice,
+    workoutId: fixtureWorkoutId,
+    reflowLaunched: false,
+    workoutName: 'Fixture',
+    workout: fixtureWorkout,
+    compiled,
+  })
 
 /**
  * `LiveSessions` wired over a real `CompletionsRepo` — the one dependency it

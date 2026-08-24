@@ -16,6 +16,7 @@ import {
   type SessionSummary,
   type TimerState,
   type UserId,
+  type WorkoutId,
 } from '@j45/domain'
 import * as Clock from 'effect/Clock'
 import * as DateTime from 'effect/DateTime'
@@ -43,9 +44,11 @@ import {
   addPresence,
   getHandle,
   isProgressed,
+  listSessions,
   participantsOf,
   progressOf,
   removePresence,
+  sessionsOfWorkout,
   summaryOf,
   timersEqual,
   withState,
@@ -236,6 +239,8 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
     const handle: SessionHandle = {
       id,
       host: params.host,
+      workoutId: params.workoutId,
+      reflowLaunched: params.reflowLaunched,
       workoutName: params.workoutName,
       workout: params.workout,
       compiled: params.compiled,
@@ -261,11 +266,6 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
     yield* Effect.forkIn(reaper(handle), registry.layerScope)
     return yield* summaryOf(handle)
   })
-
-const list = (registry: Registry): Effect.Effect<readonly SessionSummary[]> =>
-  Effect.flatMap(Ref.get(registry.sessions), (map) =>
-    Effect.forEach([...HashMap.values(map)], summaryOf),
-  )
 
 const snapshot = (
   registry: Registry,
@@ -426,7 +426,8 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
 
     return {
       start: (params: StartParams) => start(registry, params),
-      list: () => list(registry),
+      list: () => listSessions(registry),
+      sessionsOfWorkout: (workoutId: WorkoutId) => sessionsOfWorkout(registry, workoutId),
       snapshot: (id: SessionId) => snapshot(registry, id),
       watch: (id: SessionId, participant: Participant) => watch(registry, id, participant),
       command: (id: SessionId, cmd: SessionCommand) => command(registry, id, cmd),

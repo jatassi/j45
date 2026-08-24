@@ -57,6 +57,7 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
 
 export class SessionSummary extends Schema.Class<SessionSummary>('SessionSummary')({
   id: SessionId,
+  workoutId: WorkoutId,               // the library workout the session was started from
   hostDisplayName: Schema.String,
   workoutName: Schema.NonEmptyTrimmedString,
   startedAt: Schema.DateTimeUtc,
@@ -109,7 +110,9 @@ Semantics:
 - **ListActiveSessions** returns every live session on the server — at
   friends/family scale, seeing each other's sessions is the point (it is
   session *content* that stays private until you join; the summary leaks
-  only host display name and workout name, which is exactly the invitation).
+  only host display name, workout name, and the source `WorkoutId` — which
+  is exactly the invitation. The id is an opaque handle, not access: every
+  library rpc still gates on ownership, so a foreign id opens nothing).
 
 ## Server (`packages/server/src/session/`)
 

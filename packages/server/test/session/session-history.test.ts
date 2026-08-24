@@ -16,6 +16,7 @@ import {
   Station,
   UserId,
   Workout,
+  WorkoutId,
   type SessionId,
   type Username,
 } from '@j45/domain'
@@ -106,8 +107,17 @@ const uid = (id: string) => Schema.decodeSync(UserId)(id)
 const alice = new Participant({ userId: uid('alice'), displayName: 'Alice' })
 const bob = new Participant({ userId: uid('bob'), displayName: 'Bob' })
 
+const fixtureWorkoutId = Schema.decodeSync(WorkoutId)('workout-fixture')
+
 const startFixture = (svc: LiveSessions) =>
-  svc.start({ host: alice, workoutName: 'Fixture', workout: fixtureWorkout, compiled })
+  svc.start({
+    host: alice,
+    workoutId: fixtureWorkoutId,
+    reflowLaunched: false,
+    workoutName: 'Fixture',
+    workout: fixtureWorkout,
+    compiled,
+  })
 
 const seedUser = (id: UserId, displayName = 'Test User') =>
   Effect.gen(function* () {

@@ -47,12 +47,20 @@ const makeLibraryWorkout = (id: string, name: string): LibraryWorkout =>
     updatedAt: seededAt,
   })
 
-const makeSession = (id: string, workoutName: string, startedAt: DateTime.Utc): SessionSummary =>
+type SessionParts = {
+  readonly id: string
+  readonly workoutId: string
+  readonly workoutName: string
+  readonly startedAt: DateTime.Utc
+}
+
+const makeSession = (parts: SessionParts): SessionSummary =>
   new SessionSummary({
-    id: Schema.decodeSync(SessionId)(id),
+    id: Schema.decodeSync(SessionId)(parts.id),
+    workoutId: Schema.decodeSync(WorkoutId)(parts.workoutId),
     hostDisplayName: 'Jordan',
-    workoutName,
-    startedAt,
+    workoutName: parts.workoutName,
+    startedAt: parts.startedAt,
     participantCount: 2,
   })
 
@@ -100,16 +108,18 @@ describe('resolveWorkoutByName', () => {
 
 describe('pickHero priority', () => {
   it('picks live when sessions are non-empty, even if history and library would pick start-last', () => {
-    const older = makeSession(
-      'session-older',
-      'Athletica',
-      DateTime.unsafeMake('2026-03-01T09:00:00.000Z'),
-    )
-    const newer = makeSession(
-      'session-newer',
-      'Iron Circuit',
-      DateTime.unsafeMake('2026-03-01T10:00:00.000Z'),
-    )
+    const older = makeSession({
+      id: 'session-older',
+      workoutId: 'workout-athletica',
+      workoutName: 'Athletica',
+      startedAt: DateTime.unsafeMake('2026-03-01T09:00:00.000Z'),
+    })
+    const newer = makeSession({
+      id: 'session-newer',
+      workoutId: 'workout-iron',
+      workoutName: 'Iron Circuit',
+      startedAt: DateTime.unsafeMake('2026-03-01T10:00:00.000Z'),
+    })
     const history = [makeCompletion('c-1', 'Athletica')]
 
     const pick = pickHero([older, newer], history, library)
@@ -123,12 +133,13 @@ describe('pickHero priority', () => {
     expect(pick.workout).toBe(ironCircuit)
   })
 
-  it('picks live with optional workout omitted when the session name does not resolve', () => {
-    const session = makeSession(
-      'session-orphan',
-      'Renamed Away',
-      DateTime.unsafeMake('2026-03-01T10:00:00.000Z'),
-    )
+  it('picks live with optional workout omitted when the session workout is not in the library', () => {
+    const session = makeSession({
+      id: 'session-orphan',
+      workoutId: 'workout-gone',
+      workoutName: 'Renamed Away',
+      startedAt: DateTime.unsafeMake('2026-03-01T10:00:00.000Z'),
+    })
 
     const pick = pickHero([session], [], library)
 
@@ -137,6 +148,20 @@ describe('pickHero priority', () => {
       session,
       extras: [],
     })
+  })
+
+  it('attaches no library workout to another user’s session that shares a workout name', () => {
+    const foreign = makeSession({
+      id: 'session-foreign',
+      // Another user's own copy of a same-named workout — a different id.
+      workoutId: 'workout-their-iron',
+      workoutName: 'Iron Circuit',
+      startedAt: DateTime.unsafeMake('2026-03-01T10:00:00.000Z'),
+    })
+
+    const pick = pickHero([foreign], [], library)
+
+    expect(pick).toEqual({ _tag: 'live', session: foreign, extras: [] })
   })
 
   it('picks start-last over browse when there are no live sessions and history head resolves', () => {
