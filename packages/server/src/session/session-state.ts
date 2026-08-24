@@ -20,7 +20,7 @@ import * as Option from 'effect/Option'
 import type * as Queue from 'effect/Queue'
 import * as Ref from 'effect/Ref'
 import type * as Scope from 'effect/Scope'
-import type * as SubscriptionRef from 'effect/SubscriptionRef'
+import * as SubscriptionRef from 'effect/SubscriptionRef'
 
 import type { CompletionsRepo } from './completions-repo.js'
 
@@ -73,7 +73,10 @@ export type SessionHandle = {
   // source, but it tracks nothing, so `sessionsTracking` omits it.
   readonly workoutId: WorkoutId
   readonly reflowLaunched: boolean
-  readonly workoutName: string
+  // The as-run plan. The workout *name* is deliberately absent here: a
+  // rename changes it while the session runs, and `stateRef` holds the one
+  // current name that the snapshot, the lobby summary, and any completion
+  // row all read.
   readonly workout: Workout
   readonly compiled: CompiledWorkout
   readonly startedAt: DateTime.Utc
@@ -131,18 +134,22 @@ export const getHandle = (
     }),
   )
 
-/** The lobby-listing summary for one session, sized by current presence. */
+/**
+ * The lobby-listing summary for one session, sized by current presence. The
+ * name comes from the published snapshot, so the lobby row and the player
+ * show the same name after a rename.
+ */
 export const summaryOf = (handle: SessionHandle): Effect.Effect<SessionSummary> =>
   Effect.map(
-    Ref.get(handle.presence),
-    (map) =>
+    Effect.all({ presence: Ref.get(handle.presence), state: SubscriptionRef.get(handle.stateRef) }),
+    ({ presence, state }) =>
       new SessionSummary({
         id: handle.id,
         workoutId: handle.workoutId,
         hostDisplayName: handle.host.displayName,
-        workoutName: handle.workoutName,
+        workoutName: state.workoutName,
         startedAt: handle.startedAt,
-        participantCount: HashMap.size(map),
+        participantCount: HashMap.size(presence),
       }),
   )
 
@@ -213,8 +220,9 @@ export const timersEqual = (a: TimerState, b: TimerState): boolean => {
 
 /**
  * A fresh snapshot with a new `serverNow` plus whichever of `timer` /
- * `participants` the caller overrides — everything else carried from `state`.
- * The two publish paths (a timer advance, a presence change) each vary one.
+ * `participants` / `workoutName` the caller overrides — everything else
+ * carried from `state`. Each publish path (a timer advance, a presence
+ * change, an applied plan change) varies exactly one of them.
  */
 export const withState = (
   state: SessionState,
@@ -222,12 +230,13 @@ export const withState = (
     readonly serverNow: number
     readonly timer?: TimerState
     readonly participants?: readonly Participant[]
+    readonly workoutName?: string
   },
 ): SessionState =>
   new SessionState({
     id: state.id,
     host: state.host,
-    workoutName: state.workoutName,
+    workoutName: over.workoutName ?? state.workoutName,
     compiled: state.compiled,
     timer: over.timer ?? state.timer,
     serverNow: over.serverNow,

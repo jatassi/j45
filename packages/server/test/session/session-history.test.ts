@@ -34,6 +34,7 @@ import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { SESSION_COOKIE_NAME } from '../../src/auth/cookie.js'
 import { AuthMiddlewareLive } from '../../src/auth/middleware.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
@@ -57,7 +58,9 @@ const SqlTestLive = MigratorLive.pipe(
 // One shared, memoized `LiveSessions` built over its `CompletionsRepo` — the
 // same reference wherever both the test body and the handler layer need it, so
 // they drive one registry and one connection.
-const LiveSessionsLive = LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default))
+const LiveSessionsLive = LiveSessions.Default.pipe(
+  Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
+)
 
 /** `LiveSessions` + `CompletionsRepo` + `UserRepo` over one migrated sqlite. */
 const LiveLive = Layer.mergeAll(LiveSessionsLive, CompletionsRepo.Default, UserRepo.Default).pipe(
@@ -84,6 +87,7 @@ const HandlerLive = Layer.mergeAll(
  * `SqlError` — the doomed-write case.
  */
 const FailingLive = LiveSessions.Default.pipe(
+  Layer.provide(PlanChanges.Default),
   Layer.provide(
     CompletionsRepo.Default.pipe(
       Layer.provide(

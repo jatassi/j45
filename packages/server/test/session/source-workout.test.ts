@@ -26,6 +26,7 @@ import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { SESSION_COOKIE_NAME } from '../../src/auth/cookie.js'
 import { AuthMiddlewareLive } from '../../src/auth/middleware.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
@@ -47,7 +48,9 @@ const SqlTestLive = MigratorLive.pipe(
   Layer.provideMerge(NodeContext.layer),
 )
 
-const LiveSessionsLive = LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default))
+const LiveSessionsLive = LiveSessions.Default.pipe(
+  Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
+)
 
 const TestServicesLive = Layer.mergeAll(
   UserRepo.Default,

@@ -48,6 +48,11 @@ unrecorded wherever they fit.
   that tracks one Workout. A Session that started with a launch-time Reflow
   overlay keeps the id, but tracks nothing: its compiled plan was never in the
   library.
+- **Plan change** — a change to a stored Workout, announced by the library so
+  that every live Session which tracks that Workout can follow it. The library
+  publishes; the live-Session registry consumes. The library never knows that
+  live Sessions exist. A rename is applied at once and raises no notice to
+  Participants, because the new name is already on screen.
 - **Glass chrome** — persistent UI furniture rendered in the liquid-glass
   material: the bottom tab bar, sticky headers, overlays, and control docks.
   Content cards stay opaque — chrome is one half of glass's decided role.

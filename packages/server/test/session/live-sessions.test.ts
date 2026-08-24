@@ -25,6 +25,7 @@ import * as Scope from 'effect/Scope'
 import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
@@ -71,7 +72,7 @@ const startFixture = (svc: LiveSessions) =>
  * `test/session/session-history.test.ts`.
  */
 const TestLive = LiveSessions.Default.pipe(
-  Layer.provide(CompletionsRepo.Default),
+  Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
   Layer.provideMerge(
     MigratorLive.pipe(
       Layer.provideMerge(SqliteClient.layer({ filename: ':memory:' })),
