@@ -25,3 +25,17 @@ import sorting is a Prettier plugin (`bun run format`).
 
 When spawning subagents, always include the model name in brackets at the beginning
 of the agent title like this: `[Opus] Do the thing`.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `jatassi/j45`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, used verbatim as label strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — `docs/glossary.md` + `docs/adr/`. See `docs/agents/domain.md`.
