@@ -1,13 +1,17 @@
 import * as FileSystem from '@effect/platform/FileSystem'
+import type * as Headers from '@effect/platform/Headers'
 import * as HttpRouter from '@effect/platform/HttpRouter'
 import * as HttpServerRequest from '@effect/platform/HttpServerRequest'
 import * as HttpServerResponse from '@effect/platform/HttpServerResponse'
 import * as Path from '@effect/platform/Path'
 import * as Effect from 'effect/Effect'
 import type * as Layer from 'effect/Layer'
+import * as Option from 'effect/Option'
 
-import { ClientDistDir } from './client-dist.js'
+import type { BuildFile } from './client-dist.js'
+import { ClientDistDir, entryDocument, resolveDistPath } from './client-dist.js'
 import { ReleaseShaConfig, ServeClientConfig } from './config.js'
+import { cacheControlFor, isNotModified } from './static-cache.js'
 import { version } from './version.js'
 
 /**
@@ -28,6 +32,26 @@ export const HealthzRouteLive: Layer.Layer<never> = HttpRouter.Default.use((rout
 )
 
 /**
+ * One file out of the client build, carrying the cache policy its class
+ * earns — or a bodiless `304` when the request's validators already describe
+ * it. `HttpServerResponse.file` supplies the validators themselves (`ETag`
+ * from size+mtime, `Last-Modified`) but never acts on the ones a client sends
+ * back, so the comparison is ours to make; without it, forcing revalidation
+ * on the entry document would re-send the whole document every load.
+ */
+const buildFileResponse = (file: BuildFile, requestHeaders: Headers.Headers) =>
+  Effect.gen(function* () {
+    const response = yield* HttpServerResponse.file(file.absolutePath, {
+      headers: { 'cache-control': cacheControlFor(file.buildRelativePath) },
+    })
+    return isNotModified(requestHeaders, response.headers)
+      ? // `response.headers` is exactly the validators plus the cache policy,
+        // which is what RFC 9110 §15.4.5 asks a 304 to repeat.
+        HttpServerResponse.empty({ status: 304, headers: response.headers })
+      : response
+  })
+
+/**
  * Per-request handler: serve the requested file from the dist directory,
  * fall back to `index.html` for client-side routing, else 404.
  */
@@ -37,29 +61,20 @@ const staticFileHandler = (resolvedDistDir: string) =>
     const path_ = yield* Path.Path
     const request = yield* HttpServerRequest.HttpServerRequest
 
-    const absoluteDistDir = path_.resolve(resolvedDistDir)
+    const distDir = path_.resolve(resolvedDistDir)
     const { pathname } = new URL(request.url, 'http://localhost')
-    const requestedPath = path_.resolve(
-      path_.join(absoluteDistDir, pathname === '/' ? 'index.html' : pathname.slice(1)),
-    )
+    const isFilePresent = (candidate: string) =>
+      fs.exists(candidate).pipe(Effect.orElseSucceed(() => false))
 
-    // Guard against `..` segments escaping distDir.
-    const isInsideDist =
-      requestedPath === absoluteDistDir || requestedPath.startsWith(absoluteDistDir + path_.sep)
-
-    if (isInsideDist) {
-      const isRequestedExists = yield* fs
-        .exists(requestedPath)
-        .pipe(Effect.orElseSucceed(() => false))
-      if (isRequestedExists) {
-        return yield* HttpServerResponse.file(requestedPath)
-      }
+    // `Option.none()` when `..` segments would escape distDir.
+    const requested = resolveDistPath(path_, distDir, pathname)
+    if (Option.isSome(requested) && (yield* isFilePresent(requested.value.absolutePath))) {
+      return yield* buildFileResponse(requested.value, request.headers)
     }
 
-    const indexPath = path_.join(absoluteDistDir, 'index.html')
-    const isIndexExists = yield* fs.exists(indexPath).pipe(Effect.orElseSucceed(() => false))
-    if (isIndexExists) {
-      return yield* HttpServerResponse.file(indexPath)
+    const entry = entryDocument(path_, distDir)
+    if (yield* isFilePresent(entry.absolutePath)) {
+      return yield* buildFileResponse(entry, request.headers)
     }
 
     return HttpServerResponse.empty({ status: 404 })
