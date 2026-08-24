@@ -50,9 +50,9 @@ export function resolveWorkoutByName(
 }
 
 /**
- * The caller's library entry with this id, or `undefined`. A live session
- * hosted by another user names a workout in *their* library, so an id that is
- * absent here resolves to nothing — which is the correct answer, not a miss.
+ * The caller's library entry with this id, or `undefined`. A live session of a
+ * different host refers to a workout in *that host's* library. An id that is
+ * absent here thus resolves to nothing, and this is the correct result.
  */
 export function resolveWorkoutById(
   id: WorkoutId,
@@ -65,8 +65,8 @@ export function resolveWorkoutById(
  * Picks the home hero by priority: live → start-last → browse.
  *
  * - **live**: `sessions` non-empty — newest by `startedAt` is the hero, the
- *   rest are extras; attaches the library workout the session runs, matched on
- *   identity. A same-named workout is not the same workout.
+ *   rest are extras; attaches the library workout by id. A workout with the
+ *   same name is not the same workout.
  * - **start-last**: no live sessions, history head resolves by name.
  * - **browse**: first library workout, or `undefined` if the library is empty
  *   (never throws). Unresolved history head falls through here too.

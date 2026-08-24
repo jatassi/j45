@@ -67,10 +67,10 @@ export type Sub = {
 export type SessionHandle = {
   readonly id: SessionId
   readonly host: Participant
-  // The library workout this session was started from, and whether a
-  // launch-time reflow overlay was applied to it. A reflow-launched session
-  // runs a plan that never existed in the library, so it names its source but
-  // tracks nothing: `sessionsTracking` leaves it out.
+  // The library workout that this session started from, and whether a
+  // launch-time reflow overlay changed that workout. A reflow-launched
+  // session runs a plan that the library never held. It keeps the id of its
+  // source, but it tracks nothing, so `sessionsTracking` omits it.
   readonly workoutId: WorkoutId
   readonly reflowLaunched: boolean
   readonly workoutName: string
@@ -131,29 +131,6 @@ export const getHandle = (
     }),
   )
 
-/**
- * Every live session that tracks `workoutId`, as lobby summaries — the reverse
- * of the source id each handle carries. A session started with a launch-time
- * reflow overlay is left out on purpose: its compiled plan never existed in
- * the library, so a change to the library workout has nothing to apply to it.
- *
- * The answer is derived by a scan of the registry, not held as a second map.
- * The registry holds one entry per live session, which is a small set, and a
- * derived answer cannot go stale when a session ends.
- */
-export const sessionsTracking = (
-  registry: Registry,
-  workoutId: WorkoutId,
-): Effect.Effect<readonly SessionSummary[]> =>
-  Effect.flatMap(Ref.get(registry.sessions), (map) =>
-    Effect.forEach(
-      [...HashMap.values(map)].filter(
-        (handle) => handle.workoutId === workoutId && !handle.reflowLaunched,
-      ),
-      summaryOf,
-    ),
-  )
-
 /** The lobby-listing summary for one session, sized by current presence. */
 export const summaryOf = (handle: SessionHandle): Effect.Effect<SessionSummary> =>
   Effect.map(
@@ -168,6 +145,57 @@ export const summaryOf = (handle: SessionHandle): Effect.Effect<SessionSummary> 
         participantCount: HashMap.size(map),
       }),
   )
+
+/**
+ * The lobby summaries of every live session that `keep` accepts. Both registry
+ * queries are this one scan with a different predicate.
+ */
+const summarize = (
+  registry: Registry,
+  keep: (handle: SessionHandle) => boolean,
+): Effect.Effect<readonly SessionSummary[]> =>
+  Effect.flatMap(Ref.get(registry.sessions), (map) =>
+    Effect.forEach([...HashMap.values(map)].filter(keep), summaryOf),
+  )
+
+/** Every live session on this server, as lobby summaries. */
+export const listSessions = (registry: Registry): Effect.Effect<readonly SessionSummary[]> =>
+  summarize(registry, () => true)
+
+/**
+ * The live sessions of one library workout, split by what a change to that
+ * workout can reach. `tracking` holds the sessions that run the stored plan.
+ * `reflowLaunched` holds the sessions that started with a launch-time reflow
+ * overlay: they hold the same source id, but their compiled plan was never in
+ * the library, so a change to it has nothing to apply to them.
+ */
+export type SessionsOfWorkout = {
+  readonly tracking: readonly SessionSummary[]
+  readonly reflowLaunched: readonly SessionSummary[]
+}
+
+/**
+ * Every live session that started from `workoutId`, in the two groups above.
+ * This is the reverse of the source id that each handle holds.
+ *
+ * A scan of the registry gives the answer. A second map does not hold it: the
+ * registry has one entry for each live session, which is a small set, and a
+ * derived answer cannot become stale when a session ends.
+ */
+export const sessionsOfWorkout = (
+  registry: Registry,
+  workoutId: WorkoutId,
+): Effect.Effect<SessionsOfWorkout> =>
+  Effect.all({
+    tracking: summarize(
+      registry,
+      (handle) => handle.workoutId === workoutId && !handle.reflowLaunched,
+    ),
+    reflowLaunched: summarize(
+      registry,
+      (handle) => handle.workoutId === workoutId && handle.reflowLaunched,
+    ),
+  })
 
 /** Structural equality on timer states — used to suppress no-op republishes. */
 export const timersEqual = (a: TimerState, b: TimerState): boolean => {

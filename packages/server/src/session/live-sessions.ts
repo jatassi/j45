@@ -44,10 +44,11 @@ import {
   addPresence,
   getHandle,
   isProgressed,
+  listSessions,
   participantsOf,
   progressOf,
   removePresence,
-  sessionsTracking,
+  sessionsOfWorkout,
   summaryOf,
   timersEqual,
   withState,
@@ -266,11 +267,6 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
     return yield* summaryOf(handle)
   })
 
-const list = (registry: Registry): Effect.Effect<readonly SessionSummary[]> =>
-  Effect.flatMap(Ref.get(registry.sessions), (map) =>
-    Effect.forEach([...HashMap.values(map)], summaryOf),
-  )
-
 const snapshot = (
   registry: Registry,
   id: SessionId,
@@ -430,8 +426,8 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
 
     return {
       start: (params: StartParams) => start(registry, params),
-      list: () => list(registry),
-      sessionsTracking: (workoutId: WorkoutId) => sessionsTracking(registry, workoutId),
+      list: () => listSessions(registry),
+      sessionsOfWorkout: (workoutId: WorkoutId) => sessionsOfWorkout(registry, workoutId),
       snapshot: (id: SessionId) => snapshot(registry, id),
       watch: (id: SessionId, participant: Participant) => watch(registry, id, participant),
       command: (id: SessionId, cmd: SessionCommand) => command(registry, id, cmd),

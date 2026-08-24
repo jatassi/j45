@@ -84,7 +84,7 @@ export const SessionHandlersLive: Layer.Layer<
           return yield* liveSessions.start({
             host: new Participant({ userId: user.id, displayName: user.displayName }),
             // The source workout, and whether the session runs an overlay of
-            // it rather than the stored plan itself.
+            // that workout in place of the stored plan.
             workoutId: library.id,
             reflowLaunched: reflow !== undefined,
             workoutName: library.workout.name,

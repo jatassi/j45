@@ -33,9 +33,9 @@ import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
 
 /**
- * A live session's link back to the library workout it was started from: the
+ * A live session's link back to the library workout that it started from: the
  * id on every lobby summary, the reverse lookup from that id to the sessions
- * tracking it, and the launch-time reflow that deliberately tracks nothing.
+ * that run it, and the launch-time reflow that tracks nothing.
  *
  * Two seams, both public: `LiveSessions` directly for the registry behaviour,
  * and `SessionRpcs` through `RpcTest.makeClient` for the handler wiring — the
@@ -129,15 +129,21 @@ describe('a live session and its source workout', () => {
       const two = yield* startTracking(svc, shared, 'Shared')
       const unrelated = yield* startTracking(svc, other, 'Other')
 
-      const tracking = yield* svc.sessionsTracking(shared)
-      expect(new Set(tracking.map((summary) => summary.id))).toEqual(new Set([one.id, two.id]))
-      expect(tracking.map((summary) => summary.id)).not.toContain(unrelated.id)
+      const found = yield* svc.sessionsOfWorkout(shared)
+      expect(new Set(found.tracking.map((summary) => summary.id))).toEqual(
+        new Set([one.id, two.id]),
+      )
+      expect(found.tracking.map((summary) => summary.id)).not.toContain(unrelated.id)
+      expect(found.reflowLaunched).toEqual([])
 
-      expect(yield* svc.sessionsTracking(workoutId('workout-none'))).toEqual([])
+      expect(yield* svc.sessionsOfWorkout(workoutId('workout-none'))).toEqual({
+        tracking: [],
+        reflowLaunched: [],
+      })
     }).pipe(Effect.provide(LiveSessionsLive.pipe(Layer.provideMerge(SqlTestLive)))),
   )
 
-  it.effect('a reflow-launched session names its source workout but tracks nothing', () =>
+  it.effect('a reflow-launched session holds its source id but tracks nothing', () =>
     Effect.gen(function* () {
       const svc = yield* LiveSessions
       const source = workoutId('workout-reflowed')
@@ -151,9 +157,13 @@ describe('a live session and its source workout', () => {
         compiled: compile(workout),
         reflowLaunched: true,
       })
+      const plain = yield* startTracking(svc, source, 'Reflowed')
 
+      // Both started from the same workout, and the lookup tells them apart.
       expect(summary.workoutId).toBe(source)
-      expect(yield* svc.sessionsTracking(source)).toEqual([])
+      const found = yield* svc.sessionsOfWorkout(source)
+      expect(found.tracking.map((each) => each.id)).toEqual([plain.id])
+      expect(found.reflowLaunched.map((each) => each.id)).toEqual([summary.id])
     }).pipe(Effect.provide(LiveSessionsLive.pipe(Layer.provideMerge(SqlTestLive)))),
   )
 
@@ -188,10 +198,11 @@ describe('a live session and its source workout', () => {
       expect(reflowSummary.workoutId).toBe(overlaid.id)
 
       const liveSessions = yield* LiveSessions
-      expect((yield* liveSessions.sessionsTracking(plain.id)).map((s) => s.id)).toEqual([
-        plainSummary.id,
-      ])
-      expect(yield* liveSessions.sessionsTracking(overlaid.id)).toEqual([])
+      const fromPlain = yield* liveSessions.sessionsOfWorkout(plain.id)
+      expect(fromPlain.tracking.map((each) => each.id)).toEqual([plainSummary.id])
+      const fromOverlaid = yield* liveSessions.sessionsOfWorkout(overlaid.id)
+      expect(fromOverlaid.tracking).toEqual([])
+      expect(fromOverlaid.reflowLaunched.map((each) => each.id)).toEqual([reflowSummary.id])
     }).pipe(Effect.provide(TestServicesLive)),
   )
 })

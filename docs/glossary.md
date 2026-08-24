@@ -43,6 +43,11 @@ unrecorded wherever they fit.
   clock, participants), synced to all joined phones. Ephemeral; only its
   completion record persists. (Login state is never called a "session" bare —
   code and schema say `AuthSession` / `auth_sessions`.)
+- **Source workout** — the library Workout that a Session started from. The
+  Session keeps its `WorkoutId`, and the server can find every live Session
+  that tracks one Workout. A Session that started with a launch-time Reflow
+  overlay keeps the id, but tracks nothing: its compiled plan was never in the
+  library.
 - **Glass chrome** — persistent UI furniture rendered in the liquid-glass
   material: the bottom tab bar, sticky headers, overlays, and control docks.
   Content cards stay opaque — chrome is one half of glass's decided role.
