@@ -21,6 +21,21 @@ bun run test     # vitest
 Linting is **oxlint**, not ESLint. Rules live in `.oxlintrc.json`;
 import sorting is a Prettier plugin (`bun run format`).
 
+## Writing guidelines
+
+### Style
+
+Writing should adapt principles defined in **ASD-STE100** Simplified Technical English. Apply this style to:
+- Claude's responses to the user
+- Documentation
+- Code comments
+- Specs, issues, comments, reports
+
+## Git hygiene
+
+The goal is to keep the primary checkout on `main` branch when possible, and to keep `main` clean. Use worktrees to avoid dirtying primary checkout, then merge to main when ready. Always clean up worktrees after work is complete. Prefer harness-provided worktree tools over ad-hoc worktree management methods. Push frequently.
+
+
 ## Subagents
 
 When spawning subagents, always include the model name in brackets at the beginning
