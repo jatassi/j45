@@ -37,12 +37,15 @@ const applyRename = (handle: SessionHandle, name: string): Effect.Effect<void> =
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const state = yield* SubscriptionRef.get(handle.stateRef)
-      if (state.workoutName === name) {
+      // A done session takes no more changes. Its plan is frozen, and the
+      // completion row must record the plan that was in force while the
+      // timer was live — not a change that came after the last rep.
+      if (state.timer._tag === 'done' || state.workoutName === name) {
         return
       }
-      // Only the name changes. A rename raises no plan-changed notice: the
-      // new name is already on screen, and a notice for it would teach
-      // participants to ignore the one that matters when stations change.
+      // Only the name changes. A rename raises no plan-changed notice. The
+      // new name is already on screen. A notice for a rename would make
+      // participants ignore the notice that matters, when stations change.
       yield* SubscriptionRef.set(
         handle.stateRef,
         withState(state, { serverNow: now, workoutName: name }),
@@ -51,19 +54,13 @@ const applyRename = (handle: SessionHandle, name: string): Effect.Effect<void> =
   )
 
 /**
- * One change, applied to one session that tracks the changed workout.
- *
- * `renamed` is the only kind of change today, so this reads as a direct
- * call. A second kind makes it a `switch` on `change._tag`, with one
- * `apply…` function for each kind.
- */
-const applyToSession = (handle: SessionHandle, change: PlanChange): Effect.Effect<void> =>
-  applyRename(handle, change.name)
-
-/**
  * Applies one plan change to every live session that tracks the changed
- * workout. A session that ends between the lookup and the apply is skipped
- * rather than failing the change — it has nothing left to update.
+ * workout. A session that ends between the lookup and the apply is skipped.
+ * It has nothing left to update.
+ *
+ * `renamed` is the only kind of change today, so the apply below is a direct
+ * call. A second kind makes it a `switch` on `change._tag`, with one `apply…`
+ * function for each kind.
  */
 export const applyPlanChange = (registry: Registry, change: PlanChange): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -72,7 +69,7 @@ export const applyPlanChange = (registry: Registry, change: PlanChange): Effect.
       tracking,
       (summary) =>
         Effect.flatMap(getHandle(registry, summary.id), (handle) =>
-          applyToSession(handle, change),
+          applyRename(handle, change.name),
         ).pipe(Effect.ignore),
       { discard: true },
     )

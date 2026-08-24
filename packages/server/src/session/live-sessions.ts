@@ -427,11 +427,11 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
     const completionsRepo = yield* CompletionsRepo
     const registry: Registry = { sessions, layerScope, completionsRepo }
 
-    // The consuming half of the plan-changed seam: the library announces a
-    // change, this registry applies it to the sessions running that plan.
-    // The arrow points this way only — `library/` never sees `LiveSessions`.
+    // The consuming half of the plan-changed seam. The library announces a
+    // change, and this registry applies it to the sessions that run that
+    // plan. `library/` has no import of `LiveSessions`.
     const planChanges = yield* PlanChanges
-    yield* planChanges.consumeWith((change) => applyPlanChange(registry, change))
+    yield* planChanges.subscribe((change) => applyPlanChange(registry, change))
 
     return {
       start: (params: StartParams) => start(registry, params),

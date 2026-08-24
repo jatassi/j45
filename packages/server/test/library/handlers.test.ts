@@ -52,6 +52,9 @@ const TestServicesLive = Layer.mergeAll(
   AuthSessions.Default,
   WorkoutsRepo.Default,
   AuthMiddlewareLive.pipe(Layer.provide(Layer.mergeAll(AuthSessions.Default, UserRepo.Default))),
+  // `PlanChanges` is all that the rename announcement adds to this layer.
+  // There is no `LiveSessions` here, and the layer still builds: the library
+  // handlers do not depend on the live-session service.
   LibraryHandlersLive.pipe(
     Layer.provide(Layer.mergeAll(WorkoutsRepo.Default, PlanChanges.Default)),
   ),

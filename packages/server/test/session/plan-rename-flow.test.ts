@@ -23,6 +23,7 @@ import * as Layer from 'effect/Layer'
 import * as Queue from 'effect/Queue'
 import * as Schema from 'effect/Schema'
 import * as Stream from 'effect/Stream'
+import * as TestClock from 'effect/TestClock'
 
 import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { SESSION_COOKIE_NAME } from '../../src/auth/cookie.js'
@@ -186,6 +187,25 @@ describe('renaming a workout and its live sessions', () => {
 
       const svc = yield* LiveSessions
       expect((yield* svc.snapshot(overlaid.id)).workoutName).toBe('Old')
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
+  it.scoped('a session whose timer is done keeps the name it finished under', () =>
+    Effect.gen(function* () {
+      const { headers, library, sessions } = yield* asOwner
+      const created = yield* library.CreateWorkout({ workout: makeWorkout('Old') }, { headers })
+      const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
+
+      const svc = yield* LiveSessions
+      // Ready 5s, work 10s, rest 5s, work 10s — 30s runs the timer to done.
+      yield* TestClock.adjust('30 seconds')
+      expect((yield* svc.snapshot(started.id)).timer._tag).toBe('done')
+
+      yield* library.RenameWorkout({ id: created.id, name: 'New' }, { headers })
+
+      // The plan freezes at done, so a later rename never reaches the
+      // session — and never reaches the completion row it will write.
+      expect((yield* svc.snapshot(started.id)).workoutName).toBe('Old')
     }).pipe(Effect.provide(FlowLive)),
   )
 
