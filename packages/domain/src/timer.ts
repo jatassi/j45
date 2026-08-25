@@ -19,13 +19,24 @@ export type TimerState = typeof TimerState.Type
 const durationAt = (segments: readonly Segment[], index: number): number =>
   segments[index]?.durationMillis ?? 0
 
-/** Enter `segmentIndex` at full duration, anchored to `nowMillis`. */
-const enter = (segmentIndex: number, segments: readonly Segment[], nowMillis: number): TimerState =>
+/**
+ * Enter `segmentIndex` at full duration, anchored to `nowMillis`.
+ *
+ * Exported because a deadline must sometimes be recomputed from the current
+ * instant rather than chained off the previous one — applying a plan change
+ * to a running session is the case, since the segment it enters has a
+ * duration the old chain knew nothing about.
+ */
+export const enterSegment = (
+  segmentIndex: number,
+  segments: readonly Segment[],
+  nowMillis: number,
+): TimerState =>
   new TimerRunning({ segmentIndex, endsAtMillis: nowMillis + durationAt(segments, segmentIndex) })
 
 /** Begin a compiled workout at its first (`ready`) segment. */
 export const start = (segments: readonly Segment[], nowMillis: number): TimerState =>
-  enter(0, segments, nowMillis)
+  enterSegment(0, segments, nowMillis)
 
 /**
  * While running and the deadline has passed, enter the next segment —
@@ -83,7 +94,9 @@ export const skip = (
     return state
   }
   const nextIndex = state.segmentIndex + 1
-  return nextIndex >= segments.length ? new TimerDone({}) : enter(nextIndex, segments, nowMillis)
+  return nextIndex >= segments.length
+    ? new TimerDone({})
+    : enterSegment(nextIndex, segments, nowMillis)
 }
 
 /**
@@ -96,12 +109,14 @@ export const prev = (
   nowMillis: number,
 ): TimerState => {
   if (state._tag === 'done') {
-    return enter(segments.length - 1, segments, nowMillis)
+    return enterSegment(segments.length - 1, segments, nowMillis)
   }
   if (state._tag !== 'running' && state._tag !== 'paused') {
     return state
   }
-  return state.segmentIndex === 0 ? state : enter(state.segmentIndex - 1, segments, nowMillis)
+  return state.segmentIndex === 0
+    ? state
+    : enterSegment(state.segmentIndex - 1, segments, nowMillis)
 }
 
 /** Any state → idle. */

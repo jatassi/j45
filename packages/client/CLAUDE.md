@@ -56,10 +56,18 @@ Apply on every screen:
 | Empty result       | `empty` with a CTA                          |
 | Query failure      | inline `alert` + retry button               |
 | Command failure    | `sonner` toast (nothing silently swallowed) |
+| Server-pushed news | `sonner` toast, no sound (see below)        |
 | Destructive action | `alert-dialog` confirm                      |
 
 Loading and failure must never look the same. Success stays quiet unless the
 outcome is otherwise invisible on-screen.
+
+"Server-pushed news" is the narrow case where the server changes something
+under the user without them asking: today only a plan change reaching a live
+session. Raise it from a monotonic counter on the snapshot, never by
+comparing one snapshot with the next — a snapshot is republished for reasons
+that are not news. The player adds no sound to it: every beep it makes
+carries timing meaning.
 
 ## Glass: positioned wrapper gotcha
 

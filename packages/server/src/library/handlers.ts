@@ -5,10 +5,13 @@ import {
   LibraryRpcs,
   type LibraryWorkout,
   type UserId,
+  type Workout,
+  type WorkoutConflict,
   type WorkoutId,
   type WorkoutNotFound,
 } from '@j45/domain'
 import * as Arr from 'effect/Array'
+import type * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import type * as Layer from 'effect/Layer'
 import * as Order from 'effect/Order'
@@ -71,6 +74,48 @@ const renameAndAnnounce = (
       name: renamed.workout.name,
     })
     return renamed
+  })
+
+/** `UpdateWorkout`'s target: whose workout, which one, and the version read. */
+type UpdateInput = {
+  readonly id: WorkoutId
+  readonly workout: Workout
+  readonly expectedUpdatedAt: DateTime.Utc
+  readonly ownerId: UserId
+  readonly changedBy: string
+}
+
+/**
+ * Saves new content into the caller's own workout, then announces it — the
+ * content twin of `renameAndAnnounce`, and the same rules hold.
+ *
+ * `expectedUpdatedAt` is the version the caller read. The repo makes it a
+ * precondition, so a save built on a stale read fails `WorkoutConflict`
+ * instead of clobbering whoever wrote in between.
+ *
+ * The announcement follows the write and carries the stored plan back from
+ * the repo, so a live session never runs a plan the store does not hold.
+ * `changedBy` is who saved it, which the participant's notice names.
+ */
+const updateAndAnnounce = (
+  workoutsRepo: WorkoutsRepo,
+  planChanges: PlanChanges,
+  input: UpdateInput,
+): Effect.Effect<LibraryWorkout, WorkoutNotFound | WorkoutConflict | SqlError> =>
+  Effect.gen(function* () {
+    const updated = yield* workoutsRepo.update({
+      id: input.id,
+      ownerId: input.ownerId,
+      workout: input.workout,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    })
+    yield* planChanges.publish({
+      _tag: 'edited',
+      workoutId: updated.id,
+      workout: updated.workout,
+      changedBy: input.changedBy,
+    })
+    return updated
   })
 
 /**
@@ -137,17 +182,15 @@ export const LibraryHandlersLive: Layer.Layer<
           return yield* workoutsRepo.insert(user.id, workout)
         }).pipe(Effect.catchTag('SqlError', asDefect)),
 
-      // `updatedAt` is the version the caller read: the repo makes it a
-      // precondition, so a save built on a stale read fails `WorkoutConflict`
-      // instead of clobbering whoever wrote in between.
       UpdateWorkout: ({ id, workout, updatedAt }) =>
         Effect.gen(function* () {
           const user = yield* CurrentUser
-          return yield* workoutsRepo.update({
+          return yield* updateAndAnnounce(workoutsRepo, planChanges, {
             id,
-            ownerId: user.id,
             workout,
             expectedUpdatedAt: updatedAt,
+            ownerId: user.id,
+            changedBy: user.displayName,
           })
         }).pipe(Effect.catchTag('SqlError', asDefect)),
     }

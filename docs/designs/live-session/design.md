@@ -33,6 +33,15 @@ Depends on `plan-library` (sessions start from a library workout) and
 lives there; this feature reuses it, per the architecture's player-kit
 contract).
 
+> **Amended by `live-plan-sync`.** This document first said that a session's
+> compiled workout "changes never". That is no longer true, and the reversal
+> is deliberate: a running session is a live view of its source workout, not a
+> frozen instantiation of it. An edit to the workout recompiles into every
+> session that tracks it and lands at the next segment boundary, with the
+> timer re-entering at the same work ordinal. `planRevision` counts the
+> changes that landed, so a client can raise one notice for each. A session
+> launched with a reflow overlay is exempt: its plan was never in the library.
+
 ## Domain additions (`packages/domain/src/session.ts`)
 
 Pure Schema; package deps stay exactly `effect` + `@effect/rpc`.
@@ -49,10 +58,12 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
   id: SessionId,
   host: Participant,
   workoutName: Schema.NonEmptyTrimmedString,
-  compiled: CompiledWorkout,          // sent in every snapshot; a few KB, changes never
+  compiled: CompiledWorkout,          // sent in every snapshot; a few KB
   timer: TimerState,                  // endsAtMillis is server-epoch absolute
   serverNow: Schema.Number,           // epoch millis at emit — client computes clock offset
   participants: Schema.Array(Participant),
+  planRevision: Schema.Int,           // rises only when a plan change lands
+  planChangedBy: Schema.NullOr(Schema.String), // who made that change
 }) {}
 
 export class SessionSummary extends Schema.Class<SessionSummary>('SessionSummary')({

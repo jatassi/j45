@@ -3,6 +3,7 @@ import {
   SessionNotFound,
   SessionState,
   SessionSummary,
+  start as startTimer,
   type CompiledWorkout,
   type Participant,
   type SessionId,
@@ -73,12 +74,18 @@ export type SessionHandle = {
   // source, but it tracks nothing, so `sessionsTracking` omits it.
   readonly workoutId: WorkoutId
   readonly reflowLaunched: boolean
-  // The as-run plan. The workout *name* is deliberately absent here: a
-  // rename changes it while the session runs, and `stateRef` holds the one
-  // current name that the snapshot, the lobby summary, and any completion
-  // row all read.
-  readonly workout: Workout
-  readonly compiled: CompiledWorkout
+  // The as-run plan: the last plan applied while the timer was still live.
+  // A `Ref`, not a value, because a session is a live view of its workout —
+  // an applied edit replaces it. The compiled form of the same plan lives on
+  // `stateRef` alone, so the snapshot participants hold and the plan the
+  // ticker runs are one value and can never disagree. The workout *name* is
+  // likewise absent here: `stateRef` holds the one current name that the
+  // snapshot, the lobby summary, and any completion row all read.
+  readonly workout: Ref.Ref<Workout>
+  // A content edit that waits for the next segment boundary. No interval is
+  // cut short: an edit stays here until the next timer move that changes
+  // segment, and that move puts it in force.
+  readonly pending: Ref.Ref<Option.Option<PendingPlan>>
   readonly startedAt: DateTime.Utc
   readonly stateRef: SubscriptionRef.SubscriptionRef<SessionState>
   readonly rawSubs: SubscriptionRef.SubscriptionRef<number>
@@ -105,6 +112,18 @@ export type SessionHandle = {
   readonly scope: Scope.CloseableScope
 }
 
+/**
+ * A content edit that is accepted, but not yet in force: it waits for the
+ * next segment boundary. `compiled` is built once, when the edit arrives,
+ * so the boundary does no work that can be done early.
+ */
+export type PendingPlan = {
+  readonly workout: Workout
+  readonly compiled: CompiledWorkout
+  /** Who saved the edit, carried onto the snapshot for the notice to name. */
+  readonly changedBy: string
+}
+
 /** The shared registry every session actor is filed under. */
 export type Registry = {
   readonly sessions: Ref.Ref<HashMap.HashMap<SessionId, SessionHandle>>
@@ -121,6 +140,24 @@ export type StartParams = {
   readonly workout: Workout
   readonly compiled: CompiledWorkout
 }
+
+/**
+ * The snapshot a fresh session opens on: the compiled plan it starts from,
+ * its timer at the ready segment, nobody present yet, and no plan change
+ * applied — so a client that joins at once has nothing to notice.
+ */
+export const initialState = (id: SessionId, params: StartParams, now: number): SessionState =>
+  new SessionState({
+    id,
+    host: params.host,
+    workoutName: params.workoutName,
+    compiled: params.compiled,
+    timer: startTimer(params.compiled.segments, now),
+    serverNow: now,
+    participants: [],
+    planRevision: 0,
+    planChangedBy: null,
+  })
 
 /** The session actor filed under `id`, or `SessionNotFound` if there is none. */
 export const getHandle = (
@@ -219,10 +256,10 @@ export const timersEqual = (a: TimerState, b: TimerState): boolean => {
 }
 
 /**
- * A fresh snapshot with a new `serverNow` plus whichever of `timer` /
- * `participants` / `workoutName` the caller overrides — everything else
- * carried from `state`. Each publish path (a timer advance, a presence
- * change, an applied plan change) varies exactly one of them.
+ * A fresh snapshot with a new `serverNow` plus whichever fields the caller
+ * overrides — everything else carried from `state`. A timer advance varies
+ * `timer`; a presence change varies `participants`; a rename varies
+ * `workoutName`; an applied content edit varies the rest together.
  */
 export const withState = (
   state: SessionState,
@@ -231,16 +268,24 @@ export const withState = (
     readonly timer?: TimerState
     readonly participants?: readonly Participant[]
     readonly workoutName?: string
+    readonly compiled?: CompiledWorkout
+    // The two plan-change fields travel together or not at all, so a
+    // snapshot can never say "changed by nobody" at a raised revision.
+    readonly planChange?: { readonly revision: number; readonly changedBy: string }
   },
 ): SessionState =>
   new SessionState({
     id: state.id,
     host: state.host,
     workoutName: over.workoutName ?? state.workoutName,
-    compiled: state.compiled,
+    compiled: over.compiled ?? state.compiled,
     timer: over.timer ?? state.timer,
     serverNow: over.serverNow,
     participants: over.participants ?? state.participants,
+    // Carried, never derived: a join, a leave, and a timer advance all
+    // republish the snapshot, and none of them is a plan change.
+    planRevision: over.planChange?.revision ?? state.planRevision,
+    planChangedBy: over.planChange?.changedBy ?? state.planChangedBy,
   })
 
 export const addPresence =
@@ -276,13 +321,19 @@ export const participantsOf = (
     )
 
 /**
+ * The segment a timer sits in, or `undefined` when it is idle or done. The
+ * one place that reads a segment index off a timer state.
+ */
+export const segmentIndexOf = (timer: TimerState): number | undefined =>
+  timer._tag === 'running' || timer._tag === 'paused' ? timer.segmentIndex : undefined
+
+/**
  * Whether a timer state counts as having progressed past the ready segment —
  * any running/paused segment beyond index 0, or a finished workout. A session
  * that only ever sat at the ready segment never progressed.
  */
 export const isProgressed = (timer: TimerState): boolean =>
-  timer._tag === 'done' ||
-  ((timer._tag === 'running' || timer._tag === 'paused') && timer.segmentIndex >= 1)
+  timer._tag === 'done' || (segmentIndexOf(timer) ?? 0) >= 1
 
 /**
  * The index of the furthest segment entered for a timer position (the ready
@@ -291,13 +342,11 @@ export const isProgressed = (timer: TimerState): boolean =>
  * ready segment for totality.
  */
 const furthestSegment = (timer: TimerState, totalSegments: number): number => {
-  if (timer._tag === 'running' || timer._tag === 'paused') {
-    return timer.segmentIndex
+  const segmentIndex = segmentIndexOf(timer)
+  if (segmentIndex !== undefined) {
+    return segmentIndex
   }
-  if (timer._tag === 'done') {
-    return Math.max(0, totalSegments - 1)
-  }
-  return 0
+  return timer._tag === 'done' ? Math.max(0, totalSegments - 1) : 0
 }
 
 /**
