@@ -29,6 +29,7 @@ import { PlanChanges } from '../../src/library/plan-changes.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
+import { lobbyNow } from './plan-flow-harness.js'
 
 // A deterministic fixture workout. Compiled it becomes four segments with
 // round, self-checkable deadlines (TestClock starts at epoch 0):
@@ -280,12 +281,12 @@ describe('LiveSessions', () => {
 
       const { scope } = yield* openWatch(svc, id, bob)
       expect(participantIds(yield* svc.snapshot(id))).toContain(bob.userId)
-      expect((yield* svc.list())[0]?.participantCount).toBe(1)
+      expect((yield* lobbyNow(svc))[0]?.participantCount).toBe(1)
 
       // The scope's finalizer removes bob when the stream releases.
       yield* Scope.close(scope, Exit.void)
       expect((yield* svc.snapshot(id)).participants).toHaveLength(0)
-      expect((yield* svc.list())[0]?.participantCount).toBe(0)
+      expect((yield* lobbyNow(svc))[0]?.participantCount).toBe(0)
     }).pipe(Effect.provide(TestLive)),
   )
 
@@ -301,7 +302,7 @@ describe('LiveSessions', () => {
 
         // Deduped: bob appears once despite two live subscriptions.
         expect((yield* svc.snapshot(id)).participants).toHaveLength(1)
-        expect((yield* svc.list())[0]?.participantCount).toBe(1)
+        expect((yield* lobbyNow(svc))[0]?.participantCount).toBe(1)
 
         // One subscription released, but bob's other one still holds him in.
         yield* Scope.close(w2.scope, Exit.void)
@@ -353,7 +354,7 @@ describe('LiveSessions', () => {
         // (alice is still a non-departed roster member).
         yield* svc.leaveSession(id, bob.userId)
         expect(Exit.isFailure(yield* Effect.exit(bobW.pull))).toBe(true)
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
         expect(participantIds(yield* svc.snapshot(id))).toEqual([alice.userId])
 
         // alice (the host, the last ever-participant) leaves: presence empty and
@@ -363,7 +364,7 @@ describe('LiveSessions', () => {
         yield* Scope.close(aliceW.scope, Exit.void)
         yield* Scope.close(bobW.scope, Exit.void)
 
-        expect(yield* svc.list()).toHaveLength(0)
+        expect(yield* lobbyNow(svc)).toHaveLength(0)
         expect(Exit.isFailure(yield* Effect.exit(svc.snapshot(id)))).toBe(true)
         expect(Exit.isFailure(yield* Effect.exit(svc.leaveSession(id, alice.userId)))).toBe(true)
       }).pipe(Effect.provide(TestLive)),
@@ -398,7 +399,7 @@ describe('LiveSessions', () => {
         // alice's lone live subscription still holds rawSubs above zero, so 90s
         // does not GC — proof the double release did not drive rawSubs to zero.
         yield* TestClock.adjust('90 seconds')
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
         yield* Scope.close(a.scope, Exit.void)
       }).pipe(Effect.provide(TestLive)),
   )
@@ -413,11 +414,11 @@ describe('LiveSessions', () => {
 
       // 59s of abandonment is not yet enough.
       yield* TestClock.adjust('59 seconds')
-      expect(yield* svc.list()).toHaveLength(1)
+      expect(yield* lobbyNow(svc)).toHaveLength(1)
 
       // Crossing 60 consecutive seconds ends the session.
       yield* TestClock.adjust('1 seconds')
-      expect(yield* svc.list()).toHaveLength(0)
+      expect(yield* lobbyNow(svc)).toHaveLength(0)
       expect(Exit.isFailure(yield* Effect.exit(svc.snapshot(id)))).toBe(true)
     }).pipe(Effect.provide(TestLive)),
   )
@@ -433,14 +434,14 @@ describe('LiveSessions', () => {
       // A live subscriber keeps the session alive well past 60s.
       const { scope } = yield* openWatch(svc, id, alice)
       yield* TestClock.adjust('90 seconds')
-      expect(yield* svc.list()).toHaveLength(1)
+      expect(yield* lobbyNow(svc)).toHaveLength(1)
       yield* Scope.close(scope, Exit.void)
 
       // Only after the last subscriber leaves does a fresh 60s window end it.
       yield* TestClock.adjust('59 seconds')
-      expect(yield* svc.list()).toHaveLength(1)
+      expect(yield* lobbyNow(svc)).toHaveLength(1)
       yield* TestClock.adjust('1 seconds')
-      expect(yield* svc.list()).toHaveLength(0)
+      expect(yield* lobbyNow(svc)).toHaveLength(0)
     }).pipe(Effect.provide(TestLive)),
   )
 
@@ -450,13 +451,13 @@ describe('LiveSessions', () => {
       yield* Effect.gen(function* () {
         const svc = yield* LiveSessions
         yield* startFixture(svc)
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
       }).pipe(Effect.provide(TestLive))
 
       // A freshly built layer starts empty — sessions are in-memory only.
       yield* Effect.gen(function* () {
         const svc = yield* LiveSessions
-        expect(yield* svc.list()).toHaveLength(0)
+        expect(yield* lobbyNow(svc)).toHaveLength(0)
       }).pipe(Effect.provide(TestLive))
     }),
   )

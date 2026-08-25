@@ -204,8 +204,8 @@ describe('SessionHandlersLive', () => {
         const startTag = tagOf(
           yield* Effect.either(client.StartSession({ workoutId: workout.id }, { headers })),
         )
-        const listTag = tagOf(
-          yield* Effect.either(client.ListActiveSessions(undefined, { headers })),
+        const lobbyTag = tagOf(
+          yield* Effect.either(Stream.runHead(client.WatchActiveSessions(undefined, { headers }))),
         )
         const watchTag = tagOf(
           yield* Effect.either(Stream.runHead(client.WatchSession({ id: sessionId }, { headers }))),
@@ -217,7 +217,7 @@ describe('SessionHandlersLive', () => {
         )
 
         expect(startTag).toBe('Unauthorized')
-        expect(listTag).toBe('Unauthorized')
+        expect(lobbyTag).toBe('Unauthorized')
         expect(watchTag).toBe('Unauthorized')
         expect(commandTag).toBe('Unauthorized')
       }

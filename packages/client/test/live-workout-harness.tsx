@@ -1,6 +1,4 @@
-import * as React from 'react'
-
-import { RegistryProvider, Result, useAtomRefresh } from '@effect-atom/atom-react'
+import { RegistryProvider, Result } from '@effect-atom/atom-react'
 import {
   Flow,
   LibraryWorkout,
@@ -20,16 +18,15 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { act, render } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
-import type * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
 
 import { LibraryScreen } from '@/components/library-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 import { EditWorkoutScreen, ReflowWorkoutScreen } from '@/components/workout-editor-screen'
-import { listActiveSessionsAtom } from '@/lib/live-workout'
+import { useActiveSessions } from '@/lib/live-workout'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 /**
@@ -40,9 +37,7 @@ import { ServerRpcClient } from '@/lib/rpc-client'
  * growing a second copy of it.
  */
 
-export type Handlers = Partial<
-  Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>
->
+export type Handlers = Partial<Record<string, (payload: unknown) => unknown>>
 
 const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
 
@@ -71,7 +66,7 @@ export const athletica = new LibraryWorkout({
   updatedAt: seededAt,
 })
 
-/** One lobby row, as `ListActiveSessions` returns it. */
+/** One lobby row, as the lobby feed publishes it. */
 export const liveSessionOf = (id: string, workoutId: WorkoutId) =>
   new SessionSummary({
     id: Schema.decodeSync(SessionId)(id),
@@ -86,34 +81,15 @@ export const liveSessionOf = (id: string, workoutId: WorkoutId) =>
 export const libraryWorkoutOf = (workout: Workout) =>
   new LibraryWorkout({ id: athleticaId, workout, createdAt: seededAt, updatedAt: seededAt })
 
-let refreshSessions: (() => void) | undefined
-
 /**
- * Reads the lobby again, the way home's 5s poll does. A test calls it to
- * change the lobby under a screen that is already open — a session that
- * starts, or one that ends. Render with `pollsSessions` first.
- */
-export const refreshActiveSessions = () => {
-  if (refreshSessions === undefined) {
-    throw new Error('refreshActiveSessions needs renderApp with pollsSessions')
-  }
-  act(refreshSessions)
-}
-
-/**
- * Holds the lobby atom open for the whole render, so a test can refresh it.
- * It is opt-in: it gives the atom a longer life than any screen has in the
- * app, and no test must get that for free.
+ * Holds the lobby subscription open for the whole render and renders what it
+ * holds, so a test can wait for a published snapshot to land. It is opt-in:
+ * it gives the feed a longer life than any screen has in the app, and no test
+ * must get that for free.
  */
 function ActiveSessionsProbe() {
-  const refresh = useAtomRefresh(listActiveSessionsAtom)
-  React.useEffect(() => {
-    refreshSessions = refresh
-    return () => {
-      refreshSessions = undefined
-    }
-  }, [refresh])
-  return null
+  const sessions = useActiveSessions()
+  return <div data-testid="lobby-probe" data-count={sessions.length} />
 }
 
 function makeFakeRuntime(handlers: Handlers) {
@@ -129,8 +105,8 @@ function makeFakeRuntime(handlers: Handlers) {
 
 /** What a render can turn on beyond the routes themselves. */
 export type RenderOptions = {
-  /** Keep the lobby atom open, so `refreshActiveSessions` can read it again. */
-  readonly pollsSessions?: boolean
+  /** Keep the lobby subscription open, and render what it holds. */
+  readonly probesSessions?: boolean
 }
 
 /** Mounts library, detail, editor and launch-mode routes over memory history. */
@@ -164,7 +140,7 @@ export function renderApp(handlers: Handlers, initialPath: string, options: Rend
 
   render(
     <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
-      {options.pollsSessions === true ? <ActiveSessionsProbe /> : undefined}
+      {options.probesSessions === true ? <ActiveSessionsProbe /> : undefined}
       <RouterProvider router={testRouter} />
     </RegistryProvider>,
   )

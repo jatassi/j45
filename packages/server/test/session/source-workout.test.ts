@@ -32,6 +32,7 @@ import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
+import { lobbyNow } from './plan-flow-harness.js'
 
 /**
  * A live session's link back to the library workout that it started from: the
@@ -117,7 +118,7 @@ describe('a live session and its source workout', () => {
       yield* startTracking(svc, second, 'Second')
 
       expect(started.workoutId).toBe(first)
-      const listed = yield* svc.list()
+      const listed = yield* lobbyNow(svc)
       expect(new Set(listed.map((summary) => summary.workoutId))).toEqual(new Set([first, second]))
     }).pipe(Effect.provide(LiveSessionsLive.pipe(Layer.provideMerge(SqlTestLive)))),
   )

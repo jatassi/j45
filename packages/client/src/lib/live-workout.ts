@@ -1,23 +1,130 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import type { SessionSummary, WorkoutId } from '@j45/domain'
+import * as Duration from 'effect/Duration'
+import * as Effect from 'effect/Effect'
+import * as Stream from 'effect/Stream'
 
 import { ServerRpcClient } from '@/lib/rpc-client'
 
+/** The flat rpc client `ServerRpcClient` resolves to. */
+type LobbyClient = Effect.Effect.Success<typeof ServerRpcClient>
+
+/** Exponential reconnect backoff, capped at 8s so a long outage keeps retrying. */
+const reconnectDelay = (attempt: number): Duration.Duration =>
+  Duration.millis(Math.min(500 * 2 ** attempt, 8000))
+
 /**
- * Active live sessions (`ListActiveSessions`), hoisted to module scope like
- * every other rpc atom in this codebase — a stable atom identity across
- * re-renders. It lives here, outside any component file, because three
- * screens now read the same list: home (its hero fold and 5s poll), the
- * workout detail screen, and the editor. They must share one atom identity,
- * and no component file may export a non-component value — this project's
- * `react/only-export-components` Fast Refresh guard disallows it.
+ * The retrying lobby stream. Every element is the whole set of live sessions
+ * as the server holds it — the first one on subscribe, then one more per
+ * change.
+ *
+ * The feed the server serves never fails and never stops while the server
+ * lives, so a stream that fails or stops here says one thing only: the
+ * transport went away. Both outcomes therefore lead to the same place — wait
+ * out the backoff, then subscribe again. The fresh first element is complete,
+ * so there is nothing to replay and no drift to repair.
+ *
+ * Failure is deliberately swallowed rather than carried. This is a background
+ * feed: home reads a feed that has said nothing as no live sessions, and
+ * never as an error that takes over the fold. Reconnection is the same shape
+ * the per-session watch feed uses (`lib/session.ts`), on purpose — one
+ * approach, not two.
+ */
+export const lobbyFeed = (
+  client: LobbyClient,
+  attempt: number,
+): Stream.Stream<readonly SessionSummary[]> =>
+  client('WatchActiveSessions', undefined).pipe(
+    Stream.catchAll(() => Stream.empty),
+    Stream.concat(
+      Stream.fromEffect(Effect.sleep(reconnectDelay(attempt))).pipe(
+        Stream.flatMap(() => lobbyFeed(client, attempt + 1)),
+      ),
+    ),
+  )
+
+/** Whether the page is in front of the user right now. */
+const documentIsVisible = (): boolean => globalThis.document.visibilityState === 'visible'
+
+/**
+ * Whether the document is visible, now and on every change.
+ *
+ * The listener is registered before the first value is read, so a change
+ * cannot slip between the two. `changes` drops a repeat, because a
+ * `visibilitychange` that does not in fact change the state must not restart
+ * the feed.
+ *
+ * The app watches this transition in two other places already — the player's
+ * audio unlock and its wake lock — for the same reason: a phone in a pocket
+ * must not be doing work.
+ */
+export const documentVisibility: Stream.Stream<boolean> = Stream.asyncPush<boolean>((emit) =>
+  Effect.acquireRelease(
+    Effect.sync(() => {
+      const listener = (): void => {
+        emit.single(documentIsVisible())
+      }
+      globalThis.document.addEventListener('visibilitychange', listener)
+      listener()
+      return listener
+    }),
+    (listener) =>
+      Effect.sync(() => {
+        globalThis.document.removeEventListener('visibilitychange', listener)
+      }),
+  ),
+).pipe(Stream.changes)
+
+/**
+ * The lobby feed as the app consumes it: live while the document is in front
+ * of the user, stood down while it is not.
+ *
+ * A hidden document holds no subscription at all. An always-live feed on
+ * every route is a real battery cost on a phone, and there is nobody to show
+ * a change to. The switch drops the subscription on hide and takes a fresh
+ * one on return, whose first element is the whole set — so what comes back is
+ * current, not what the page held when it went away.
+ */
+export const activeSessionsFeed = (
+  client: LobbyClient,
+  visibility: Stream.Stream<boolean>,
+): Stream.Stream<readonly SessionSummary[]> =>
+  visibility.pipe(
+    Stream.flatMap((visible) => (visible ? lobbyFeed(client, 0) : Stream.never), { switch: true }),
+  )
+
+/**
+ * The live sessions of the whole server, as one subscription — hoisted to
+ * module scope like every other rpc atom in this codebase, so its identity is
+ * stable across re-renders.
+ *
+ * It lives here, outside any component file, because several places read the
+ * same set: home (its hero fold), the workout detail screen, the editor, and
+ * the persistent tab bar. They share one atom identity and therefore one
+ * subscription — a second subscription for the same data could disagree with
+ * the first. No component file may export a non-component value either: this
+ * project's `react/only-export-components` Fast Refresh guard disallows it.
  *
  * Every lobby row carries the `WorkoutId` it runs, so the host's own client
  * already holds an exact count of the sessions a library write will reach.
  * The confirmation prompts read that count. There is deliberately no rpc for
  * it.
  */
-export const listActiveSessionsAtom = ServerRpcClient.query('ListActiveSessions', undefined)
+export const activeSessionsAtom = ServerRpcClient.runtime.atom(
+  Stream.unwrap(
+    Effect.map(ServerRpcClient, (client) => activeSessionsFeed(client, documentVisibility)),
+  ),
+)
+
+/**
+ * The live sessions the client holds right now.
+ *
+ * A feed that has not yet produced a value, and one that is failing, both
+ * read as no live sessions. That is the silent downgrade every reader of this
+ * set inherits: a background feed must never take over a screen.
+ */
+export const useActiveSessions = (): readonly SessionSummary[] =>
+  Result.getOrElse(useAtomValue(activeSessionsAtom), (): readonly SessionSummary[] => [])
 
 /**
  * How many of these live sessions run this workout.
@@ -64,16 +171,13 @@ export const liveDeleteWarning = (count: number): string =>
  * How many live sessions run `workoutId` right now, as the caller's client
  * already knows it.
  *
- * A read that has not answered yet, or one that failed, counts as no live
+ * A feed that has not answered yet, or one that failed, counts as no live
  * sessions — the same silent downgrade home makes. A confirmation prompt
  * protects the host from a surprise; it must never become the reason a write
  * cannot happen. The trade is deliberate and it has a cost: a host who saves
- * before the first answer arrives gets no prompt. Every screen that reads
- * this count starts the read when it mounts, long before the host can finish
- * an edit, so the window is small.
+ * before the first element arrives gets no prompt. Every screen that reads
+ * this count subscribes when it mounts, long before the host can finish an
+ * edit, so the window is small.
  */
-export const useLiveSessionCount = (workoutId: WorkoutId): number => {
-  const result = useAtomValue(listActiveSessionsAtom)
-  const sessions = Result.getOrElse(result, (): readonly SessionSummary[] => [])
-  return liveSessionCount(sessions, workoutId)
-}
+export const useLiveSessionCount = (workoutId: WorkoutId): number =>
+  liveSessionCount(useActiveSessions(), workoutId)

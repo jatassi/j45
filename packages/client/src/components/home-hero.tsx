@@ -52,9 +52,8 @@ function millisToNextMinute(startedAtMillis: number, nowMillis: number): number 
 /**
  * Whole minutes since `startedAt`, with a ticking source of its own.
  *
- * Home's 5s `ListActiveSessions` poll re-renders this line today. That is
- * incidental. A feed that stays quiet when nothing changes would freeze the
- * line, so the hero counts for itself.
+ * The lobby feed stays quiet while nothing about a session changes, so it
+ * would freeze this line. The hero therefore counts for itself.
  *
  * The hook reads the wall clock when it first renders, so the line is correct
  * immediately. It then re-reads on each whole-minute boundary. It uses one

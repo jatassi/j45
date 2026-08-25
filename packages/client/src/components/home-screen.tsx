@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useSceneSurface } from '@/glass/use-scene-surface'
 import { listHistoryAtom, pickHero, recentRows, startWorkoutAtom } from '@/lib/home'
 import { HOME_NOTICE_TEXT, homeNotice } from '@/lib/home-notice'
-import { listActiveSessionsAtom } from '@/lib/live-workout'
+import { useActiveSessions } from '@/lib/live-workout'
 import { cn } from '@/lib/utils'
 import { formatDuration, listWorkoutsAtom } from '@/lib/workouts'
 
@@ -270,30 +270,20 @@ function RecentSkeleton() {
 /**
  * Home dashboard (`/`): an ended-session notice when one sent the caller
  * here, the hero fold (live → start-last → browse), quick-start tiles, and a
- * recent list. Owns the `ListActiveSessions` 5s poll (silent
+ * recent list. Reads the shared `WatchActiveSessions` subscription (silent
  * failure → no-live pick), plus `listHistoryAtom` / `listWorkoutsAtom` for
  * pick + recent composition. Visible failure only for history/workouts.
  */
 export function HomeScreen() {
-  const sessionsResult = useAtomValue(listActiveSessionsAtom)
+  // The lobby feed never owns the fold: a feed that has said nothing, and one
+  // that is failing, both read as no live sessions (see `useActiveSessions`).
+  const sessions = useActiveSessions()
   const historyResult = useAtomValue(listHistoryAtom)
   const workoutsResult = useAtomValue(listWorkoutsAtom)
-  const refreshSessions = useAtomRefresh(listActiveSessionsAtom)
   const refreshHistory = useAtomRefresh(listHistoryAtom)
   const refreshWorkouts = useAtomRefresh(listWorkoutsAtom)
 
-  React.useEffect(() => {
-    const handle = globalThis.setInterval(() => {
-      refreshSessions()
-    }, 5000)
-    return () => {
-      globalThis.clearInterval(handle)
-    }
-  }, [refreshSessions])
-
   const data = Result.all({ history: historyResult, workouts: workoutsResult })
-  // Live poll never owns the fold: Initial and Failure both read as no sessions.
-  const sessions = Result.getOrElse(sessionsResult, (): readonly SessionSummary[] => [])
 
   const retryData = () => {
     refreshHistory()

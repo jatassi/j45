@@ -12,6 +12,8 @@ import App from '@/app'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import { router } from '@/router'
 
+import { emptyLobby } from './lobby-feed'
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -28,9 +30,7 @@ const TAB_CLEARANCE_CLASS = 'pb-[calc(6rem+env(safe-area-inset-bottom))]'
  * place of the real (websocket-backed) rpc client — the same fake-runtime
  * idiom `router-fallback.test.tsx` / `account-screen.test.tsx` use.
  */
-function makeFakeRuntime(
-  handlers: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>,
-) {
+function makeFakeRuntime(handlers: Partial<Record<string, (payload: unknown) => unknown>>) {
   const client = (tag: string, payload: unknown) => {
     const handler = handlers[tag]
     if (handler === undefined) {
@@ -71,7 +71,7 @@ describe('router.tsx tab-layout Outlet clearance', () => {
       )
 
       const fakeRuntime = makeFakeRuntime({
-        ListActiveSessions: () => Effect.succeed([]),
+        WatchActiveSessions: emptyLobby,
         ServerInfo: () =>
           Effect.succeed(
             new ServerInfo({

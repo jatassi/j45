@@ -32,12 +32,14 @@ import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 import { ReflowWorkoutScreen } from '@/components/workout-editor-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
+import { emptyLobby } from './lobby-feed'
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
 
-type Handlers = Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>
+type Handlers = Partial<Record<string, (payload: unknown) => unknown>>
 
 /** Fake rpc runtime — same idiom as `workout-editor-screen.test.tsx`. */
 function makeFakeRuntime(handlers: Handlers) {
@@ -280,7 +282,7 @@ describe('ReflowWorkoutScreen', () => {
       {
         GetWorkout: () => Effect.succeed(athletica),
         ListWorkouts: () => Effect.succeed([athletica]),
-        ListActiveSessions: () => Effect.succeed([]),
+        WatchActiveSessions: emptyLobby,
         StartSession: (payload) => {
           startPayload = payload as { workoutId: WorkoutId; reflow: ReflowRequest }
           startSourceMillis = DateTime.toEpochMillis(startPayload.reflow.sourceUpdatedAt)

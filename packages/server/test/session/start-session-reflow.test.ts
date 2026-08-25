@@ -33,6 +33,7 @@ import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
+import { lobbyNow } from './plan-flow-harness.js'
 
 /**
  * `StartSession` under a launch-time reflow — what the spec compiles to, the
@@ -247,8 +248,7 @@ describe('StartSession with a reflow', () => {
           expect(attempt.left._tag).toBe('ReflowInvalid')
         }
         // Nothing was started over the wrong stations.
-        const active = yield* client.ListActiveSessions(undefined, { headers })
-        expect(active).toHaveLength(0)
+        expect(yield* lobbyNow(yield* LiveSessions)).toHaveLength(0)
       }).pipe(Effect.provide(TestServicesLive)),
   )
 })

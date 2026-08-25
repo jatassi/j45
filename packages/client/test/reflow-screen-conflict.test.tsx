@@ -33,6 +33,8 @@ import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 import { ReflowWorkoutScreen } from '@/components/workout-editor-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
+import { emptyLobby } from './lobby-feed'
+
 vi.mock('sonner', () => ({
   toast: { error: vi.fn() },
 }))
@@ -41,7 +43,7 @@ afterEach(() => {
   cleanup()
 })
 
-type Handlers = Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>
+type Handlers = Partial<Record<string, (payload: unknown) => unknown>>
 
 /** Fake rpc runtime — same idiom as `reflow-screen.test.tsx`. */
 function makeFakeRuntime(handlers: Handlers) {
@@ -146,7 +148,7 @@ describe('ReflowWorkoutScreen when the source plan changes underneath', () => {
     renderReflow({
       GetWorkout: () => Effect.succeed(current),
       ListWorkouts: () => Effect.succeed([current]),
-      ListActiveSessions: () => Effect.succeed([]),
+      WatchActiveSessions: emptyLobby,
       UpdateWorkout: (payload) => {
         const p = payload as { id: WorkoutId; updatedAt: DateTime.Utc }
         // Another device already saved: this write is built on a stale read.
