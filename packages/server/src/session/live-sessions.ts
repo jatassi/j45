@@ -195,7 +195,11 @@ const endSession = (
     }
     yield* Ref.update(registry.sessions, HashMap.remove(handle.id))
     const now = yield* Clock.currentTimeMillis
-    yield* SubscriptionRef.set(handle.stateRef, withState(state, { serverNow: now, ended: reason }))
+    // Built on whatever the snapshot holds now, not on `state` above: a
+    // ticker advance between the two must not be rolled back by this write.
+    yield* SubscriptionRef.update(handle.stateRef, (last) =>
+      withState(last, { serverNow: now, ended: reason }),
+    )
     yield* Deferred.succeed(handle.ended, undefined)
   })
 
@@ -304,13 +308,13 @@ const watch = (
       const sub = yield* Effect.acquireRelease(join(handle, participant), (sub) =>
         leave(handle, sub),
       )
-      // Two things end this stream, and each is decided on the element rather
-      // than by a race against it:
+      // Two things end this stream:
       //
       // - `sub.interrupt`, when a `leaveSession` detaches this one user. The
-      //   deferred alone is a race: the snapshot `leaveSession` publishes just
-      //   after it can beat it. The filter drops what a detached subscription
-      //   is offered, so the stream runs dry and the deferred then ends it.
+      //   deferred is what ends the stream. The filter is what keeps the
+      //   snapshot `leaveSession` publishes just after it — the participant
+      //   list without the leaver — out of a departed watcher's stream, which
+      //   the deferred alone cannot promise: it races that snapshot.
       // - The session's own last snapshot, the one `endSession` publishes with
       //   `ended` set. `takeUntil` emits it and stops. The session-wide `ended`
       //   deferred deliberately does not end this stream: it would race that
@@ -444,9 +448,7 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
     // plan. `library/` has no import of `LiveSessions`.
     const planChanges = yield* PlanChanges
     yield* planChanges.subscribe((change) =>
-      applyPlanChange(registry, change, {
-        endForPlanDeleted: (handle) => endSession(registry, handle, 'plan-deleted'),
-      }),
+      applyPlanChange(registry, change, (handle) => endSession(registry, handle, 'plan-deleted')),
     )
 
     return {

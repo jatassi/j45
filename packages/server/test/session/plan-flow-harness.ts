@@ -77,12 +77,18 @@ export const seedUser = (id: UserId, displayName = 'Test User') =>
     })
   })
 
+/** Request headers that sign a call in as one already-seeded user. */
+export const headersFor = (id: UserId) =>
+  Effect.gen(function* () {
+    const authSessions = yield* AuthSessions
+    const token = yield* authSessions.create(id)
+    return { cookie: `${SESSION_COOKIE_NAME}=${token}` }
+  })
+
 /** The owner's request headers, plus a client for each rpc group under test. */
 export const asOwner = Effect.gen(function* () {
   yield* seedUser(owner, 'Owner')
-  const authSessions = yield* AuthSessions
-  const token = yield* authSessions.create(owner)
-  const headers = { cookie: `${SESSION_COOKIE_NAME}=${token}` }
+  const headers = yield* headersFor(owner)
   const library = yield* RpcTest.makeClient(LibraryRpcs)
   const sessions = yield* RpcTest.makeClient(SessionRpcs)
   const history = yield* RpcTest.makeClient(HistoryRpcs)

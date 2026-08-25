@@ -32,6 +32,10 @@ const reconnectingFeed: SessionFeed = { _tag: 'reconnecting' }
  * One snapshot as a feed value. A snapshot carrying `ended` is the last one
  * the server publishes, and it says why the session stopped — the one place
  * the two home notices are told apart.
+ *
+ * The two vocabularies stay separate on purpose. `SessionEnd` says what
+ * happened to a session; `HomeNotice` names a message on a screen. Mapping
+ * them here keeps a rename of either one out of the other's file.
  */
 const toFeed = (state: SessionState): SessionFeed =>
   state.ended === null
@@ -46,9 +50,11 @@ const reconnectDelay = (attempt: number): Duration.Duration =>
   Duration.millis(Math.min(500 * 2 ** attempt, 8000))
 
 /**
- * The retrying watch stream. Each server snapshot becomes a `live` feed;
- * a clean completion or a `SessionNotFound` failure becomes `ended` (both
- * mean "the session is over — go home"); every other failure emits
+ * The retrying watch stream. Each server snapshot becomes a `live` feed,
+ * except the last one a session publishes, which becomes `ended` and carries
+ * why. A stream that stops without such a snapshot, and a `SessionNotFound`
+ * failure, both become the plain `ended` (they mean "the session is over — go
+ * home", with nothing more to say); every other failure emits
  * `reconnecting`, waits out the backoff, then resubscribes — the fresh
  * snapshot heals whatever drift the disconnect caused.
  */

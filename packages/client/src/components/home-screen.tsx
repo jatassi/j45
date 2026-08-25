@@ -14,7 +14,7 @@ import { toast } from 'sonner'
 
 import { HomeHero } from '@/components/home-hero'
 import { QueryBoundary } from '@/components/query-boundary'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSceneSurface } from '@/glass/use-scene-surface'
@@ -105,6 +105,11 @@ function QuickTile(props: {
  * the `notice` search parameter the route validates (see `router.tsx`).
  * Nothing renders without one.
  *
+ * `useSearch({ strict: false })` rather than a typed read off `indexRoute`:
+ * that would import the router into a screen the router imports, and it would
+ * fail in any test that mounts this screen on a route tree of its own.
+ * `homeNotice` therefore narrows the value here as well.
+ *
  * Dismissing rewrites the url without the parameter, so a reload — or a
  * later return to home — does not show the same message again. `replace`
  * keeps the dismissed url out of the back history.
@@ -121,19 +126,21 @@ function HomeNoticeBanner() {
     <Alert className="w-full max-w-sm" data-testid="home-notice" data-notice={notice}>
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription>{description}</AlertDescription>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="absolute top-2 right-2 size-8"
-        data-testid="home-notice-dismiss"
-        aria-label="Dismiss"
-        onClick={() => {
-          void navigate({ to: '/', search: {}, replace: true })
-        }}
-      >
-        <X className="size-4" />
-      </Button>
+      <AlertAction>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          data-testid="home-notice-dismiss"
+          aria-label="Dismiss"
+          onClick={() => {
+            void navigate({ to: '/', search: {}, replace: true })
+          }}
+        >
+          <X className="size-4" />
+        </Button>
+      </AlertAction>
     </Alert>
   )
 }

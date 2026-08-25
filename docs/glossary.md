@@ -54,7 +54,14 @@ unrecorded wherever they fit.
   live Sessions exist. A rename is applied at once and raises no notice to
   Participants, because the new name is already on screen. A content edit
   waits for the next Segment boundary, so no interval is cut short, and then
-  re-enters the plan at the same work ordinal.
+  re-enters the plan at the same work ordinal. A delete ends every Session
+  that tracks the Workout.
+- **Session end** — why a live Session stopped, carried on the one last
+  snapshot it publishes: `closed` for the ordinary end (everybody left, or
+  nobody was left watching), or `plan-deleted` when the host removed the
+  Workout. That snapshot is what ends a watcher's stream, so a Participant
+  always learns which of the two happened. Completion records are written
+  either way, from the last plan applied while the timer was live.
 - **Plan revision** — the count of plan changes a Session has applied, carried
   on its snapshot. It rises only when a change actually lands — never on a
   Participant join or leave, and never on a rename. A client raises its notice

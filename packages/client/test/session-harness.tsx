@@ -108,7 +108,11 @@ export function makeState(id: SessionId, timer: TimerState, serverNow: number): 
   })
 }
 
-/** The same snapshot after `revision` plan changes, the last one by `changedBy`. */
+/**
+ * The same snapshot after `revision` plan changes, the last one by
+ * `changedBy`. Every field is listed: `SessionState` is a class, and the
+ * repo's lint forbids spreading a class instance.
+ */
 export function withPlanRevision(
   state: SessionState,
   revision: number,

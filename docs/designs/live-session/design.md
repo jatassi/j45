@@ -42,7 +42,9 @@ contract).
 > changes that landed, so a client can raise one notice for each. A session
 > launched with a reflow overlay is exempt: its plan was never in the library.
 >
-> Deleting the workout ends every session that tracks it. Each such session
+> Deleting the workout ends every session that tracks it — and only those. A
+> reflow-launched session keeps running: its compiled plan was never in the
+> library, so the row that went was never its plan. Each ended session
 > publishes one last snapshot with `ended` set, which says whether it stopped
 > for the ordinary reasons (`closed`) or because the plan went
 > (`plan-deleted`). That snapshot is also what ends a watcher's stream, so a

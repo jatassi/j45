@@ -190,16 +190,15 @@ export const snapshotAfterMove = (
   })
 
 /**
- * The one thing a plan change needs that this module cannot do: end a
- * session. Ending writes the completion rows and tears the actor down, which
- * `live-sessions.ts` owns, so it is passed in rather than imported. That
- * keeps the dependency running one way — `live-sessions.ts` calls into this
+ * Ends one session because the workout it runs was deleted.
+ *
+ * This is the one thing a plan change needs that this module cannot do:
+ * ending writes the completion rows and tears the actor down, which
+ * `live-sessions.ts` owns. It is passed in rather than imported, so the
+ * dependency keeps running one way — `live-sessions.ts` calls into this
  * module, never the reverse.
  */
-export type PlanSyncOps = {
-  /** Ends one session because the workout it runs was deleted. */
-  readonly endForPlanDeleted: (handle: SessionHandle) => Effect.Effect<void>
-}
+export type EndForPlanDeleted = (handle: SessionHandle) => Effect.Effect<void>
 
 /**
  * The `DeleteWorkout` path: the session ends.
@@ -214,8 +213,8 @@ export type PlanSyncOps = {
  * the plan the session last applied while its timer was live; the deleted
  * library row is not read, and the completions table does not reference it.
  */
-const applyDelete = (handle: SessionHandle, ops: PlanSyncOps): Effect.Effect<void> =>
-  handle.sem.withPermits(1)(ops.endForPlanDeleted(handle))
+const applyDelete = (handle: SessionHandle, end: EndForPlanDeleted): Effect.Effect<void> =>
+  handle.sem.withPermits(1)(end(handle))
 
 /**
  * What one change does to one session — the `apply…` function for its kind,
@@ -227,7 +226,7 @@ const applyDelete = (handle: SessionHandle, ops: PlanSyncOps): Effect.Effect<voi
  */
 const applierFor = (
   change: PlanChange,
-  ops: PlanSyncOps,
+  end: EndForPlanDeleted,
 ): ((handle: SessionHandle) => Effect.Effect<void>) => {
   switch (change._tag) {
     case 'renamed': {
@@ -242,7 +241,7 @@ const applierFor = (
       return (handle) => applyEdit(handle, plan)
     }
     case 'deleted': {
-      return (handle) => applyDelete(handle, ops)
+      return (handle) => applyDelete(handle, end)
     }
   }
 }
@@ -255,11 +254,11 @@ const applierFor = (
 export const applyPlanChange = (
   registry: Registry,
   change: PlanChange,
-  ops: PlanSyncOps,
+  end: EndForPlanDeleted,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { tracking } = yield* sessionsOfWorkout(registry, change.workoutId)
-    const apply = applierFor(change, ops)
+    const apply = applierFor(change, end)
     yield* Effect.forEach(
       tracking,
       (summary) => Effect.flatMap(getHandle(registry, summary.id), apply).pipe(Effect.ignore),

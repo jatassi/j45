@@ -18,7 +18,7 @@ import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
 import { LiveSessions } from '../../src/session/live-sessions.js'
-import { asOwner, bobId, FlowLive, seedUser } from './plan-flow-harness.js'
+import { asOwner, bobId, FlowLive, headersFor, seedUser } from './plan-flow-harness.js'
 
 /**
  * Deleting a library workout that live sessions run, observed only where a
@@ -134,9 +134,17 @@ describe('deleting a workout that live sessions run', () => {
       const created = yield* library.CreateWorkout({ workout: makeWorkout('Doomed') }, { headers })
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
 
+      const svc = yield* LiveSessions
+      // Bob joins, so the session has two people to record, not one.
+      yield* Stream.toQueueOfElements(svc.watch(started.id, bob))
+
       // Ready is 5s, so 10s puts the timer in the first work interval.
       yield* TestClock.adjust('10 seconds')
       yield* library.DeleteWorkout({ id: created.id }, { headers })
+
+      // Everybody who was ever in the session keeps a row of their own.
+      const bobHeaders = yield* headersFor(bob.userId)
+      expect(yield* history.ListHistory(undefined, { headers: bobHeaders })).toHaveLength(1)
 
       const rows = yield* history.ListHistory(undefined, { headers })
       expect(rows).toHaveLength(1)

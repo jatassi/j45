@@ -57,10 +57,18 @@ Apply on every screen:
 | Query failure      | inline `alert` + retry button               |
 | Command failure    | `sonner` toast (nothing silently swallowed) |
 | Server-pushed news | `sonner` toast, no sound (see below)        |
+| Landing notice     | dismissible inline `alert` (see below)      |
 | Destructive action | `alert-dialog` confirm                      |
 
 Loading and failure must never look the same. Success stays quiet unless the
 outcome is otherwise invisible on-screen.
+
+A "landing notice" is the narrow case where a screen sends the user to
+another screen and that screen must say why they are there. Today only one
+does it: a session that ends sends its Participants home. It travels as a
+search parameter the destination route validates, so a reload does not lose
+it. It is an inline alert, not a toast: the user did not ask to be moved, so
+the message must wait for them to read it, and it must be dismissible.
 
 "Server-pushed news" is the narrow case where the server changes something
 under the user without them asking: today only a plan change reaching a live
