@@ -190,6 +190,33 @@ export const snapshotAfterMove = (
   })
 
 /**
+ * Ends one session because the workout it runs was deleted.
+ *
+ * This is the one thing a plan change needs that this module cannot do:
+ * ending writes the completion rows and tears the actor down, which
+ * `live-sessions.ts` owns. It is passed in rather than imported, so the
+ * dependency keeps running one way — `live-sessions.ts` calls into this
+ * module, never the reverse.
+ */
+export type EndForPlanDeleted = (handle: SessionHandle) => Effect.Effect<void>
+
+/**
+ * The `DeleteWorkout` path: the session ends.
+ *
+ * There is no `whileLive` gate here. A done session takes no more *plan*
+ * changes, because its plan is frozen — but a deleted workout leaves no
+ * session behind it, done or not. Whoever is still watching lands on home
+ * with the delete's own notice.
+ *
+ * The semaphore is taken like any other mutation, so the end never
+ * interleaves with a ticker advance. Ending writes the completion rows from
+ * the plan the session last applied while its timer was live; the deleted
+ * library row is not read, and the completions table does not reference it.
+ */
+const applyDelete = (handle: SessionHandle, end: EndForPlanDeleted): Effect.Effect<void> =>
+  handle.sem.withPermits(1)(end(handle))
+
+/**
  * What one change does to one session — the `apply…` function for its kind,
  * built once for the whole fan-out. One workout can run in several live
  * sessions at once, and an edit compiles here rather than in each of them, so
@@ -197,7 +224,10 @@ export const snapshotAfterMove = (
  *
  * A new kind of change is a new case here plus its own `apply…` above.
  */
-const applierFor = (change: PlanChange): ((handle: SessionHandle) => Effect.Effect<void>) => {
+const applierFor = (
+  change: PlanChange,
+  end: EndForPlanDeleted,
+): ((handle: SessionHandle) => Effect.Effect<void>) => {
   switch (change._tag) {
     case 'renamed': {
       return (handle) => applyRename(handle, change.name)
@@ -210,6 +240,9 @@ const applierFor = (change: PlanChange): ((handle: SessionHandle) => Effect.Effe
       }
       return (handle) => applyEdit(handle, plan)
     }
+    case 'deleted': {
+      return (handle) => applyDelete(handle, end)
+    }
   }
 }
 
@@ -218,10 +251,14 @@ const applierFor = (change: PlanChange): ((handle: SessionHandle) => Effect.Effe
  * workout. A session that ends between the lookup and the apply is skipped.
  * It has nothing left to update.
  */
-export const applyPlanChange = (registry: Registry, change: PlanChange): Effect.Effect<void> =>
+export const applyPlanChange = (
+  registry: Registry,
+  change: PlanChange,
+  end: EndForPlanDeleted,
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { tracking } = yield* sessionsOfWorkout(registry, change.workoutId)
-    const apply = applierFor(change)
+    const apply = applierFor(change, end)
     yield* Effect.forEach(
       tracking,
       (summary) => Effect.flatMap(getHandle(registry, summary.id), apply).pipe(Effect.ignore),

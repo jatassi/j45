@@ -10,7 +10,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import * as audio from '@/player/audio'
 
-import { liveStream, makeState, push, renderLive, renderSession } from './session-harness'
+import {
+  liveStream,
+  makeState,
+  push,
+  renderLive,
+  renderSession,
+  withEnded,
+} from './session-harness'
 
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
@@ -52,6 +59,60 @@ describe('SessionScreen — stream retry discrimination', () => {
 
     await screen.findByTestId('session-reconnecting')
     expect(screen.queryByTestId('home-screen')).toBeNull()
+  })
+})
+
+describe('SessionScreen — where an ended session sends its people', () => {
+  /** A snapshot mid-work, so the session is plainly live before it ends. */
+  const runningNow = (id: string) => {
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const now = Date.now()
+    return makeState(
+      sessionId,
+      new TimerRunning({ segmentIndex: 1, endsAtMillis: now + 30_000 }),
+      now,
+    )
+  }
+
+  it('a deleted plan sends them home with the notice that says so', async () => {
+    const id = 'sess-deleted'
+    const queue = Effect.runSync(Queue.unbounded<SessionState>())
+    const router = renderSession(id, { WatchSession: () => Stream.fromQueue(queue) })
+
+    await push(queue, runningNow(id))
+    await screen.findByTestId('session-screen')
+
+    // The last snapshot the server publishes for a deleted plan.
+    await push(queue, withEnded(runningNow(id), 'plan-deleted'))
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.pathname).toBe('/')
+    expect(router.state.location.search).toEqual({ notice: 'plan-deleted' })
+  })
+
+  it('any other ending sends them home with the ordinary notice', async () => {
+    const id = 'sess-closed'
+    const queue = Effect.runSync(Queue.unbounded<SessionState>())
+    const router = renderSession(id, { WatchSession: () => Stream.fromQueue(queue) })
+
+    await push(queue, runningNow(id))
+    await screen.findByTestId('session-screen')
+
+    await push(queue, withEnded(runningNow(id), 'closed'))
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.search).toEqual({ notice: 'session-ended' })
+  })
+
+  it('a session that is simply gone reads as an ordinary ending', async () => {
+    const id = 'sess-vanished'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const router = renderSession(id, {
+      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId })),
+    })
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.search).toEqual({ notice: 'session-ended' })
   })
 })
 

@@ -6,6 +6,7 @@ import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
 
 import type { PlayerPhase } from '@/components/player/phase'
+import type { HomeNotice } from '@/lib/home-notice'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 /**
@@ -16,16 +17,30 @@ import { ServerRpcClient } from '@/lib/rpc-client'
  *
  * - `live` — the latest server snapshot.
  * - `reconnecting` — a transport failure is being retried with backoff.
- * - `ended` — the session is gone (clean completion *or* `SessionNotFound`);
- *   the screen navigates home.
+ * - `ended` — the session is over; the screen navigates home. `notice` is
+ *   what home then tells the participant.
  */
 export type SessionFeed =
   | { readonly _tag: 'live'; readonly state: SessionState }
   | { readonly _tag: 'reconnecting' }
-  | { readonly _tag: 'ended' }
+  | { readonly _tag: 'ended'; readonly notice: HomeNotice }
 
-const endedFeed: SessionFeed = { _tag: 'ended' }
+const endedFeed: SessionFeed = { _tag: 'ended', notice: 'session-ended' }
 const reconnectingFeed: SessionFeed = { _tag: 'reconnecting' }
+
+/**
+ * One snapshot as a feed value. A snapshot carrying `ended` is the last one
+ * the server publishes, and it says why the session stopped — the one place
+ * the two home notices are told apart.
+ *
+ * The two vocabularies stay separate on purpose. `SessionEnd` says what
+ * happened to a session; `HomeNotice` names a message on a screen. Mapping
+ * them here keeps a rename of either one out of the other's file.
+ */
+const toFeed = (state: SessionState): SessionFeed =>
+  state.ended === null
+    ? { _tag: 'live', state }
+    : { _tag: 'ended', notice: state.ended === 'plan-deleted' ? 'plan-deleted' : 'session-ended' }
 
 /** The flat rpc client `ServerRpcClient` resolves to. */
 type WatchClient = Effect.Effect.Success<typeof ServerRpcClient>
@@ -35,9 +50,11 @@ const reconnectDelay = (attempt: number): Duration.Duration =>
   Duration.millis(Math.min(500 * 2 ** attempt, 8000))
 
 /**
- * The retrying watch stream. Each server snapshot becomes a `live` feed;
- * a clean completion or a `SessionNotFound` failure becomes `ended` (both
- * mean "the session is over — go home"); every other failure emits
+ * The retrying watch stream. Each server snapshot becomes a `live` feed,
+ * except the last one a session publishes, which becomes `ended` and carries
+ * why. A stream that stops without such a snapshot, and a `SessionNotFound`
+ * failure, both become the plain `ended` (they mean "the session is over — go
+ * home", with nothing more to say); every other failure emits
  * `reconnecting`, waits out the backoff, then resubscribes — the fresh
  * snapshot heals whatever drift the disconnect caused.
  */
@@ -47,8 +64,12 @@ const watchFeed = (
   attempt: number,
 ): Stream.Stream<SessionFeed> =>
   client('WatchSession', { id }).pipe(
-    Stream.map((state): SessionFeed => ({ _tag: 'live', state })),
+    Stream.map(toFeed),
+    // The fallback ending, for a stream that stops without a last snapshot
+    // of its own: the participant left, or the server went away. `takeUntil`
+    // keeps it out of the way whenever the session did say why it ended.
     Stream.concat(Stream.make(endedFeed)),
+    Stream.takeUntil((feed) => feed._tag === 'ended'),
     Stream.catchAll((error) =>
       error instanceof SessionNotFound
         ? Stream.make(endedFeed)

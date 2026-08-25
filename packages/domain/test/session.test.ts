@@ -58,6 +58,7 @@ describe('SessionState', () => {
         participants: [host],
         planRevision: 2,
         planChangedBy: 'Alex',
+        ended: null,
       })
 
       const encoded = yield* Schema.encode(SessionState)(original)

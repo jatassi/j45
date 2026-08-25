@@ -1,7 +1,7 @@
 import { NodeContext } from '@effect/platform-node'
 import { RpcTest } from '@effect/rpc'
 import { SqliteClient } from '@effect/sql-sqlite-node'
-import { LibraryRpcs, SessionRpcs, UserId, type Username } from '@j45/domain'
+import { HistoryRpcs, LibraryRpcs, SessionRpcs, UserId, type Username } from '@j45/domain'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
 import * as Schema from 'effect/Schema'
@@ -15,14 +15,16 @@ import { PlanChanges } from '../../src/library/plan-changes.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
+import { HistoryHandlersLive } from '../../src/session/history-handlers.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
 
 /**
  * The shared mount for the plan-change flow tests: the library handlers and
  * the session handlers over one in-memory database, wired to each other
- * exactly as `server.ts` wires them. One test can then drive a workout
- * mutation as a unary rpc and read the result on a session snapshot.
+ * exactly as `server.ts` wires them, plus the history read path over the
+ * same connection. One test can then drive a workout mutation as a unary rpc
+ * and read the result on a session snapshot, or in the rows a session left.
  *
  * A test never touches the notification seam between the two. That seam is
  * implementation.
@@ -41,6 +43,7 @@ const LiveSessionsLive = LiveSessions.Default.pipe(
 
 export const FlowLive = Layer.mergeAll(
   UserRepo.Default,
+  CompletionsRepo.Default,
   AuthSessions.Default,
   WorkoutsRepo.Default,
   PlanChanges.Default,
@@ -50,6 +53,7 @@ export const FlowLive = Layer.mergeAll(
     Layer.provide(Layer.mergeAll(WorkoutsRepo.Default, PlanChanges.Default)),
   ),
   SessionHandlersLive.pipe(Layer.provide(Layer.mergeAll(WorkoutsRepo.Default, LiveSessionsLive))),
+  HistoryHandlersLive.pipe(Layer.provide(CompletionsRepo.Default)),
 ).pipe(Layer.provideMerge(SqlTestLive))
 
 /** A branded `UserId` from a plain string. */
@@ -73,13 +77,20 @@ export const seedUser = (id: UserId, displayName = 'Test User') =>
     })
   })
 
+/** Request headers that sign a call in as one already-seeded user. */
+export const headersFor = (id: UserId) =>
+  Effect.gen(function* () {
+    const authSessions = yield* AuthSessions
+    const token = yield* authSessions.create(id)
+    return { cookie: `${SESSION_COOKIE_NAME}=${token}` }
+  })
+
 /** The owner's request headers, plus a client for each rpc group under test. */
 export const asOwner = Effect.gen(function* () {
   yield* seedUser(owner, 'Owner')
-  const authSessions = yield* AuthSessions
-  const token = yield* authSessions.create(owner)
-  const headers = { cookie: `${SESSION_COOKIE_NAME}=${token}` }
+  const headers = yield* headersFor(owner)
   const library = yield* RpcTest.makeClient(LibraryRpcs)
   const sessions = yield* RpcTest.makeClient(SessionRpcs)
-  return { headers, library, sessions } as const
+  const history = yield* RpcTest.makeClient(HistoryRpcs)
+  return { headers, history, library, sessions } as const
 })

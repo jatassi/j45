@@ -197,19 +197,20 @@ function SessionView({ state }: { readonly state: SessionState }) {
 }
 
 /**
- * Renders one feed value and, when the session has ended (clean completion or
- * `SessionNotFound`), navigates home with a notice — the same destination for
- * both. A transport failure shows the reconnecting indicator while the atom
- * retries with backoff underneath.
+ * Renders one feed value and, when the session has ended, navigates home with
+ * the notice that says why. Home is the destination for every ending; only
+ * the notice differs, and a deleted plan gets its own. A transport failure
+ * shows the reconnecting indicator while the atom retries with backoff
+ * underneath.
  */
 function SessionFeedView({ feed }: { readonly feed: SessionFeed }) {
   const navigate = useNavigate()
-  const ended = feed._tag === 'ended'
+  const notice = feed._tag === 'ended' ? feed.notice : undefined
   useEffect(() => {
-    if (ended) {
-      void navigate({ to: '/', search: { notice: 'session-ended' } })
+    if (notice !== undefined) {
+      void navigate({ to: '/', search: { notice } })
     }
-  }, [ended, navigate])
+  }, [notice, navigate])
 
   if (feed._tag === 'live') return <SessionView state={feed.state} />
   if (feed._tag === 'reconnecting')

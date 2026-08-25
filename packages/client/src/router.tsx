@@ -24,6 +24,7 @@ import {
   NewWorkoutScreen,
   ReflowWorkoutScreen,
 } from '@/components/workout-editor-screen'
+import { homeNotice, type HomeNotice } from '@/lib/home-notice'
 
 /**
  * Everything a routed screen needs that isn't itself route state: the
@@ -122,10 +123,22 @@ function setPushTitle(title: string) {
 
 // ── Tab-layout leaves ──────────────────────────────────────────────────
 
-/** `/` — the home dashboard (active sessions + quick actions). */
+/**
+ * `/` — the home dashboard (active sessions + quick actions).
+ *
+ * The one route in this tree with search state. `notice` is the explanation
+ * a session that ended sends its participants here with; `HomeScreen` reads
+ * it back with `useSearch`. `validateSearch` never throws: an unknown value
+ * (a hand-typed url, a link from an older build) drops out and home renders
+ * with no notice, rather than failing to render at all.
+ */
 const indexRoute = createRoute({
   getParentRoute: () => tabLayoutRoute,
   path: '/',
+  validateSearch: (search: Record<string, unknown>): { readonly notice?: HomeNotice } => {
+    const notice = homeNotice(search.notice)
+    return notice === undefined ? {} : { notice }
+  },
   component: HomeScreen,
 })
 
