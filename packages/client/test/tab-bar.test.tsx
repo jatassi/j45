@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { RegistryProvider, Result } from '@effect-atom/atom-react'
+import { SessionId, SessionSummary, WorkoutId } from '@j45/domain'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -8,20 +10,56 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import { cleanup, render, screen } from '@testing-library/react'
+import * as DateTime from 'effect/DateTime'
+import * as Runtime from 'effect/Runtime'
+import * as Schema from 'effect/Schema'
+import * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { TabBar } from '@/components/shell/tab-bar'
+import { ServerRpcClient } from '@/lib/rpc-client'
+
+import { emptyLobby, makeLobby, silentLobby, staticLobby } from './lobby-feed'
 
 afterEach(() => {
   cleanup()
 })
 
+/** One lobby row. Only the row count matters here, so the body is fixed. */
+const liveSession = (id: string): SessionSummary =>
+  new SessionSummary({
+    id: Schema.decodeSync(SessionId)(id),
+    workoutId: Schema.decodeSync(WorkoutId)('workout-athletica'),
+    hostDisplayName: 'Alex',
+    workoutName: 'Athletica',
+    startedAt: DateTime.unsafeMake('2026-01-01T00:00:00.000Z'),
+    participantCount: 2,
+  })
+
+/** What a fake `WatchActiveSessions` answers this render with. */
+type LobbyHandler = () => Stream.Stream<readonly SessionSummary[], unknown>
+
+/**
+ * A runtime whose rpc client answers `WatchActiveSessions` with `lobby` and
+ * nothing else — the tab bar reads no other rpc, so any other call is a bug.
+ */
+function makeFakeRuntime(lobby: LobbyHandler) {
+  const client = (tag: string) => {
+    if (tag !== 'WatchActiveSessions') {
+      throw new Error(`unexpected rpc call: ${tag}`)
+    }
+    return lobby()
+  }
+  return Runtime.defaultRuntime.pipe(Runtime.provideService(ServerRpcClient, client as never))
+}
+
 /**
  * Mounts `TabBar` under a throwaway memory router so its `Link`s and
  * `useLocation` active-group logic have real router context. `initialPath`
- * is both the memory-history start and the only matched leaf.
+ * is both the memory-history start and the only matched leaf. `lobby` is the
+ * feed the live-session indicator reads; it defaults to no live sessions.
  */
-function renderTabBar(initialPath: string) {
+function renderTabBar(initialPath: string, lobby: LobbyHandler = emptyLobby) {
   const rootRoute = createRootRoute({ component: Outlet })
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -58,7 +96,13 @@ function renderTabBar(initialPath: string) {
     ]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   })
-  render(<RouterProvider router={testRouter} />)
+  render(
+    <RegistryProvider
+      initialValues={[[ServerRpcClient.runtime, Result.success(makeFakeRuntime(lobby))]]}
+    >
+      <RouterProvider router={testRouter} />
+    </RegistryProvider>,
+  )
 }
 
 const TAB_IDS = ['tab-home', 'tab-library', 'tab-generate', 'tab-history'] as const
@@ -142,5 +186,83 @@ describe('TabBar', () => {
     // Positioning lives on the wrapper, never on the glass surface itself.
     expect(glass.className).not.toMatch(/\bfixed\b/)
     expect(glass.parentElement?.className).toMatch(/\bfixed\b/)
+  })
+})
+
+describe('TabBar live-session indicator', () => {
+  it('shows the count of live sessions on a route that is not Home', async () => {
+    renderTabBar('/library', staticLobby([liveSession('session-1'), liveSession('session-2')]))
+
+    const indicator = await screen.findByTestId('tab-live-count')
+    expect(indicator.textContent).toBe('2')
+  })
+
+  it('renders nothing when no session is live', async () => {
+    renderTabBar('/library', emptyLobby)
+
+    await screen.findByTestId('tab-library')
+    expect(screen.queryByTestId('tab-live-count')).toBeNull()
+  })
+
+  it('renders nothing rather than an error while the feed is failing', async () => {
+    renderTabBar('/library', () => Stream.fail(new Error('socket dropped')))
+
+    await screen.findByTestId('tab-library')
+    expect(screen.queryByTestId('tab-live-count')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('renders nothing while the feed has not answered yet', async () => {
+    renderTabBar('/library', silentLobby)
+
+    await screen.findByTestId('tab-library')
+    expect(screen.queryByTestId('tab-live-count')).toBeNull()
+  })
+
+  it('carries its meaning in an accessible label, not in colour or position', async () => {
+    renderTabBar('/library', staticLobby([liveSession('session-1')]))
+
+    const indicator = await screen.findByTestId('tab-live-count')
+    expect(indicator.getAttribute('aria-label')).toBe('1 live session')
+    // The label joins the Home tab's own name, so the tab says what it holds.
+    expect(screen.getByTestId('tab-home').textContent).toContain('Home')
+
+    cleanup()
+    renderTabBar('/library', staticLobby([liveSession('session-1'), liveSession('session-2')]))
+    const plural = await screen.findByTestId('tab-live-count')
+    expect(plural.getAttribute('aria-label')).toBe('2 live sessions')
+  })
+
+  it('follows sessions starting and ending with no user action', async () => {
+    const lobby = makeLobby([liveSession('session-1')])
+    renderTabBar('/library', lobby.handler)
+
+    const indicator = await screen.findByTestId('tab-live-count')
+    expect(indicator.textContent).toBe('1')
+
+    await lobby.publish([liveSession('session-1'), liveSession('session-2')])
+    expect(screen.getByTestId('tab-live-count').textContent).toBe('2')
+
+    await lobby.publish([])
+    expect(screen.queryByTestId('tab-live-count')).toBeNull()
+  })
+
+  it('shows the count on every route the tab bar renders on', async () => {
+    for (const path of ['/', '/library', '/generate', '/history', '/workouts/workout-1']) {
+      renderTabBar(path, staticLobby([liveSession('session-1'), liveSession('session-2')]))
+      const indicator = await screen.findByTestId('tab-live-count')
+      expect(indicator.textContent).toBe('2')
+      cleanup()
+    }
+  })
+
+  it('routes attention to Home instead of joining a session itself', async () => {
+    renderTabBar('/library', staticLobby([liveSession('session-1')]))
+
+    const indicator = await screen.findByTestId('tab-live-count')
+    // The only interactive ancestor is the Home tab link. Nothing in the
+    // indicator leads to a session.
+    expect(indicator.closest('a')).toBe(screen.getByTestId('tab-home'))
+    expect(indicator.querySelector('a')).toBeNull()
   })
 })

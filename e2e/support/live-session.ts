@@ -276,3 +276,20 @@ export function planChangeNotice(page: Page) {
 
 /** The name the host puts on Apex's second station while the session runs it. */
 export const RENAMED_STATION = 'Renamed while the session ran'
+
+/**
+ * The live-session count the tab bar shows this page right now.
+ *
+ * No indicator means no live sessions, so it reads as zero. Live sessions are
+ * server-wide: a session another scenario runs raises this number for every
+ * account. A caller must therefore compare it with what it read before, never
+ * with an absolute figure.
+ */
+export async function readTabLiveCount(page: Page): Promise<number> {
+  const badge = page.getByTestId('tab-live-count')
+  if ((await badge.count()) === 0) {
+    return 0
+  }
+  const text = await badge.textContent()
+  return Number.parseInt(text ?? '0', 10)
+}

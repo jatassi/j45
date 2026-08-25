@@ -97,6 +97,17 @@ comparing one snapshot with the next — a snapshot is republished for reasons
 that are not news. The player adds no sound to it: every beep it makes
 carries timing meaning.
 
+The table above governs screens. Chrome — the tab bar, the headers — is the
+second case it does not apply to. Chrome shows a live count only when there
+is a count to show: no rows renders nothing, and a feed that has not
+answered or that failed renders nothing as well. It shows no skeleton and no
+alert. The user did not ask chrome for anything, so chrome must never report
+a background failure to them, and it must never take space for news it does
+not have. The tab bar's live-session count is the one piece of chrome that
+does this today. It is an indicator, not a control: it carries an accessible
+label that names what it counts, and the only route out of it goes to the
+screen that owns the data.
+
 ## Glass: positioned wrapper gotcha
 
 `.glass-surface` sets `position: relative` on the element it is applied to.
