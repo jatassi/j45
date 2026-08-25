@@ -43,8 +43,10 @@ export type PlanChange =
   | {
       /**
        * The workout is gone from the library. Nothing else travels: there is
-       * no plan left to send. A session that runs this plan has no source to
-       * follow any more, so it ends.
+       * no plan left to send. Every live session of it has no source left to
+       * follow, so every one of them ends — a session that launched with a
+       * reflow overlay with the rest, which is the one kind of change that
+       * such a session takes.
        */
       readonly _tag: 'deleted'
       readonly workoutId: WorkoutId

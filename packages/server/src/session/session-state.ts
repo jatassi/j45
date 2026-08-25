@@ -144,12 +144,49 @@ export type PendingPlan = {
   readonly changedBy: string
 }
 
+/**
+ * How many endings the server remembers after the sessions themselves are
+ * gone.
+ *
+ * The bound is a count, not an age. A count needs no clock and no sweeper
+ * fiber, and it gives an exact ceiling on the memory the record can hold. An
+ * age bound gives no such ceiling: between two reads the record can still
+ * take any number of endings.
+ *
+ * The record has one reader: a participant who retries a watch some seconds
+ * after the session ended, because the connection was lost. At the scale this
+ * server runs, 64 endings are much more than such a window holds.
+ */
+export const RECENTLY_ENDED_LIMIT = 64
+
+/** One session that ended, and why. */
+type EndedSession = { readonly id: SessionId; readonly reason: SessionEnd }
+
 /** The shared registry every session actor is filed under. */
 export type Registry = {
   readonly sessions: Ref.Ref<HashMap.HashMap<SessionId, SessionHandle>>
+  // The last `RECENTLY_ENDED_LIMIT` endings, newest first. A session that
+  // ends leaves the registry, so nothing about it can be read off a handle
+  // any more; this is what a lookup of a gone session answers from.
+  readonly recentlyEnded: Ref.Ref<readonly EndedSession[]>
   readonly layerScope: Scope.Scope
   readonly completionsRepo: CompletionsRepo
 }
+
+/**
+ * Puts one ending into the short record, and drops the oldest to stay inside
+ * the bound. The caller is the code that removes the session from the
+ * registry, so the two moves are one act. A session is live, or remembered,
+ * but never both.
+ */
+export const rememberEnded = (
+  registry: Registry,
+  id: SessionId,
+  reason: SessionEnd,
+): Effect.Effect<void> =>
+  Ref.update(registry.recentlyEnded, (recent) =>
+    [{ id, reason }, ...recent].slice(0, RECENTLY_ENDED_LIMIT),
+  )
 
 /** The facts `LiveSessions.start` needs to stand up a fresh session actor. */
 export type StartParams = {
@@ -180,14 +217,29 @@ export const initialState = (id: SessionId, params: StartParams, now: number): S
     ended: null,
   })
 
-/** The session actor filed under `id`, or `SessionNotFound` if there is none. */
+/**
+ * The session actor filed under `id`, or `SessionNotFound` if there is none.
+ *
+ * The failure carries why that session ended, when the short record still
+ * holds it. Every path that looks a session up — a watch, a command, a leave —
+ * therefore tells a caller as much as the server can still say, rather than
+ * only that the session is gone.
+ */
 export const getHandle = (
   registry: Registry,
   id: SessionId,
 ): Effect.Effect<SessionHandle, SessionNotFound> =>
   Effect.flatMap(Ref.get(registry.sessions), (map) =>
     Option.match(HashMap.get(map, id), {
-      onNone: () => Effect.fail(new SessionNotFound({ id })),
+      onNone: () =>
+        Effect.flatMap(Ref.get(registry.recentlyEnded), (recent) =>
+          Effect.fail(
+            new SessionNotFound({
+              id,
+              endedAs: recent.find((ended) => ended.id === id)?.reason ?? null,
+            }),
+          ),
+        ),
       onSome: Effect.succeed,
     }),
   )

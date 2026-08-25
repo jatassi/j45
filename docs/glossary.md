@@ -47,7 +47,10 @@ unrecorded wherever they fit.
   Session keeps its `WorkoutId`, and the server can find every live Session
   that tracks one Workout. A Session that started with a launch-time Reflow
   overlay keeps the id, but tracks nothing: its compiled plan was never in the
-  library.
+  library. Tracking decides which Sessions a *content* change reaches. It does
+  not decide which Sessions a delete reaches: a delete reaches every live
+  Session of the Workout, because a plan that is gone leaves nothing to
+  follow, overlay or not.
 - **Plan change** — a change to a stored Workout, announced by the library so
   that every live Session which tracks that Workout can follow it. The library
   publishes; the live-Session registry consumes. The library never knows that
@@ -56,11 +59,18 @@ unrecorded wherever they fit.
   waits for the next Segment boundary, so no interval is cut short, and then
   re-enters the plan at the same work ordinal. A paused Session runs no
   interval, and its next boundary comes only if somebody resumes, so a
-  content edit applies to it at once — whether the edit arrives during the
-  pause or was already held when the pause began — with the time left
-  re-derived from the Segment now in force. Once the timer is done the plan
-  is frozen, and a later change never reaches the Session. A delete ends
-  every Session that tracks the Workout.
+  content edit applies to it at once. This is true for an edit that arrives
+  during the pause, and for an edit that was already held when the pause
+  began. The time left is re-derived from the Segment now in force when that
+  Segment differs from the Segment the Participant holds. The time left is
+  kept as it stands when the two Segments are equal. An edit that changes a
+  later Station does not change this interval, so a Participant with 10s left
+  resumes with 10s left. A save that compiles to the plan already in force is
+  not a change. It puts the whole stored plan on the Session: the name, the
+  focus and the note. A completion record holds the whole plan, and it must
+  not hold two versions of it. Such a save raises no notice. Once the timer is
+  done the plan is frozen, and a later change never reaches the Session. A
+  delete ends every live Session of the Workout.
 - **Plan exhaustion** — a new plan has no work at the ordinal the Session
   already reached, because it holds fewer works than the Session ran. The
   Session finishes: it goes to done on the plan it was running, because a
@@ -79,9 +89,20 @@ unrecorded wherever they fit.
 - **Session end** — why a live Session stopped, carried on the one last
   snapshot it publishes: `closed` for the ordinary end (everybody left, or
   nobody was left watching), or `plan-deleted` when the host removed the
-  Workout. That snapshot is what ends a watcher's stream, so a Participant
-  always learns which of the two happened. Completion records are written
-  either way, from the last plan applied while the timer was live.
+  Workout while the Session was still running. A Session whose timer already
+  reached done ends `closed` even for a delete: its Participants completed the
+  workout, so nothing was taken from them. That snapshot is what ends a
+  watcher's stream, so a Participant always learns which of the two happened.
+  Completion records are written either way, from the last plan applied while
+  the timer was live.
+- **Recently-ended record** — the short, bounded list of how the last live
+  Sessions ended, kept by the server after the Sessions themselves are gone. A
+  Participant who was disconnected when their Session ended receives no last
+  snapshot, so their retried watch fails; the failure carries the reason from
+  this record, and the two endings stay apart for them too. The bound is a
+  count, not an age: a count needs no clock and no sweeper, and it caps the
+  memory exactly. An ending the record no longer holds reads as the ordinary
+  end.
 - **Plan revision** — the count of plan changes a Session has applied, carried
   on its snapshot. It rises only when a change actually lands — never on a
   Participant join or leave, and never on a rename. A client raises its notice

@@ -51,6 +51,7 @@ import {
   listSessions,
   participantsOf,
   publishSnapshot,
+  rememberEnded,
   removePresence,
   sessionsOfWorkout,
   summaryOf,
@@ -190,7 +191,11 @@ const endSession = (
         Effect.logError('session completion write failed', cause),
       )
     }
+    // The handle leaves the registry, and the ending takes its place in the
+    // short record. A participant who was disconnected when this happened
+    // finds nothing to watch, and reads the reason from there.
     yield* Ref.update(registry.sessions, HashMap.remove(handle.id))
+    yield* rememberEnded(registry, handle.id, reason)
     const now = yield* Clock.currentTimeMillis
     // Built on whatever the snapshot holds now, not on `state` above: a
     // ticker advance between the two must not be rolled back by this write.
@@ -438,15 +443,16 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
   scoped: Effect.gen(function* () {
     const layerScope = yield* Effect.scope
     const sessions = yield* Ref.make(HashMap.empty<SessionId, SessionHandle>())
+    const recentlyEnded = yield* Ref.make<readonly { id: SessionId; reason: SessionEnd }[]>([])
     const completionsRepo = yield* CompletionsRepo
-    const registry: Registry = { sessions, layerScope, completionsRepo }
+    const registry: Registry = { sessions, recentlyEnded, layerScope, completionsRepo }
 
     // The consuming half of the plan-changed seam. The library announces a
     // change, and this registry applies it to the sessions that run that
     // plan. `library/` has no import of `LiveSessions`.
     const planChanges = yield* PlanChanges
     yield* planChanges.subscribe((change) =>
-      applyPlanChange(registry, change, (handle) => endSession(registry, handle, 'plan-deleted')),
+      applyPlanChange(registry, change, (handle, reason) => endSession(registry, handle, reason)),
     )
 
     return {

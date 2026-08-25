@@ -1,7 +1,7 @@
 import * as Option from 'effect/Option'
 import * as Schema from 'effect/Schema'
 
-import type { Segment } from './segments.js'
+import { segmentsEqual, type Segment } from './segments.js'
 
 export class TimerIdle extends Schema.TaggedClass<TimerIdle>()('idle', {}) {}
 export class TimerRunning extends Schema.TaggedClass<TimerRunning>()('running', {
@@ -48,6 +48,33 @@ export const enterSegmentPaused = (
   segments: readonly Segment[],
 ): TimerState =>
   new TimerPaused({ segmentIndex, remainingMillis: durationAt(segments, segmentIndex) })
+
+/**
+ * The paused timer for a plan change that moves a paused participant from the
+ * segment `held` onto `landing.index` of `landing.segments`, with
+ * `remainingMillis` left of `held`.
+ *
+ * The segment decides between two answers.
+ *
+ * A different segment takes `enterSegmentPaused`: the whole of the segment
+ * now in force. Milliseconds carried across would count down a duration that
+ * this segment never had.
+ *
+ * An equal segment keeps the time left. An edit that changes a later station
+ * leaves this interval as it was, second for second. A participant with 10s
+ * left must resume with 10s left. A full re-derive makes them do the whole
+ * interval a second time, for a change that did not touch it.
+ */
+export const remapPaused = (
+  remainingMillis: number,
+  held: Segment | undefined,
+  landing: { readonly index: number; readonly segments: readonly Segment[] },
+): TimerState => {
+  const to = landing.segments[landing.index]
+  return held !== undefined && to !== undefined && segmentsEqual(held, to)
+    ? new TimerPaused({ segmentIndex: landing.index, remainingMillis })
+    : enterSegmentPaused(landing.index, landing.segments)
+}
 
 /** Begin a compiled workout at its first (`ready`) segment. */
 export const start = (segments: readonly Segment[], nowMillis: number): TimerState =>

@@ -4,14 +4,11 @@ import {
   Reflow,
   ReflowPod,
   ReflowRequest,
-  type SessionNotFound,
   type SessionState,
   type WorkContext,
   type Workout,
 } from '@j45/domain'
 import * as Effect from 'effect/Effect'
-import type * as Exit from 'effect/Exit'
-import type * as Option from 'effect/Option'
 import * as Queue from 'effect/Queue'
 import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
@@ -22,6 +19,7 @@ import {
   bobId,
   caraId,
   FlowLive,
+  latestWith,
   makeWorkout,
   running,
   seedUser,
@@ -45,17 +43,6 @@ const cara = new Participant({ userId: caraId, displayName: 'Cara' })
 /** The station names of a stored workout, in order. */
 const stationsOf = (workout: Workout): readonly string[] =>
   workout.pods.flatMap((pod) => pod.stations.map((station) => station.name))
-
-/** Drains queued snapshots until one satisfies `predicate`, and returns it. */
-const latestWith = (
-  queue: Queue.Dequeue<Exit.Exit<SessionState, Option.Option<SessionNotFound>>>,
-  predicate: (state: SessionState) => boolean,
-): Effect.Effect<SessionState> =>
-  // A stream that ends or fails before the predicate holds is a defect here:
-  // the session is still live and the test is still waiting on it.
-  Effect.flatMap(Effect.orDie(Effect.flatten(Queue.take(queue))), (state) =>
-    predicate(state) ? Effect.succeed(state) : latestWith(queue, predicate),
-  )
 
 /** The work in focus for a snapshot: a work segment's own, a rest's next. */
 const workInFocus = (state: SessionState): WorkContext | undefined => {

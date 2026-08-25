@@ -100,6 +100,73 @@ describe('a plan change while the session is paused', () => {
     }).pipe(Effect.provide(FlowLive)),
   )
 
+  it.scoped('keeps the time left when the segment in force did not change', () =>
+    Effect.gen(function* () {
+      const { headers, library, sessions } = yield* asOwner
+      const created = yield* library.CreateWorkout(
+        { workout: makeWorkout(['A', 'B', 'C']) },
+        { headers },
+      )
+      const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
+      const svc = yield* LiveSessions
+
+      // t=7s: 8s left of the first work. The participant pauses there.
+      yield* TestClock.adjust('7 seconds')
+      yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
+      expect(paused(yield* snapshotOf(svc, started.id))?.remainingMillis).toBe(8000)
+
+      // The host renames a *later* station only. The segment the participant
+      // holds is the same segment, second for second.
+      yield* library.UpdateWorkout(
+        { id: created.id, workout: makeWorkout(['A', 'B', 'C2']), updatedAt: created.updatedAt },
+        { headers },
+      )
+
+      const after = yield* snapshotOf(svc, started.id)
+      expect(stationNames(after)).toEqual(['A', 'B', 'C2'])
+      expect(after.planRevision).toBe(1)
+      // The interval was not touched, so the 8s left is still 8s left. A
+      // full 10s here would make the participant run the interval twice.
+      expect(paused(after)?.segmentIndex).toBe(1)
+      expect(paused(after)?.remainingMillis).toBe(8000)
+
+      // And the resume honours it: 8s from the resume instant.
+      yield* sessions.SendSessionCommand({ id: started.id, command: 'resume' }, { headers })
+      expect(running(yield* snapshotOf(svc, started.id))?.endsAtMillis).toBe(15_000)
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
+  it.scoped('re-derives the time left when the segment in force did change', () =>
+    Effect.gen(function* () {
+      const { headers, library, sessions } = yield* asOwner
+      const created = yield* library.CreateWorkout(
+        { workout: makeWorkout(['A', 'B', 'C']) },
+        { headers },
+      )
+      const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
+      const svc = yield* LiveSessions
+
+      yield* TestClock.adjust('7 seconds')
+      yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
+
+      // This edit retimes the round, so the segment the participant holds is
+      // a different interval. The 8s left counted down a duration that the
+      // segment now in force never had.
+      yield* library.UpdateWorkout(
+        {
+          id: created.id,
+          workout: makeWorkout(['A', 'B', 'C'], { workSeconds: 20 }),
+          updatedAt: created.updatedAt,
+        },
+        { headers },
+      )
+
+      const after = yield* snapshotOf(svc, started.id)
+      expect(paused(after)?.segmentIndex).toBe(1)
+      expect(paused(after)?.remainingMillis).toBe(20_000)
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
   it.scoped('counts down the segment actually in force when the host resumes', () =>
     Effect.gen(function* () {
       const { headers, library, sessions } = yield* asOwner

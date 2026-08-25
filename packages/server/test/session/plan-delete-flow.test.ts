@@ -18,7 +18,7 @@ import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
 import { LiveSessions } from '../../src/session/live-sessions.js'
-import { asOwner, bobId, FlowLive, headersFor, seedUser } from './plan-flow-harness.js'
+import { asOwner, bobId, FlowLive, headersFor, latestWith, seedUser } from './plan-flow-harness.js'
 
 /**
  * Deleting a library workout that live sessions run, observed only where a
@@ -73,7 +73,7 @@ describe('deleting a workout that live sessions run', () => {
     }).pipe(Effect.provide(FlowLive)),
   )
 
-  it.scoped('a session launched with a reflow overlay tracks nothing, so it survives', () =>
+  it.scoped('ends a session launched with a reflow overlay as well', () =>
     Effect.gen(function* () {
       const { headers, library, sessions } = yield* asOwner
       const created = yield* library.CreateWorkout({ workout: makeWorkout('Doomed') }, { headers })
@@ -93,8 +93,35 @@ describe('deleting a workout that live sessions run', () => {
 
       yield* library.DeleteWorkout({ id: created.id }, { headers })
 
-      // Its compiled plan was never in the library, so the library row going
-      // away takes nothing from it.
+      // A reflow overlay exempts a session from a *content* change, which can
+      // never apply to a plan the library never held. A delete is not a
+      // content change: the source is gone, so there is nothing left to
+      // follow. The host is told the session stops, and it does.
+      expect(yield* isLive(yield* LiveSessions, overlaid.id)).toBe(false)
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
+  it.scoped('leaves a reflow-launched session of another workout alone', () =>
+    Effect.gen(function* () {
+      const { headers, library, sessions } = yield* asOwner
+      const doomed = yield* library.CreateWorkout({ workout: makeWorkout('Doomed') }, { headers })
+      const other = yield* library.CreateWorkout({ workout: makeWorkout('Other') }, { headers })
+      const overlaid = yield* sessions.StartSession(
+        {
+          workoutId: other.id,
+          reflow: new ReflowRequest({
+            spec: new Reflow({
+              pods: [new ReflowPod({ name: 'Only', stations: [0] })],
+              flowType: 'laps',
+            }),
+            sourceUpdatedAt: other.updatedAt,
+          }),
+        },
+        { headers },
+      )
+
+      yield* library.DeleteWorkout({ id: doomed.id }, { headers })
+
       expect(yield* isLive(yield* LiveSessions, overlaid.id)).toBe(true)
     }).pipe(Effect.provide(FlowLive)),
   )
@@ -124,6 +151,33 @@ describe('deleting a workout that live sessions run', () => {
 
       // And it is the last thing the watcher gets: the stream is over.
       expect(Exit.isFailure(yield* Effect.exit(nextSnapshot))).toBe(true)
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
+  it.scoped('ends a session whose timer already finished as an ordinary close', () =>
+    Effect.gen(function* () {
+      const { headers, library, sessions } = yield* asOwner
+      yield* seedUser(bob.userId, 'Bob')
+      const created = yield* library.CreateWorkout({ workout: makeWorkout('Doomed') }, { headers })
+      const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
+
+      const svc = yield* LiveSessions
+      const queue = yield* Stream.toQueueOfElements(svc.watch(started.id, bob))
+      const nextSnapshot = Effect.flatten(Queue.take(queue))
+      yield* nextSnapshot
+
+      // ready 5s | A 10s | rest 5s | B 10s — the last rep ends at 30s, and
+      // Bob is sitting on the finished screen.
+      yield* TestClock.adjust('31 seconds')
+      yield* latestWith(queue, (state) => state.timer._tag === 'done')
+
+      yield* library.DeleteWorkout({ id: created.id }, { headers })
+
+      // The session still ends. Only the reason changes: Bob completed the
+      // workout, so nothing was taken from him, and a plan-deleted notice
+      // would tell him his session was cut short when it was not.
+      const last = yield* latestWith(queue, (state) => state.ended !== null)
+      expect(last.ended).toBe('closed')
     }).pipe(Effect.provide(FlowLive)),
   )
 

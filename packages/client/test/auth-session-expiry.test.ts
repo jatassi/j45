@@ -73,7 +73,7 @@ describe('withAuthSessionExpiry', () => {
     const listener = listen()
     const ok = withAuthSessionExpiry(() => Effect.succeed('fine'))
     const other = withAuthSessionExpiry(() =>
-      Effect.fail(new SessionNotFound({ id: 'nope' as SessionNotFound['id'] })),
+      Effect.fail(new SessionNotFound({ id: 'nope' as SessionNotFound['id'], endedAs: null })),
     )
 
     expect(await Effect.runPromise(ok())).toBe('fine')

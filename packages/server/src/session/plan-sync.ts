@@ -2,11 +2,13 @@ import {
   compile,
   compiledEquals,
   enterSegment,
-  enterSegmentPaused,
+  remapPaused,
   remapPosition,
   TimerDone,
   Workout,
+  type SessionEnd,
   type SessionState,
+  type SessionSummary,
   type TimerState,
 } from '@j45/domain'
 import * as Clock from 'effect/Clock'
@@ -26,6 +28,7 @@ import {
   type PendingPlan,
   type Registry,
   type SessionHandle,
+  type SessionsOfWorkout,
 } from './session-state.js'
 
 /**
@@ -34,9 +37,10 @@ import {
  *
  * Two rules hold for every kind of change, and a new kind must keep both:
  *
- * 1. Only the sessions that *track* the workout are reached. A session
- *    launched with a reflow overlay runs a plan the library never held, so a
- *    change to the library has nothing to apply to it.
+ * 1. A *content* change reaches only the sessions that track the workout. A
+ *    session launched with a reflow overlay runs a plan the library never
+ *    held, so an edit or a rename has nothing to apply to it. A delete is the
+ *    one exception, and `targetsOf` states why.
  * 2. An applied change is a state mutation like a timer advance, so it takes
  *    the session's semaphore. A change and a ticker advance can then never
  *    interleave a read-modify-write.
@@ -70,9 +74,7 @@ const whileLive = (
  * the semaphore.
  *
  * The snapshot holds the current name. The lobby summary and the completion
- * row both read it from there, so all three agree by construction. The
- * stored plan carries a name of its own, and it is written through here for
- * the same reason.
+ * row both read it from there, so all three agree by construction.
  *
  * A new name raises no plan-changed notice, so the revision does not move.
  * The name is already on screen. A notice for it would make participants
@@ -83,35 +85,61 @@ const publishName = (
   state: SessionState,
   name: string,
 ): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    if (state.workoutName === name) {
-      return
-    }
-    const now = yield* Clock.currentTimeMillis
-    yield* SubscriptionRef.set(
-      handle.stateRef,
-      withState(state, { serverNow: now, workoutName: name }),
-    )
-    // The stored plan carries a name of its own, and a completion row writes
-    // both. One row must not hold two names, so the rename reaches the plan
-    // as well. Only the name moves: the stations stay as they are, and they
-    // stay equal to the compiled plan that the ticker runs.
-    yield* Ref.update(
-      handle.workout,
-      (workout) =>
-        new Workout({
-          name,
-          focus: workout.focus,
-          note: workout.note,
-          pods: workout.pods,
-          flow: workout.flow,
-        }),
-    )
-  })
+  state.workoutName === name
+    ? Effect.void
+    : Effect.flatMap(Clock.currentTimeMillis, (now) =>
+        SubscriptionRef.set(
+          handle.stateRef,
+          withState(state, { serverNow: now, workoutName: name }),
+        ),
+      )
 
-/** The `RenameWorkout` path: a new name and nothing else. */
+/**
+ * The `RenameWorkout` path: a new name and nothing else.
+ *
+ * The stored plan carries a name of its own, and a completion row writes
+ * both. One row must not hold two names, so the rename reaches the plan as
+ * well. Only the name moves: the stations stay as they are, and they stay
+ * equal to the compiled plan that the ticker runs.
+ */
 const applyRename = (handle: SessionHandle, name: string): Effect.Effect<void> =>
-  whileLive(handle, (state) => publishName(handle, state, name))
+  whileLive(handle, (state) =>
+    Effect.zipRight(
+      publishName(handle, state, name),
+      Ref.update(
+        handle.workout,
+        (workout) =>
+          new Workout({
+            name,
+            focus: workout.focus,
+            note: workout.note,
+            pods: workout.pods,
+            flow: workout.flow,
+          }),
+      ),
+    ),
+  )
+
+/**
+ * A save that compiles to the plan already in force, put on the session. The
+ * caller holds the semaphore.
+ *
+ * The whole stored plan goes onto the handle, not only its name. `focus` and
+ * `note` are on the stored plan and in no compiled segment. A save that
+ * corrects one of them therefore arrives here. A completion row carries the
+ * whole plan. A row with the corrected name and the old focus holds two
+ * versions of one plan, and the name write-through exists to prevent exactly
+ * that.
+ *
+ * The revision does not move, and no notice is raised. Nothing that anybody
+ * runs has changed.
+ */
+const publishStoredPlan = (
+  handle: SessionHandle,
+  state: SessionState,
+  workout: Workout,
+): Effect.Effect<void> =>
+  Effect.zipRight(Ref.set(handle.workout, workout), publishName(handle, state, workout.name))
 
 /**
  * The snapshot that puts `plan` in force, re-entering it at the position the
@@ -124,13 +152,11 @@ const applyRename = (handle: SessionHandle, name: string): Effect.Effect<void> =
  *
  * - **The position.** `remapPosition` keeps the participant at the same work
  *   ordinal, so an edit never returns them to a station they finished.
- * - **The time left.** The timer re-enters the mapped segment with that
- *   segment's whole duration. A running timer takes an absolute deadline
- *   anchored on `now`, because chaining anchors on the previous deadline and
- *   the segment now in force has a duration the old chain knew nothing
- *   about. A paused timer keeps its frozen milliseconds, re-derived the same
- *   way: milliseconds carried across would count down a duration that the
- *   segment now in force never had.
+ * - **The time left.** A running timer takes an absolute deadline anchored on
+ *   `now` for the whole of the mapped segment, because chaining anchors on
+ *   the previous deadline and the segment now in force has a duration the old
+ *   chain knew nothing about. A paused timer takes what `remapPaused`
+ *   decides.
  * - **The end of the plan.** A new plan that no longer reaches this position
  *   has fewer works than the session already ran. A clamp backwards would
  *   replay a finished station, so the session finishes instead.
@@ -161,7 +187,8 @@ const putPlanInForce = (
   Effect.gen(function* () {
     const { from, now, plan, state } = args
     const segments = plan.compiled.segments
-    const mapped = remapPosition(state.compiled.segments, segmentIndexOf(from) ?? 0, segments)
+    const heldIndex = segmentIndexOf(from) ?? 0
+    const mapped = remapPosition(state.compiled.segments, heldIndex, segments)
     yield* Ref.set(handle.pending, Option.none())
     if (Either.isLeft(mapped)) {
       yield* Effect.logInfo('plan change exhausted the session position').pipe(
@@ -181,7 +208,10 @@ const putPlanInForce = (
       compiled: plan.compiled,
       timer:
         from._tag === 'paused'
-          ? enterSegmentPaused(mapped.right, segments)
+          ? remapPaused(from.remainingMillis, state.compiled.segments[heldIndex], {
+              index: mapped.right,
+              segments,
+            })
           : enterSegment(mapped.right, segments, now),
       workoutName: plan.workout.name,
       planChange: { revision: state.planRevision + 1, changedBy: plan.changedBy },
@@ -223,10 +253,11 @@ const applyWhilePaused = (
  * current plan, and that is the plan the session must arrive at.
  *
  * A save that compiles to the plan already in force is not a plan change,
- * whatever the editor sent. Two saves do this, and both must stay quiet:
- * a save that renames the workout and leaves the stations alone, and a save
- * of content the user did not touch. Each publishes the name and no notice.
- * The held plan clears with them: the store now holds what the session runs.
+ * whatever the editor sent. Three saves do this, and all must stay quiet: a
+ * save that renames the workout and leaves the stations alone, a save that
+ * corrects the focus or the note, and a save of content the user did not
+ * touch. Each puts the stored plan on the session and raises no notice. The
+ * held plan clears with them: the store now holds what the session runs.
  *
  * A paused session is the exception: it waits for nothing, so the edit goes
  * into force here rather than into the hold.
@@ -236,7 +267,7 @@ const applyEdit = (handle: SessionHandle, plan: PendingPlan): Effect.Effect<void
     if (compiledEquals(plan.compiled, state.compiled)) {
       return Effect.zipRight(
         Ref.set(handle.pending, Option.none()),
-        publishName(handle, state, plan.workout.name),
+        publishStoredPlan(handle, state, plan.workout),
       )
     }
     return state.timer._tag === 'paused'
@@ -297,7 +328,7 @@ export const snapshotAfterMove = (
   })
 
 /**
- * Ends one session because the workout it runs was deleted.
+ * Ends one session, for the stated reason.
  *
  * This is the one thing a plan change needs that this module cannot do:
  * ending writes the completion rows and tears the actor down, which
@@ -305,23 +336,34 @@ export const snapshotAfterMove = (
  * dependency keeps running one way — `live-sessions.ts` calls into this
  * module, never the reverse.
  */
-export type EndForPlanDeleted = (handle: SessionHandle) => Effect.Effect<void>
+export type EndSession = (handle: SessionHandle, reason: SessionEnd) => Effect.Effect<void>
 
 /**
  * The `DeleteWorkout` path: the session ends.
  *
  * There is no `whileLive` gate here. A done session takes no more *plan*
  * changes, because its plan is frozen — but a deleted workout leaves no
- * session behind it, done or not. Whoever is still watching lands on home
- * with the delete's own notice.
+ * session behind it, done or not.
+ *
+ * The reason is not the same for both. A session that still runs loses the
+ * plan below it, and its participants must be told: `plan-deleted`. A session
+ * whose timer already reached the end has nothing left to interrupt. Its
+ * participants completed the workout, and they sit on the finished screen. A
+ * plan-deleted notice would tell them that their session was cut short, which
+ * is not true. That session ends as `closed`.
  *
  * The semaphore is taken like any other mutation, so the end never
  * interleaves with a ticker advance. Ending writes the completion rows from
  * the plan the session last applied while its timer was live; the deleted
  * library row is not read, and the completions table does not reference it.
  */
-const applyDelete = (handle: SessionHandle, end: EndForPlanDeleted): Effect.Effect<void> =>
-  handle.sem.withPermits(1)(end(handle))
+const applyDelete = (handle: SessionHandle, end: EndSession): Effect.Effect<void> =>
+  handle.sem.withPermits(1)(
+    Effect.gen(function* () {
+      const state = yield* SubscriptionRef.get(handle.stateRef)
+      yield* end(handle, state.timer._tag === 'done' ? 'closed' : 'plan-deleted')
+    }),
+  )
 
 /**
  * What one change does to one session — the `apply…` function for its kind,
@@ -333,7 +375,7 @@ const applyDelete = (handle: SessionHandle, end: EndForPlanDeleted): Effect.Effe
  */
 const applierFor = (
   change: PlanChange,
-  end: EndForPlanDeleted,
+  end: EndSession,
 ): ((handle: SessionHandle) => Effect.Effect<void>) => {
   switch (change._tag) {
     case 'renamed': {
@@ -354,20 +396,40 @@ const applierFor = (
 }
 
 /**
- * Applies one plan change to every live session that tracks the changed
- * workout. A session that ends between the lookup and the apply is skipped.
- * It has nothing left to update.
+ * Which live sessions of the changed workout one change reaches.
+ *
+ * An edit and a rename reach the tracking sessions only. This is the reflow
+ * exemption: a session launched with a reflow overlay runs a plan that the
+ * library never held, so a change to the library content can never apply to
+ * it.
+ *
+ * A delete reaches every session of the workout. The reflow-launched
+ * sessions go with the rest. This difference is deliberate. A reflow session
+ * runs an overlay of a plan that is now gone, so it has no source left to
+ * follow. A *content* change to that source can never apply to it, but a
+ * delete is not a content change. Before the delete, the host is told how
+ * many sessions stop. That count comes from lobby rows, and a lobby row does
+ * not say which sessions are reflow-launched. A session left running here is
+ * thus a session that the host was told would stop.
+ */
+const targetsOf = (change: PlanChange, sessions: SessionsOfWorkout): readonly SessionSummary[] =>
+  change._tag === 'deleted' ? [...sessions.tracking, ...sessions.reflowLaunched] : sessions.tracking
+
+/**
+ * Applies one plan change to every live session of the changed workout that
+ * the change reaches. A session that ends between the lookup and the apply is
+ * skipped. It has nothing left to update.
  */
 export const applyPlanChange = (
   registry: Registry,
   change: PlanChange,
-  end: EndForPlanDeleted,
+  end: EndSession,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const { tracking } = yield* sessionsOfWorkout(registry, change.workoutId)
+    const targets = targetsOf(change, yield* sessionsOfWorkout(registry, change.workoutId))
     const apply = applierFor(change, end)
     yield* Effect.forEach(
-      tracking,
+      targets,
       (summary) => Effect.flatMap(getHandle(registry, summary.id), apply).pipe(Effect.ignore),
       { discard: true },
     )

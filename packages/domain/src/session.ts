@@ -117,7 +117,21 @@ export type SessionCommand = typeof SessionCommand.Type
  */
 const taggedError = Schema.TaggedError
 
-/** A session lookup or command that targeted an unknown `SessionId`. */
+/**
+ * A session lookup or command that targeted an unknown `SessionId`.
+ *
+ * `endedAs` says why that session ended, if the server still remembers it.
+ * A participant can lose the connection, and the session can end while they
+ * are away. They then retry the watch and read the reason here. This is the
+ * only place they can read it: the session is gone and publishes no more
+ * snapshots. Without it, a deleted plan reads as an ordinary ending to the
+ * participant who most needs to know the difference.
+ *
+ * `null` when the server cannot say. Two cases give `null`: an id the server
+ * never had, and an ending that the short record no longer holds. The client
+ * reads `null` as the ordinary ending, which is the safe answer.
+ */
 export class SessionNotFound extends taggedError<SessionNotFound>()('SessionNotFound', {
   id: SessionId,
+  endedAs: Schema.NullOr(SessionEnd),
 }) {}
