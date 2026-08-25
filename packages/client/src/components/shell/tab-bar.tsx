@@ -5,6 +5,8 @@ import { Link, useLocation } from '@tanstack/react-router'
 
 import type { GlassOptions } from '@/glass/use-liquid-glass'
 import { useLiquidGlass } from '@/glass/use-liquid-glass'
+import { liveSessionPhrase, useActiveSessions } from '@/lib/live-workout'
+import { cn } from '@/lib/utils'
 
 import { tabItemClass, TABS, type TabDef, type TabId } from './tab-defs'
 
@@ -70,17 +72,64 @@ function TabBarSurface(props: {
   )
 }
 
-function TabLink({ tab, active }: { readonly tab: TabDef; readonly active: boolean }) {
+function TabLink({
+  tab,
+  active,
+  badge,
+}: {
+  readonly tab: TabDef
+  readonly active: boolean
+  readonly badge?: ReactNode
+}) {
   return (
     <Link
       to={tab.to}
       data-testid={tab.testId}
       aria-current={active ? 'page' : undefined}
       data-active={active ? 'true' : undefined}
-      className={tabItemClass(active)}
+      className={cn(tabItemClass(active), 'relative')}
     >
       <TabItemBody tab={tab} active={active} />
+      {badge}
     </Link>
+  )
+}
+
+/**
+ * How many sessions are live right now, on the Home tab.
+ *
+ * It reads `useActiveSessions`, which is the one lobby subscription home, the
+ * workout detail screen and the editor already share. The tab bar joins that
+ * subscription; it does not open a second one, because two subscriptions to
+ * the same set can disagree and the count would then contradict the list home
+ * shows.
+ *
+ * No live sessions renders nothing at all: chrome stays quiet when there is
+ * nothing to say. A feed that has not answered, and one that is failing, both
+ * read as no live sessions — so a broken feed shows no count, never an error.
+ *
+ * The count is a number, not a dot: one friend warming up and the whole group
+ * are different news. It carries its meaning in an accessible label, because
+ * a numeral in a corner says nothing on its own. `role="status"` announces a
+ * change without taking the user away from what they do.
+ *
+ * It sits inside the Home tab link, so the only thing it can do is take the
+ * user to home. Home is where you join a session.
+ */
+function LiveSessionCount() {
+  const count = useActiveSessions().length
+  if (count === 0) {
+    return null
+  }
+  return (
+    <span
+      data-testid="tab-live-count"
+      role="status"
+      aria-label={`${liveSessionPhrase(count)} running. Open Home to join.`}
+      className="absolute top-0.5 left-1/2 min-w-4 translate-x-1.5 rounded-full bg-primary px-1 text-center text-[10px] leading-4 font-semibold text-primary-foreground"
+    >
+      {count}
+    </span>
   )
 }
 
@@ -95,7 +144,12 @@ function TabBar() {
   return (
     <TabBarSurface>
       {TABS.map((tab) => (
-        <TabLink key={tab.id} tab={tab} active={active === tab.id} />
+        <TabLink
+          key={tab.id}
+          tab={tab}
+          active={active === tab.id}
+          badge={tab.id === 'home' ? <LiveSessionCount /> : undefined}
+        />
       ))}
     </TabBarSurface>
   )

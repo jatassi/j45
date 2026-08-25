@@ -14,6 +14,7 @@ import {
   mintTwoInviteCodes,
   planChangeNotice,
   readBeepCount,
+  readTabLiveCount,
   readWakeLockAcquired,
   readWakeLockReleaseCount,
   registerAndReachLibrary,
@@ -340,6 +341,71 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         // removes it, and other scenarios read that lobby.
         await leaveSessionWithConfirm(pageB)
         await expect(pageB.getByTestId('home-screen')).toBeVisible()
+        await leaveSessionWithConfirm(page)
+        await expect(page.getByTestId('home-screen')).toBeVisible()
+      } finally {
+        await contextB.close()
+      }
+    },
+  )
+
+  test(
+    'B sits on Library while A starts a session: the tab bar count on B rises with no navigation, ' +
+      'and the indicator says what it counts',
+    async ({ page, browser, browserName }) => {
+      test.skip(
+        browserName !== 'chromium',
+        'live-session e2e is chromium-only (two logged-in browser contexts; not webkit).',
+      )
+      test.setTimeout(60_000)
+
+      const env = readE2eEnv()
+      const [codeA, codeB] = await mintTwoInviteCodes(page, env.baseUrl, env.owner)
+
+      await registerAndReachLibrary(page, env.baseUrl, {
+        code: codeA,
+        username: 'e2e-ls4-a',
+        displayName: 'Live Count A',
+        pin: '6420',
+      })
+
+      const contextB = await browser.newContext()
+      const pageB = await contextB.newPage()
+      try {
+        await registerAndReachLibrary(pageB, env.baseUrl, {
+          code: codeB,
+          username: 'e2e-ls4-b',
+          displayName: 'Live Count B',
+          pin: '6420',
+        })
+
+        // B leaves home for a route that lists no live sessions at all. From
+        // here the tab bar is the only thing that can tell B anything.
+        await pageB.getByTestId('tab-library').click()
+        await expect(pageB.getByTestId('library-screen')).toBeVisible()
+
+        // Live sessions are server-wide, so other scenarios can add rows.
+        // Read the count first and compare with it, never with zero.
+        const before = await readTabLiveCount(pageB)
+
+        await startApexSession(page)
+
+        await expect
+          .poll(async () => readTabLiveCount(pageB), { timeout: 15_000 })
+          .toBeGreaterThanOrEqual(before + 1)
+
+        // B did not navigate. The chrome already on screen learned by itself.
+        await expect(pageB.getByTestId('library-screen')).toBeVisible()
+
+        // The indicator names what it counts, and it lives inside the Home
+        // tab: the only place it can take B is home, never into a session.
+        const indicator = pageB.getByTestId('tab-home').getByTestId('tab-live-count')
+        await expect(indicator).toBeVisible()
+        await expect(indicator).toHaveAttribute('aria-label', /live sessions? running/)
+
+        // End the session before the browsers close, so that its row does not
+        // stay in every account's lobby until the 60-second collector removes
+        // it.
         await leaveSessionWithConfirm(page)
         await expect(page.getByTestId('home-screen')).toBeVisible()
       } finally {
