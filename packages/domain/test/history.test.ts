@@ -7,6 +7,7 @@ import { expect } from 'vitest'
 
 import { UserId } from '../src/auth.js'
 import { CompletionId, SessionCompletion } from '../src/history.js'
+import { WorkoutId } from '../src/library.js'
 import { HistoryRpcs, J45Rpcs } from '../src/rpc.js'
 import { Participant, SessionId } from '../src/session.js'
 import { Flow, Pod, Round, Station, Workout } from '../src/workout.js'
@@ -56,6 +57,44 @@ describe('SessionCompletion', () => {
       const encoded = yield* Schema.encode(SessionCompletion)(original)
       const decoded = yield* Schema.decodeUnknown(SessionCompletion)(encoded)
 
+      expect(decoded).toStrictEqual(original)
+      // A record written before source identity existed carries none.
+      expect(decoded.sourceWorkoutId).toBeUndefined()
+    }),
+  )
+
+  it.effect('round-trips the optional source workout id when one is present', () =>
+    Effect.gen(function* () {
+      const now = yield* DateTime.now
+      const host = new Participant({
+        userId: Schema.decodeSync(UserId)('user-1'),
+        displayName: 'Alex',
+      })
+      const workout = new Workout({
+        name: 'Athletica',
+        focus: 'cardio',
+        pods: [new Pod({ name: 'Pod 1', stations: [new Station({ name: 'Burpee' })] })],
+        flow: new Flow({
+          type: 'laps',
+          rounds: [new Round({ workSeconds: 40, restSeconds: 20 })],
+        }),
+      })
+      const original = new SessionCompletion({
+        id: Schema.decodeSync(CompletionId)('completion-2'),
+        sessionId: Schema.decodeSync(SessionId)('session-2'),
+        workoutName: 'Athletica',
+        workout,
+        host,
+        participants: [host],
+        startedAt: now,
+        endedAt: now,
+        sourceWorkoutId: Schema.decodeSync(WorkoutId)('workout-athletica'),
+      })
+
+      const encoded = yield* Schema.encode(SessionCompletion)(original)
+      expect(encoded.sourceWorkoutId).toBe('workout-athletica')
+
+      const decoded = yield* Schema.decodeUnknown(SessionCompletion)(encoded)
       expect(decoded).toStrictEqual(original)
     }),
   )
