@@ -1,18 +1,13 @@
 import { describe, expect, it } from '@effect/vitest'
 import {
-  Flow,
   Participant,
-  Pod,
   Reflow,
   ReflowPod,
   ReflowRequest,
-  Round,
-  Station,
-  Workout,
-  type SessionId,
   type SessionNotFound,
   type SessionState,
   type WorkContext,
+  type Workout,
 } from '@j45/domain'
 import * as Effect from 'effect/Effect'
 import type * as Exit from 'effect/Exit'
@@ -22,7 +17,17 @@ import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
 import { LiveSessions } from '../../src/session/live-sessions.js'
-import { asOwner, bobId, caraId, FlowLive, seedUser } from './plan-flow-harness.js'
+import {
+  asOwner,
+  bobId,
+  caraId,
+  FlowLive,
+  makeWorkout,
+  running,
+  seedUser,
+  snapshotOf,
+  stationNames,
+} from './plan-flow-harness.js'
 
 /**
  * Editing the content of a library workout that live sessions run, observed
@@ -34,55 +39,8 @@ import { asOwner, bobId, caraId, FlowLive, seedUser } from './plan-flow-harness.
  * exact instant rather than a wall-clock guess.
  */
 
-/** How long one round works and rests, in seconds. Defaults: 10 and 5. */
-type Timing = { readonly workSeconds?: number; readonly restSeconds?: number }
-
-/**
- * One pod of the named stations, one round, under the workout name `name`.
- * `['A', 'B']` at the default timing compiles to ready 5s, work A 10s, rest
- * 5s, work B 10s. A `restSeconds` of `0` emits no rest segments at all,
- * which is how a test moves the segment indices without moving the work
- * ordinals.
- */
-const makeWorkout = (
-  stations: readonly [string, ...string[]],
-  timing: Timing = {},
-  name = 'Plan',
-) =>
-  new Workout({
-    name,
-    focus: 'cardio',
-    pods: [
-      new Pod({
-        name: 'P',
-        stations: [
-          new Station({ name: stations[0] }),
-          ...stations.slice(1).map((station) => new Station({ name: station })),
-        ],
-      }),
-    ],
-    flow: new Flow({
-      type: 'laps',
-      rounds: [
-        new Round({ workSeconds: timing.workSeconds ?? 10, restSeconds: timing.restSeconds ?? 5 }),
-      ],
-    }),
-  })
-
 const bob = new Participant({ userId: bobId, displayName: 'Bob' })
 const cara = new Participant({ userId: caraId, displayName: 'Cara' })
-
-/** The station names of a snapshot's work segments, in run order. */
-const stationNames = (state: SessionState): readonly string[] =>
-  state.compiled.segments.flatMap((segment) =>
-    segment._tag === 'work' ? [segment.work.station.name] : [],
-  )
-
-/** The running timer of a snapshot, or `undefined` if it is not running. */
-const running = (state: SessionState) => (state.timer._tag === 'running' ? state.timer : undefined)
-
-/** The snapshot of one session, by id. */
-const snapshotOf = (svc: LiveSessions, id: SessionId) => svc.snapshot(id)
 
 /** The station names of a stored workout, in order. */
 const stationsOf = (workout: Workout): readonly string[] =>

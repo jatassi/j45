@@ -372,6 +372,23 @@ export const isProgressed = (timer: TimerState): boolean =>
   timer._tag === 'done' || (segmentIndexOf(timer) ?? 0) >= 1
 
 /**
+ * Publishes one snapshot to the watchers, with the bookkeeping that every
+ * published timer move needs: a timer that has left the ready segment, or
+ * finished, sets `progressed`, and that flag alone decides whether the
+ * session leaves any history behind.
+ *
+ * The caller holds the session's semaphore. It also owns the ticker wakeup:
+ * only a move that changes the deadline needs one.
+ */
+export const publishSnapshot = (handle: SessionHandle, state: SessionState): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* SubscriptionRef.set(handle.stateRef, state)
+    if (isProgressed(state.timer)) {
+      yield* Ref.set(handle.progressed, true)
+    }
+  })
+
+/**
  * The index of the furthest segment entered for a timer position (the ready
  * segment is `0`). A done workout entered its last segment, so it reports
  * `totalSegments - 1`; `idle` never occurs for a live session but maps to the

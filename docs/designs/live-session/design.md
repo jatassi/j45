@@ -42,6 +42,18 @@ contract).
 > changes that landed, so a client can raise one notice for each. A session
 > launched with a reflow overlay is exempt: its plan was never in the library.
 >
+> Three timer positions have no next boundary to wait for. A paused session
+> takes the edit at once — an edit that arrives during the pause, and an edit
+> already held when the pause began — and the frozen milliseconds are
+> re-derived from the segment now in force, so the resume counts down the
+> segment it is actually in. A done session is frozen: no later change reaches
+> it, and its completion row keeps the plan that was in force while the timer
+> ran. A new plan that no longer reaches the current work ordinal finishes the
+> session on the plan it was running; the alternative, a clamp backwards,
+> replays a station the participant completed. That finish raises no notice
+> and moves no revision, so a participant cannot tell it from the last segment
+> of the plan.
+>
 > Deleting the workout ends every session that tracks it — and only those. A
 > reflow-launched session keeps running: its compiled plan was never in the
 > library, so the row that went was never its plan. Each ended session
