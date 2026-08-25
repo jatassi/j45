@@ -1,4 +1,6 @@
-import { RegistryProvider, Result } from '@effect-atom/atom-react'
+import * as React from 'react'
+
+import { RegistryProvider, Result, useAtomRefresh } from '@effect-atom/atom-react'
 import {
   Flow,
   LibraryWorkout,
@@ -18,7 +20,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { render } from '@testing-library/react'
+import { act, render } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import type * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
@@ -27,6 +29,7 @@ import * as Schema from 'effect/Schema'
 import { LibraryScreen } from '@/components/library-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
 import { EditWorkoutScreen, ReflowWorkoutScreen } from '@/components/workout-editor-screen'
+import { listActiveSessionsAtom } from '@/lib/live-workout'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 /**
@@ -83,6 +86,36 @@ export const liveSessionOf = (id: string, workoutId: WorkoutId) =>
 export const libraryWorkoutOf = (workout: Workout) =>
   new LibraryWorkout({ id: athleticaId, workout, createdAt: seededAt, updatedAt: seededAt })
 
+let refreshSessions: (() => void) | undefined
+
+/**
+ * Reads the lobby again, the way home's 5s poll does. A test calls it to
+ * change the lobby under a screen that is already open — a session that
+ * starts, or one that ends. Render with `pollsSessions` first.
+ */
+export const refreshActiveSessions = () => {
+  if (refreshSessions === undefined) {
+    throw new Error('refreshActiveSessions needs renderApp with pollsSessions')
+  }
+  act(refreshSessions)
+}
+
+/**
+ * Holds the lobby atom open for the whole render, so a test can refresh it.
+ * It is opt-in: it gives the atom a longer life than any screen has in the
+ * app, and no test must get that for free.
+ */
+function ActiveSessionsProbe() {
+  const refresh = useAtomRefresh(listActiveSessionsAtom)
+  React.useEffect(() => {
+    refreshSessions = refresh
+    return () => {
+      refreshSessions = undefined
+    }
+  }, [refresh])
+  return null
+}
+
 function makeFakeRuntime(handlers: Handlers) {
   const client = (tag: string, payload: unknown) => {
     const handler = handlers[tag]
@@ -94,8 +127,14 @@ function makeFakeRuntime(handlers: Handlers) {
   return Runtime.defaultRuntime.pipe(Runtime.provideService(ServerRpcClient, client as never))
 }
 
+/** What a render can turn on beyond the routes themselves. */
+export type RenderOptions = {
+  /** Keep the lobby atom open, so `refreshActiveSessions` can read it again. */
+  readonly pollsSessions?: boolean
+}
+
 /** Mounts library, detail, editor and launch-mode routes over memory history. */
-export function renderApp(handlers: Handlers, initialPath: string) {
+export function renderApp(handlers: Handlers, initialPath: string, options: RenderOptions = {}) {
   const fakeRuntime = makeFakeRuntime(handlers)
   const rootRoute = createRootRoute({ component: Outlet })
   const libraryRoute = createRoute({
@@ -125,6 +164,7 @@ export function renderApp(handlers: Handlers, initialPath: string) {
 
   render(
     <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
+      {options.pollsSessions === true ? <ActiveSessionsProbe /> : undefined}
       <RouterProvider router={testRouter} />
     </RegistryProvider>,
   )
