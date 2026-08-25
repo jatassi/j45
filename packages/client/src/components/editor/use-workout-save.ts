@@ -31,10 +31,14 @@ export type WorkoutSave = {
   /** Whether a save is waiting on the host. */
   readonly promptOpen: boolean
   /**
-   * How many live sessions the save reaches, as the prompt states it. It is
-   * read live, not frozen at the click: the lobby answer can arrive after the
-   * prompt opens, and a prompt that keeps a stale zero would understate what
-   * the host is about to do.
+   * How many live sessions the save reaches, as the prompt states it.
+   *
+   * It is read live, not frozen at the click: the lobby answer can arrive
+   * after the prompt opens, and a prompt that keeps a stale zero would
+   * understate what the host is about to do. But the live read can only
+   * raise the count. The prompt keeps the count it opened with as a floor,
+   * because its title says the workout is live. A session that ends while
+   * the host reads the prompt must not turn that count into nobody.
    */
   readonly promptCount: number
   /** Write the waiting save. */
@@ -69,7 +73,10 @@ export function useWorkoutSave(options: WorkoutSaveOptions): WorkoutSave {
   const refreshWorkout = useAtomRefresh(ServerRpcClient.query('GetWorkout', { id }))
   const [, update] = useAtom(updateWorkoutAtom, { mode: 'promise' })
   const liveCount = useLiveSessionCount(id)
-  const [pending, setPending] = React.useState<Workout | undefined>(undefined)
+  /** The waiting save, with the count the prompt opened with as its floor. */
+  const [pending, setPending] = React.useState<
+    { readonly workout: Workout; readonly floor: number } | undefined
+  >(undefined)
 
   const write = (workout: Workout) =>
     void update({ payload: { id, workout, updatedAt } })
@@ -89,13 +96,14 @@ export function useWorkoutSave(options: WorkoutSaveOptions): WorkoutSave {
       })
 
   return {
-    save: (workout: Workout) => (liveCount > 0 ? setPending(workout) : write(workout)),
+    save: (workout: Workout) =>
+      liveCount > 0 ? setPending({ workout, floor: liveCount }) : write(workout),
     promptOpen: pending !== undefined,
-    promptCount: liveCount,
+    promptCount: pending === undefined ? liveCount : Math.max(pending.floor, liveCount),
     confirm: () => {
       if (pending === undefined) return
       setPending(undefined)
-      write(pending)
+      write(pending.workout)
     },
     cancel: () => setPending(undefined),
   }

@@ -85,7 +85,10 @@ read that has not answered, or one that failed, counts as nobody: the prompt
 exists to stop a surprise, and it must never become the reason the owner
 cannot write to their own content. Read the count live while the prompt is
 open, so a late answer strengthens the wording rather than leaving a stale
-zero on screen.
+zero on screen. Once a prompt states a count, the live read can only raise
+it. The save prompt keeps the count it opened with. Its title says the
+workout is live, so a session that ends while the host reads must not turn
+that count into nobody.
 
 "Server-pushed news" is the narrow case where the server changes something
 under the user without them asking: today only a plan change reaching a live

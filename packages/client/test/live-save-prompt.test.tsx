@@ -10,8 +10,10 @@ import {
   libraryWorkoutOf,
   liveSessionOf,
   otherWorkoutId,
+  refreshActiveSessions,
   renderApp,
   type Handlers,
+  type RenderOptions,
 } from './live-workout-harness'
 
 vi.mock('sonner', () => ({
@@ -35,8 +37,8 @@ const editTheDraft = () => {
   fireEvent.change(screen.getAllByTestId('station-name-input')[0], { target: { value: 'Ski erg' } })
 }
 
-const openEditor = async (handlers: Handlers) => {
-  renderApp(handlers, `/workouts/${athleticaId}/edit`)
+const openEditor = async (handlers: Handlers, options: RenderOptions = {}) => {
+  renderApp(handlers, `/workouts/${athleticaId}/edit`, options)
   await screen.findByTestId('workout-editor-screen')
   editTheDraft()
   fireEvent.click(screen.getByTestId('editor-save'))
@@ -127,6 +129,63 @@ describe('saving an edit into a workout that live sessions run', () => {
     await screen.findByTestId('workout-detail-screen')
     expect(screen.queryByTestId('live-save-dialog')).toBeNull()
     expect(updateCalls).toBe(1)
+  })
+
+  it('keeps its opening count when the last session ends under the open prompt', async () => {
+    let lobbyReads = 0
+    let lobby = [liveSessionOf('session-abc', athleticaId)]
+    let updateCalls = 0
+    await openEditor(
+      editorHandlers({
+        ListActiveSessions: () =>
+          Effect.sync(() => {
+            lobbyReads++
+            return lobby
+          }),
+        UpdateWorkout: () => {
+          updateCalls++
+          return Effect.succeed(athletica)
+        },
+      }),
+      { pollsSessions: true },
+    )
+
+    const dialog = await screen.findByTestId('live-save-dialog')
+    expect(dialog.textContent).toContain('1 live session')
+
+    // The session ends while the host reads the prompt.
+    const readsBefore = lobbyReads
+    lobby = []
+    refreshActiveSessions()
+    await waitFor(() => {
+      expect(lobbyReads).toBeGreaterThan(readsBefore)
+    })
+
+    // The title says the workout is live, so the count must not say nobody.
+    expect(dialog.textContent).not.toContain('0 live sessions')
+    expect(dialog.textContent).toContain('1 live session')
+    expect(updateCalls).toBe(0)
+  })
+
+  it('strengthens the wording when a session starts under the open prompt', async () => {
+    let lobby = [liveSessionOf('session-abc', athleticaId)]
+    await openEditor(
+      editorHandlers({
+        ListActiveSessions: () => Effect.sync(() => lobby),
+        UpdateWorkout: () => Effect.succeed(athletica),
+      }),
+      { pollsSessions: true },
+    )
+
+    const dialog = await screen.findByTestId('live-save-dialog')
+    expect(dialog.textContent).toContain('1 live session')
+
+    lobby = [liveSessionOf('session-abc', athleticaId), liveSessionOf('session-def', athleticaId)]
+    refreshActiveSessions()
+
+    await waitFor(() => {
+      expect(dialog.textContent).toContain('2 live sessions')
+    })
   })
 
   it('gates launch mode the same way — its Save to plan writes the same workout', async () => {
