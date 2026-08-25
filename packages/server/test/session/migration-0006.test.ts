@@ -30,14 +30,17 @@ import Migration0003 from '../../migrations/0003_library.js'
 import Migration0004 from '../../migrations/0004_exercises.js'
 import Migration0005 from '../../migrations/0005_history.js'
 import Migration0006 from '../../migrations/0006_completion_progress.js'
+import Migration0007 from '../../migrations/0007_completion_source_workout.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 
 /**
  * `Migrator.fromRecord` (in-memory loader — real migration modules, statically
- * imported) drives both migrators below. Production (`src/sql.ts`) loads the
+ * imported) drives the migrators below. Production (`src/sql.ts`) loads the
  * same modules off disk. `fromRecord` lets a fresh database stop at exactly
- * 0001–0005 — the "migrated through 0005 only" state — before 0006 runs.
+ * 0001–0005 — the "migrated through 0005 only" state — before 0006 runs, and
+ * at 0006 for the column shape 0006 itself leaves behind. `migrateAll` runs
+ * the whole set, which is what `CompletionsRepo` writes against.
  */
 const migrateThrough0005 = Migrator.make({})({
   loader: Migrator.fromRecord({
@@ -49,6 +52,17 @@ const migrateThrough0005 = Migrator.make({})({
   }),
 })
 
+const migrateThrough0006 = Migrator.make({})({
+  loader: Migrator.fromRecord({
+    '0001_app_meta': Migration0001,
+    '0002_auth': Migration0002,
+    '0003_library': Migration0003,
+    '0004_exercises': Migration0004,
+    '0005_history': Migration0005,
+    '0006_completion_progress': Migration0006,
+  }),
+})
+
 const migrateAll = Migrator.make({})({
   loader: Migrator.fromRecord({
     '0001_app_meta': Migration0001,
@@ -57,6 +71,7 @@ const migrateAll = Migrator.make({})({
     '0004_exercises': Migration0004,
     '0005_history': Migration0005,
     '0006_completion_progress': Migration0006,
+    '0007_completion_source_workout': Migration0007,
   }),
 })
 
@@ -126,7 +141,7 @@ describe('migration 0006_completion_progress', () => {
     'adds nullable progress_segments_completed and progress_total_segments to session_completions',
     () =>
       Effect.gen(function* () {
-        yield* migrateAll
+        yield* migrateThrough0006
         const sql = yield* SqlClient.SqlClient
 
         const columns = yield* sql<{
@@ -189,7 +204,9 @@ describe('migration 0006_completion_progress', () => {
           body: JSON.stringify(encoded),
         })}`
 
-        // 0001–0005 are already recorded — only 0006 actually runs here.
+        // 0001–0005 are already recorded, so only 0006 and 0007 run here.
+        // `CompletionsRepo` reads and writes the whole schema, never a
+        // half-migrated one.
         yield* migrateAll
 
         const columns = yield* sql<{

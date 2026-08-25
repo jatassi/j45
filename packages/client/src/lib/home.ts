@@ -37,22 +37,13 @@ export type HeroPick =
   | { readonly _tag: 'browse'; readonly workout: LibraryWorkout | undefined }
 
 /**
- * Case-insensitive, whitespace-trimmed match of `name` against a library
- * workout's `workout.name`. Returns the matching entry or `undefined`.
- */
-export function resolveWorkoutByName(
-  name: string,
-  workouts: readonly LibraryWorkout[],
-): LibraryWorkout | undefined {
-  const needle = name.trim().toLowerCase()
-  if (needle.length === 0) return undefined
-  return workouts.find((entry) => entry.workout.name.trim().toLowerCase() === needle)
-}
-
-/**
  * The caller's library entry with this id, or `undefined`. A live session of a
  * different host refers to a workout in *that host's* library. An id that is
  * absent here thus resolves to nothing, and this is the correct result.
+ *
+ * Identity is the only join Home makes. There is deliberately no fallback to
+ * the workout name: names are free text and nothing keeps them unique, so a
+ * name match can return a workout the user never chose.
  */
 export function resolveWorkoutById(
   id: WorkoutId,
@@ -62,14 +53,34 @@ export function resolveWorkoutById(
 }
 
 /**
+ * The library workout one completion came from, or `undefined` when it cannot
+ * be resolved — the record carries no identity (written before completions
+ * had one), the workout is deleted, or it belongs to another user's library.
+ * All three are ordinary, and all three resolve to nothing rather than to a
+ * same-named substitute.
+ */
+function resolveCompletion(
+  completion: SessionCompletion,
+  workouts: readonly LibraryWorkout[],
+): LibraryWorkout | undefined {
+  const id = completion.sourceWorkoutId
+  return id === undefined ? undefined : resolveWorkoutById(id, workouts)
+}
+
+/**
  * Picks the home hero by priority: live → start-last → browse.
  *
  * - **live**: `sessions` non-empty — newest by `startedAt` is the hero, the
  *   rest are extras; attaches the library workout by id. A workout with the
  *   same name is not the same workout.
- * - **start-last**: no live sessions, history head resolves by name.
+ * - **start-last**: no live sessions, and some completion resolves to a
+ *   workout in the caller's library. The walk goes newest-first and takes the
+ *   first that resolves, rather than giving up at the newest: after a session
+ *   on someone else's plan the newest records point at a library that is not
+ *   the caller's, and the hero must stay useful.
  * - **browse**: first library workout, or `undefined` if the library is empty
- *   (never throws). Unresolved history head falls through here too.
+ *   (never throws). A history where nothing resolves falls through here too,
+ *   so the fold is never dead.
  */
 export function pickHero(
   sessions: readonly SessionSummary[],
@@ -87,8 +98,8 @@ export function pickHero(
       : { _tag: 'live', session, extras, workout }
   }
 
-  if (history.length > 0) {
-    const workout = resolveWorkoutByName(history[0].workoutName, workouts)
+  for (const completion of history) {
+    const workout = resolveCompletion(completion, workouts)
     if (workout !== undefined) {
       return { _tag: 'start-last', workout }
     }
@@ -99,9 +110,14 @@ export function pickHero(
 
 /**
  * Up to `count` distinct library workouts for the home recent list: walk
- * `history` in order, resolve each name into the library (skipping misses and
- * duplicates by `WorkoutId`), then pad remaining slots from `workouts` in
- * library order without re-adding anything already included.
+ * `history` in order, resolve each completion into the library by identity
+ * (skipping misses and duplicates by `WorkoutId`), then pad remaining slots
+ * from `workouts` in library order without re-adding anything already
+ * included.
+ *
+ * A completion that resolves to nothing contributes no row. Its Start button
+ * could not work, so a row for it would be worse than its absence — and the
+ * padding keeps the list full either way.
  */
 export function recentRows(
   history: readonly SessionCompletion[],
@@ -113,7 +129,7 @@ export function recentRows(
 
   for (const completion of history) {
     if (rows.length >= count) break
-    const resolved = resolveWorkoutByName(completion.workoutName, workouts)
+    const resolved = resolveCompletion(completion, workouts)
     if (resolved === undefined || seen.has(resolved.id)) continue
     seen.add(resolved.id)
     rows.push(resolved)

@@ -135,7 +135,7 @@ const listHistoryFor = (userId: UserId) =>
 
 describe('history flows via ListHistory (TestClock)', () => {
   it.scoped(
-    'host starts, ticker crosses into work, second user joins then leaves mid-session, host leaves last — both ListHistory records hold workoutName, as-run snapshot, host, startedAt, endedAt, and timer-position progress',
+    'host starts, ticker crosses into work, second user joins then leaves mid-session, host leaves last — both ListHistory records hold workoutName, as-run snapshot, host, startedAt, endedAt, timer-position progress, and the source workout id',
     () =>
       Effect.gen(function* () {
         yield* seedUser(alice.userId, 'Alice')
@@ -174,6 +174,9 @@ describe('history flows via ListHistory (TestClock)', () => {
           // Progress rides the wire: furthest segment entered is 1 of 4.
           expect(record.progress?.segmentsCompleted).toBe(1)
           expect(record.progress?.totalSegments).toBe(4)
+          // Every participant's record carries the source workout the session
+          // started from — the host's library id, guest rows included.
+          expect(record.sourceWorkoutId).toBe(fixtureWorkoutId)
         }
         // Per-leaver participants: bob left first (both rostered), alice last.
         expect(participantIdsSorted(bobRecord)).toEqual([alice.userId, bob.userId])
@@ -230,6 +233,8 @@ describe('history flows via ListHistory (TestClock)', () => {
           }
           expect(aliceRecord.workoutName).toBe('Fixture')
           expect(bobRecord.workoutName).toBe('Fixture')
+          expect(aliceRecord.sourceWorkoutId).toBe(fixtureWorkoutId)
+          expect(bobRecord.sourceWorkoutId).toBe(fixtureWorkoutId)
           expect(participantIdsSorted(aliceRecord)).toEqual([alice.userId, bob.userId])
           expect(participantIdsSorted(bobRecord)).toEqual([alice.userId, bob.userId])
         }

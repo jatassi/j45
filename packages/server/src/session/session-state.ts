@@ -324,6 +324,12 @@ export const sessionsOfWorkout = (
  * workout that was deleted while the session ran therefore takes nothing away
  * from the rows the session leaves behind.
  *
+ * `sourceWorkoutId` is the one exception in kind: not a plan, but the identity
+ * of the library workout this session started from, carried on the handle
+ * since launch. It is the host's id, so a guest's row holds an id that
+ * resolves to nothing in their own library — the truthful answer, and the
+ * reason readers must join on it rather than on the name.
+ *
  * Progress is counted in that same plan. The total is the segment count of
  * the plan, and the position is the furthest segment that the session
  * published while it ran that plan. Both numbers come from one plan, so
@@ -334,6 +340,7 @@ export const completionInputs = (handle: SessionHandle, state: SessionState) =>
     return {
       sessionId: handle.id,
       workoutName: state.workoutName,
+      sourceWorkoutId: handle.workoutId,
       workout: yield* Ref.get(handle.workout),
       host: handle.host,
       participants: [...HashMap.values(yield* Ref.get(handle.roster))],

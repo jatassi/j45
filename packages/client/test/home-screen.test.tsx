@@ -1,40 +1,18 @@
 // @vitest-environment jsdom
-import { RegistryProvider, Result } from '@effect-atom/atom-react'
-import {
-  CompletionId,
-  Flow,
-  LibraryWorkout,
-  Participant,
-  Pod,
-  Round,
-  SessionCompletion,
-  SessionId,
-  SessionSummary,
-  Station,
-  UserId,
-  Workout,
-  WorkoutId,
-  WorkoutNotFound,
-} from '@j45/domain'
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-  useParams,
-} from '@tanstack/react-router'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import * as DateTime from 'effect/DateTime'
+import { WorkoutId, WorkoutNotFound } from '@j45/domain'
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import * as Effect from 'effect/Effect'
-import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HomeScreen } from '@/components/home-screen'
-import { ServerRpcClient } from '@/lib/rpc-client'
+import {
+  defaultHandlers,
+  ironCircuit,
+  liveSession,
+  renderHomeScreen,
+  startedSummary,
+} from './home-harness'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -49,170 +27,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.mocked(toast.error).mockClear()
 })
-
-/**
- * Builds a `Runtime` that provides `ServerRpcClient` with `handlers` in
- * place of the real (websocket-backed) rpc client — the same fake-runtime
- * idiom `library-screen.test.tsx` / `home-hero.test.tsx` use, seeding
- * `ServerRpcClient.runtime` itself via `RegistryProvider`'s `initialValues`.
- */
-function makeFakeRuntime(
-  handlers: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>,
-) {
-  const client = (tag: string, payload: unknown) => {
-    const handler = handlers[tag]
-    if (handler === undefined) {
-      throw new Error(`unexpected rpc call: ${tag}`)
-    }
-    return handler(payload)
-  }
-  return Runtime.defaultRuntime.pipe(Runtime.provideService(ServerRpcClient, client as never))
-}
-
-const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
-
-const makeWorkout = (name: string, focus: 'cardio' | 'strength' | 'hybrid' = 'cardio'): Workout =>
-  new Workout({
-    name,
-    focus,
-    pods: [new Pod({ name: 'Pod 1', stations: [new Station({ name: 'Burpee' })] })],
-    flow: new Flow({
-      type: 'laps',
-      rounds: [new Round({ workSeconds: 40, restSeconds: 20 })],
-    }),
-  })
-
-const makeLibraryWorkout = (
-  id: string,
-  name: string,
-  focus: 'cardio' | 'strength' | 'hybrid' = 'cardio',
-): LibraryWorkout =>
-  new LibraryWorkout({
-    id: Schema.decodeSync(WorkoutId)(id),
-    workout: makeWorkout(name, focus),
-    createdAt: seededAt,
-    updatedAt: seededAt,
-  })
-
-const alice = new Participant({
-  userId: Schema.decodeSync(UserId)('user-alice'),
-  displayName: 'Alice',
-})
-
-const makeCompletion = (id: string, workoutName: string): SessionCompletion =>
-  new SessionCompletion({
-    id: Schema.decodeSync(CompletionId)(id),
-    sessionId: Schema.decodeSync(SessionId)(`session-for-${id}`),
-    workoutName,
-    workout: makeWorkout(workoutName),
-    host: alice,
-    participants: [alice],
-    startedAt: seededAt,
-    endedAt: seededAt,
-  })
-
-/** Stand-in destination for `/session/<id>` navigation. */
-function SessionDestination() {
-  const { sessionId } = useParams({ strict: false }) as { sessionId: string }
-  return <div data-testid={`session-screen-${sessionId}`} />
-}
-
-/** Stand-in destination for `/workouts/<id>` detail navigation. */
-function WorkoutDetailDestination() {
-  const { workoutId } = useParams({ strict: false }) as { workoutId: string }
-  return <div data-testid={`workout-detail-${workoutId}`} />
-}
-
-/**
- * Mounts `HomeScreen` as the `/` route of a throwaway router so its `Link`s
- * and navigates have router context.
- */
-function renderHomeScreen(
-  handlers: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>,
-) {
-  const fakeRuntime = makeFakeRuntime(handlers)
-  const rootRoute = createRootRoute({ component: Outlet })
-  const indexRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: HomeScreen,
-  })
-  const timerRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/timer',
-    component: () => <div data-testid="timer-destination" />,
-  })
-  const generateRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/generate',
-    component: () => <div data-testid="generate-destination" />,
-  })
-  const newWorkoutRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workouts/new',
-    component: () => <div data-testid="new-workout-destination" />,
-  })
-  const workoutDetailRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workouts/$workoutId',
-    component: WorkoutDetailDestination,
-  })
-  const sessionRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/session/$sessionId',
-    component: SessionDestination,
-  })
-  const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([
-      indexRoute,
-      timerRoute,
-      generateRoute,
-      newWorkoutRoute,
-      workoutDetailRoute,
-      sessionRoute,
-    ]),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
-  })
-
-  render(
-    <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
-      <RouterProvider router={testRouter} />
-    </RegistryProvider>,
-  )
-}
-
-const ironCircuit = makeLibraryWorkout('workout-iron', 'Iron Circuit', 'strength')
-const athletica = makeLibraryWorkout('workout-athletica', 'Athletica', 'cardio')
-
-const liveSession = new SessionSummary({
-  id: Schema.decodeSync(SessionId)('session-live-1'),
-  workoutId: ironCircuit.id,
-  hostDisplayName: 'Jordan',
-  workoutName: 'Iron Circuit',
-  startedAt: DateTime.unsafeMake('2026-03-01T09:48:00.000Z'),
-  participantCount: 4,
-})
-
-const startedSummary = new SessionSummary({
-  id: Schema.decodeSync(SessionId)('session-started-1'),
-  workoutId: ironCircuit.id,
-  hostDisplayName: 'You',
-  workoutName: ironCircuit.workout.name,
-  startedAt: seededAt,
-  participantCount: 1,
-})
-
-/** Default successful handlers for the three home queries. */
-function defaultHandlers(
-  overrides: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>> = {},
-): Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>> {
-  return {
-    ListActiveSessions: () => Effect.succeed([]),
-    ListHistory: () => Effect.succeed([makeCompletion('c-1', 'Iron Circuit')]),
-    ListWorkouts: () => Effect.succeed([ironCircuit, athletica]),
-    ...overrides,
-  }
-}
 
 describe('HomeScreen — hero composition', () => {
   it('computes pickHero for a live session and renders home-hero with join target', async () => {

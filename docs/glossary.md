@@ -50,7 +50,13 @@ unrecorded wherever they fit.
   library. Tracking decides which Sessions a *content* change reaches. It does
   not decide which Sessions a delete reaches: a delete reaches every live
   Session of the Workout, because a plan that is gone leaves nothing to
-  follow, overlay or not.
+  follow, overlay or not. Every completion record the Session writes keeps
+  the same id, so a reader can find the Workout a record came from. The id is
+  the host's, and it is the only key a reader may join on: a name is free
+  text, two Workouts can hold one name, and a record of somebody else's plan
+  holds their name, not yours. A record that resolves to nothing in the
+  reader's own library is the true answer, not a miss. Records written before
+  the id was kept hold none, and are not given one by guess.
 - **Plan change** — a change to a stored Workout, announced by the library so
   that every live Session which tracks that Workout can follow it. The library
   publishes; the live-Session registry consumes. The library never knows that

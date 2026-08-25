@@ -9,6 +9,7 @@ import {
   type SessionId,
   type UserId,
   type Workout,
+  type WorkoutId,
 } from '@j45/domain'
 import * as Arr from 'effect/Array'
 import type * as DateTime from 'effect/DateTime'
@@ -26,18 +27,22 @@ type CompletionsTableRow = {
   /** Denormalized from `progress`; NULL when the completion has no progress (pre-0006 rows, or post-0006 writes without it). */
   readonly progress_segments_completed: number | null
   readonly progress_total_segments: number | null
+  /** Denormalized from `sourceWorkoutId`; NULL for pre-0007 rows, which have no honest one, and absent on a pre-0007 schema. */
+  readonly source_workout_id: string | null | undefined
 }
 
 /**
  * Decodes a `session_completions` row into the domain `SessionCompletion`.
- * Starts from `body`'s JSON, then applies the denormalized progress columns
- * as the authority for `progress`: both non-null → that
- * `CompletionProgress`; either NULL → progress absent (covers pre-0006 rows
- * and writes without progress). The merged value goes through
- * `Schema.decodeUnknown` so field validation and `DateTimeUtc` ISO parsing
- * both apply. Every row here was written by this module (or by a pre-0006
- * insert of the same body shape), so a decode failure is a stored-data
- * invariant violation — it dies rather than returning a typed error.
+ * Starts from `body`'s JSON, then applies the denormalized columns as the
+ * authority for the fields they mirror: progress is that `CompletionProgress`
+ * when both columns are non-null and absent otherwise (covering pre-0006 rows
+ * and writes without progress), and `sourceWorkoutId` is the column's value or
+ * absent (covering pre-0007 rows, which have none). The merged value goes
+ * through `Schema.decodeUnknown` so field validation and `DateTimeUtc` ISO
+ * parsing both apply. Every row here was written by this module (or by a
+ * pre-0006 insert of the same body shape), so a decode failure is a
+ * stored-data invariant violation — it dies rather than returning a typed
+ * error.
  */
 const decodeRow = (row: CompletionsTableRow) => {
   const body = JSON.parse(row.body) as Record<string, unknown>
@@ -54,6 +59,16 @@ const decodeRow = (row: CompletionsTableRow) => {
     delete body.progress
   }
 
+  // NULL column → no source workout. Never guessed from the name. `SELECT *`
+  // on a schema that predates 0007 returns no such key at all, which reads the
+  // same way and is the correct answer for those rows.
+  const sourceWorkoutId = row.source_workout_id ?? undefined
+  if (sourceWorkoutId === undefined) {
+    delete body.sourceWorkoutId
+  } else {
+    body.sourceWorkoutId = sourceWorkoutId
+  }
+
   return Schema.decodeUnknown(SessionCompletion)(body).pipe(Effect.orDie)
 }
 
@@ -65,7 +80,9 @@ type InsertRow = {
 /**
  * The as-ended facts of one session, minus the per-participant identity.
  * `progress` is how far the session had run when the row is written (absent for
- * legacy call sites); it rides onto every `SessionCompletion` this record mints.
+ * legacy call sites); `sourceWorkoutId` is the library workout the session
+ * started from, in the *host's* library. Both ride onto every
+ * `SessionCompletion` this record mints, guest rows included.
  */
 export type SessionRecord = {
   readonly sessionId: SessionId
@@ -76,6 +93,7 @@ export type SessionRecord = {
   readonly startedAt: DateTime.Utc
   readonly endedAt: DateTime.Utc
   readonly progress?: CompletionProgress
+  readonly sourceWorkoutId?: WorkoutId
 }
 
 /** Mints one `SessionCompletion` from a record — the shared row shape. */
@@ -91,6 +109,7 @@ const completionFor = (record: SessionRecord, participants: readonly Participant
     startedAt: record.startedAt,
     endedAt: record.endedAt,
     progress: record.progress,
+    sourceWorkoutId: record.sourceWorkoutId,
   })
 
 /**
@@ -137,7 +156,7 @@ export const completionRowForUser = (
  * when absent they are written as NULL (post-0006). Omitting them only when
  * the table predates 0006 is unnecessary in production — MigratorLive always
  * runs 0006 — but writing NULL explicitly keeps the "no progress" state
- * visible in the row.
+ * visible in the row. `source_workout_id` follows the same rule (post-0007).
  */
 const insertAll = (sql: SqlClient.SqlClient, rows: readonly InsertRow[]) =>
   sql.withTransaction(
@@ -155,6 +174,7 @@ const insertAll = (sql: SqlClient.SqlClient, rows: readonly InsertRow[]) =>
               body: JSON.stringify(encoded),
               progress_segments_completed: progress?.segmentsCompleted ?? null,
               progress_total_segments: progress?.totalSegments ?? null,
+              source_workout_id: encoded.sourceWorkoutId ?? null,
             })}`
           }),
         { discard: true },
@@ -171,8 +191,9 @@ const listForUser = (sql: SqlClient.SqlClient, userId: UserId) =>
   `.pipe(Effect.flatMap((rows) => Effect.forEach(rows, decodeRow)))
 
 /**
- * Persistence for the `session_completions` table (migrations `0005_history`
- * + `0006_completion_progress`), following the `library/` idioms: services
+ * Persistence for the `session_completions` table (migrations `0005_history`,
+ * `0006_completion_progress`, `0007_completion_source_workout`), following the
+ * `library/` idioms: services
  * via `Effect.Service`, persistence only through the generic
  * `SqlClient.SqlClient` tag. Encode once on write / decode on read;
  * caller-facing failures are only `SqlError` — decode defects die.

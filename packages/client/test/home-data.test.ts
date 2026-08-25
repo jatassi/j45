@@ -18,13 +18,7 @@ import * as DateTime from 'effect/DateTime'
 import * as Schema from 'effect/Schema'
 import { describe, expect, it } from 'vitest'
 
-import {
-  listHistoryAtom,
-  pickHero,
-  recentRows,
-  resolveWorkoutByName,
-  startWorkoutAtom,
-} from '@/lib/home'
+import { listHistoryAtom, pickHero, recentRows, startWorkoutAtom } from '@/lib/home'
 
 const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
 
@@ -69,7 +63,16 @@ const alice = new Participant({
   displayName: 'Alice',
 })
 
-const makeCompletion = (id: string, workoutName: string): SessionCompletion =>
+/**
+ * A completion record. `sourceWorkoutId` is the identity Home joins on;
+ * omitting it models a record written before identity existed. `workoutName`
+ * is deliberately free to disagree with the library — the point of the join.
+ */
+const makeCompletion = (
+  id: string,
+  workoutName: string,
+  sourceWorkoutId?: string,
+): SessionCompletion =>
   new SessionCompletion({
     id: Schema.decodeSync(CompletionId)(id),
     sessionId: Schema.decodeSync(SessionId)(`session-for-${id}`),
@@ -79,6 +82,9 @@ const makeCompletion = (id: string, workoutName: string): SessionCompletion =>
     participants: [alice],
     startedAt: seededAt,
     endedAt: seededAt,
+    ...(sourceWorkoutId === undefined
+      ? {}
+      : { sourceWorkoutId: Schema.decodeSync(WorkoutId)(sourceWorkoutId) }),
   })
 
 const athletica = makeLibraryWorkout('workout-athletica', 'Athletica')
@@ -90,19 +96,6 @@ describe('home data helpers — module exports', () => {
   it('exports startWorkoutAtom and listHistoryAtom as module-scoped rpc atoms', () => {
     expect(startWorkoutAtom).toBeDefined()
     expect(listHistoryAtom).toBeDefined()
-  })
-})
-
-describe('resolveWorkoutByName', () => {
-  it('matches case-insensitively and trims whitespace on both sides', () => {
-    expect(resolveWorkoutByName('athletica', library)).toBe(athletica)
-    expect(resolveWorkoutByName('  IRON CIRCUIT  ', library)).toBe(ironCircuit)
-    expect(resolveWorkoutByName('Ladder Day', library)).toBe(ladderDay)
-  })
-
-  it('returns undefined when no library workout matches the name', () => {
-    expect(resolveWorkoutByName('Deleted Workout', library)).toBeUndefined()
-    expect(resolveWorkoutByName('', library)).toBeUndefined()
   })
 })
 
@@ -120,7 +113,7 @@ describe('pickHero priority', () => {
       workoutName: 'Iron Circuit',
       startedAt: DateTime.unsafeMake('2026-03-01T10:00:00.000Z'),
     })
-    const history = [makeCompletion('c-1', 'Athletica')]
+    const history = [makeCompletion('c-1', 'Athletica', 'workout-athletica')]
 
     const pick = pickHero([older, newer], history, library)
 
@@ -166,8 +159,8 @@ describe('pickHero priority', () => {
 
   it('picks start-last over browse when there are no live sessions and history head resolves', () => {
     const history = [
-      makeCompletion('c-head', 'Iron Circuit'),
-      makeCompletion('c-older', 'Athletica'),
+      makeCompletion('c-head', 'Iron Circuit', 'workout-iron'),
+      makeCompletion('c-older', 'Athletica', 'workout-athletica'),
     ]
 
     const pick = pickHero([], history, library)
@@ -175,8 +168,49 @@ describe('pickHero priority', () => {
     expect(pick).toEqual({ _tag: 'start-last', workout: ironCircuit })
   })
 
-  it('falls through to browse when history head does not resolve (renamed/deleted workout)', () => {
-    const history = [makeCompletion('c-gone', 'Deleted Workout')]
+  it('still resolves a completion of a workout that has since been renamed', () => {
+    // The record keeps the name as run; the library entry has moved on.
+    const history = [makeCompletion('c-renamed', 'Iron Circuit', 'workout-ladder')]
+
+    expect(pickHero([], history, library)).toEqual({ _tag: 'start-last', workout: ladderDay })
+  })
+
+  it('picks the workout the record names by identity when two library workouts share a name', () => {
+    const twin = makeLibraryWorkout('workout-iron-copy', 'Iron Circuit')
+    const shared = [ironCircuit, twin] as const
+    // Head-of-library `ironCircuit` is what a name match would have returned.
+    const history = [makeCompletion('c-twin', 'Iron Circuit', 'workout-iron-copy')]
+
+    expect(pickHero([], history, shared)).toEqual({ _tag: 'start-last', workout: twin })
+  })
+
+  it('walks past a completion of another user’s plan to the newest one that is the caller’s own', () => {
+    const history = [
+      // Newest: a session on a friend's plan — their id, a name the caller
+      // also has. Resolving it would offer the caller's own copy as though it
+      // were the workout just done.
+      makeCompletion('c-foreign', 'Iron Circuit', 'workout-their-iron'),
+      makeCompletion('c-mine', 'Athletica', 'workout-athletica'),
+    ]
+
+    expect(pickHero([], history, library)).toEqual({ _tag: 'start-last', workout: athletica })
+  })
+
+  it('walks past records that carry no identity at all', () => {
+    const history = [
+      // Written before completions carried identity — no honest join key.
+      makeCompletion('c-legacy', 'Iron Circuit'),
+      makeCompletion('c-mine', 'Ladder Day', 'workout-ladder'),
+    ]
+
+    expect(pickHero([], history, library)).toEqual({ _tag: 'start-last', workout: ladderDay })
+  })
+
+  it('falls through to browse when no completion in the history resolves', () => {
+    const history = [
+      makeCompletion('c-deleted', 'Deleted Workout', 'workout-deleted'),
+      makeCompletion('c-legacy', 'Athletica'),
+    ]
 
     const pick = pickHero([], history, library)
 
@@ -190,7 +224,7 @@ describe('pickHero priority', () => {
   })
 
   it('picks browse with workout: undefined on an empty library without throwing', () => {
-    const history = [makeCompletion('c-1', 'Anything')]
+    const history = [makeCompletion('c-1', 'Anything', 'workout-athletica')]
 
     expect(() => pickHero([], history, [])).not.toThrow()
     expect(pickHero([], history, [])).toEqual({ _tag: 'browse', workout: undefined })
@@ -199,12 +233,13 @@ describe('pickHero priority', () => {
 })
 
 describe('recentRows', () => {
-  it('returns distinct name-resolved history workouts in history order', () => {
+  it('returns distinct identity-resolved history workouts in history order', () => {
     const history = [
-      makeCompletion('c-1', 'Iron Circuit'),
-      makeCompletion('c-2', 'iron circuit'), // same library workout, different casing
-      makeCompletion('c-3', 'Ladder Day'),
-      makeCompletion('c-4', 'Athletica'),
+      makeCompletion('c-1', 'Iron Circuit', 'workout-iron'),
+      // Same library workout under the name it had at the time.
+      makeCompletion('c-2', 'Iron Circuit (old)', 'workout-iron'),
+      makeCompletion('c-3', 'Ladder Day', 'workout-ladder'),
+      makeCompletion('c-4', 'Athletica', 'workout-athletica'),
     ]
 
     const rows = recentRows(history, library, 3)
@@ -212,11 +247,26 @@ describe('recentRows', () => {
     expect(rows).toEqual([ironCircuit, ladderDay, athletica])
   })
 
-  it('skips unresolvable history entries and pads remaining slots from the library without duplicates', () => {
-    const history = [makeCompletion('c-1', 'Iron Circuit'), makeCompletion('c-2', 'Gone Workout')]
+  it('rows the workout the record identifies, not the first library entry sharing its name', () => {
+    const twin = makeLibraryWorkout('workout-iron-copy', 'Iron Circuit')
+    const shared = [ironCircuit, twin] as const
+    const history = [makeCompletion('c-twin', 'Iron Circuit', 'workout-iron-copy')]
 
-    // count=4: history contributes Iron Circuit only; pad with Athletica, Ladder Day
-    // (library order, skipping Iron Circuit already present).
+    expect(recentRows(history, shared, 1)).toEqual([twin])
+  })
+
+  it('skips a deleted workout, another user’s workout, and a record with no identity, then pads from the library', () => {
+    const history = [
+      makeCompletion('c-1', 'Iron Circuit', 'workout-iron'),
+      makeCompletion('c-2', 'Gone Workout', 'workout-deleted'),
+      // A friend's plan whose name collides with the caller's own copy.
+      makeCompletion('c-3', 'Athletica', 'workout-their-athletica'),
+      // Written before completions carried identity.
+      makeCompletion('c-4', 'Ladder Day'),
+    ]
+
+    // count=4: history contributes Iron Circuit only; padding fills the rest
+    // from the library in order, skipping what is already present.
     const rows = recentRows(history, library, 4)
 
     expect(rows).toEqual([ironCircuit, athletica, ladderDay])
