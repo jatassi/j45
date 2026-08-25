@@ -22,7 +22,10 @@ never have held that shape at all (a launch-time reflow).
 > promise: a completion records **the last plan applied while the timer was
 > still live**. An edit after the timer is done never reaches the record. The
 > known cost is that a session which ran across two plans is recorded against
-> the later one, not stitched across both.
+> the later one, not stitched across both. A session that a delete ends
+> follows the same rule, and it is the reason the rule is worded this way:
+> the record comes from the plan held in memory, which the row deletion
+> cannot touch. There is no foreign key from completions to workouts.
 
 ## How it fits
 

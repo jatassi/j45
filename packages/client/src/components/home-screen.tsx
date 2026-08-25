@@ -8,16 +8,18 @@ import {
   type SessionSummary,
   type WorkoutId,
 } from '@j45/domain'
-import { Link, useNavigate } from '@tanstack/react-router'
-import { Dumbbell, Play, Plus, Sparkles, Timer } from 'lucide-react'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
+import { Dumbbell, Play, Plus, Sparkles, Timer, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { HomeHero } from '@/components/home-hero'
 import { QueryBoundary } from '@/components/query-boundary'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSceneSurface } from '@/glass/use-scene-surface'
 import { listHistoryAtom, pickHero, recentRows, startWorkoutAtom } from '@/lib/home'
+import { HOME_NOTICE_TEXT, homeNotice } from '@/lib/home-notice'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import { cn } from '@/lib/utils'
 import { formatDuration, listWorkoutsAtom } from '@/lib/workouts'
@@ -95,6 +97,44 @@ function QuickTile(props: {
         {props.label}
       </span>
     </Link>
+  )
+}
+
+/**
+ * The explanation a session that ended sends its people here with, read from
+ * the `notice` search parameter the route validates (see `router.tsx`).
+ * Nothing renders without one.
+ *
+ * Dismissing rewrites the url without the parameter, so a reload — or a
+ * later return to home — does not show the same message again. `replace`
+ * keeps the dismissed url out of the back history.
+ */
+function HomeNoticeBanner() {
+  const navigate = useNavigate()
+  const search = useSearch({ strict: false }) as { readonly notice?: unknown }
+  const notice = homeNotice(search.notice)
+  if (notice === undefined) {
+    return null
+  }
+  const { title, description } = HOME_NOTICE_TEXT[notice]
+  return (
+    <Alert className="w-full max-w-sm" data-testid="home-notice" data-notice={notice}>
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription>{description}</AlertDescription>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="absolute top-2 right-2 size-8"
+        data-testid="home-notice-dismiss"
+        aria-label="Dismiss"
+        onClick={() => {
+          void navigate({ to: '/', search: {}, replace: true })
+        }}
+      >
+        <X className="size-4" />
+      </Button>
+    </Alert>
   )
 }
 
@@ -228,8 +268,9 @@ function RecentSkeleton() {
 }
 
 /**
- * Home dashboard (`/`): hero fold (live → start-last → browse), quick-start
- * tiles, and a recent list. Owns the `ListActiveSessions` 5s poll (silent
+ * Home dashboard (`/`): an ended-session notice when one sent the caller
+ * here, the hero fold (live → start-last → browse), quick-start tiles, and a
+ * recent list. Owns the `ListActiveSessions` 5s poll (silent
  * failure → no-live pick), plus `listHistoryAtom` / `listWorkoutsAtom` for
  * pick + recent composition. Visible failure only for history/workouts.
  */
@@ -261,6 +302,8 @@ export function HomeScreen() {
 
   return (
     <div className="flex min-h-svh flex-col items-center gap-6 p-6" data-testid="home-screen">
+      <HomeNoticeBanner />
+
       <QueryBoundary
         result={data}
         loading={<HomeHero pick={undefined} />}

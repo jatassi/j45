@@ -118,6 +118,33 @@ const updateAndAnnounce = (
     return updated
   })
 
+/** `DeleteWorkout`'s target: whose workout, and which one. */
+type DeleteInput = {
+  readonly id: WorkoutId
+  readonly ownerId: UserId
+}
+
+/**
+ * Removes the caller's own workout, then announces that it is gone — the
+ * third and last announcing path, and the same rules hold.
+ *
+ * The announcement follows the write, so nothing acts on a delete that the
+ * store did not make. A delete that finds no row fails `WorkoutNotFound`
+ * before this point and announces nothing.
+ *
+ * Only the id travels. There is no plan left to send, and a consumer that
+ * runs the deleted plan needs none: it holds the last plan it applied.
+ */
+const deleteAndAnnounce = (
+  workoutsRepo: WorkoutsRepo,
+  planChanges: PlanChanges,
+  input: DeleteInput,
+): Effect.Effect<void, WorkoutNotFound | SqlError> =>
+  Effect.gen(function* () {
+    yield* workoutsRepo.delete(input.id, input.ownerId)
+    yield* planChanges.publish({ _tag: 'deleted', workoutId: input.id })
+  })
+
 /**
  * Implements every `LibraryRpcs` member in one `toLayer` — like
  * `OwnerHandlersLive`, no other task contributes to this group. Every
@@ -173,7 +200,7 @@ export const LibraryHandlersLive: Layer.Layer<
       DeleteWorkout: ({ id }) =>
         Effect.gen(function* () {
           const user = yield* CurrentUser
-          yield* workoutsRepo.delete(id, user.id)
+          yield* deleteAndAnnounce(workoutsRepo, planChanges, { id, ownerId: user.id })
         }).pipe(Effect.catchTag('SqlError', asDefect)),
 
       CreateWorkout: ({ workout }) =>

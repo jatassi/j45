@@ -6,13 +6,14 @@ import {
   start as startTimer,
   type CompiledWorkout,
   type Participant,
+  type SessionEnd,
   type SessionId,
   type TimerState,
   type UserId,
   type Workout,
   type WorkoutId,
 } from '@j45/domain'
-import type * as DateTime from 'effect/DateTime'
+import * as DateTime from 'effect/DateTime'
 import type * as Deferred from 'effect/Deferred'
 import * as Effect from 'effect/Effect'
 import * as HashMap from 'effect/HashMap'
@@ -62,8 +63,9 @@ export type Sub = {
  * the ticker never interleave a read-modify-write. `wakeup` re-arms the
  * ticker when a command changes the deadline out from under its sleep;
  * `rawSubs` (counting every subscription, not distinct users) drives the GC;
- * `ended` completes every watcher stream and, via the reaper, closes `scope`
- * (which owns the ticker and GC fibers).
+ * `ended` releases the reaper, which closes `scope` (owner of the ticker and
+ * GC fibers). It does not stop the watcher streams: they stop on the final
+ * snapshot instead, which is the one that says why the session ended.
  */
 export type SessionHandle = {
   readonly id: SessionId
@@ -106,6 +108,11 @@ export type SessionHandle = {
   // Flips true the first time a published timer crosses into segment 1 (past
   // the ready segment) or reaches done; gates whether ending writes any rows.
   readonly progressed: Ref.Ref<boolean>
+  // The single claim token for ending: whoever flips it from `false` to
+  // `true` first owns the end, and every later caller returns at once. The
+  // garbage collector, the last leaver, and a deleted workout can all reach
+  // the end, and two of them must not write the history rows twice.
+  readonly ending: Ref.Ref<boolean>
   readonly sem: Effect.Semaphore
   readonly wakeup: Queue.Queue<undefined>
   readonly ended: Deferred.Deferred<undefined>
@@ -157,6 +164,7 @@ export const initialState = (id: SessionId, params: StartParams, now: number): S
     participants: [],
     planRevision: 0,
     planChangedBy: null,
+    ended: null,
   })
 
 /** The session actor filed under `id`, or `SessionNotFound` if there is none. */
@@ -241,6 +249,30 @@ export const sessionsOfWorkout = (
     ),
   })
 
+/**
+ * The facts every completion row of one session shares, read at the moment
+ * the row is written: the plan and the name last in force while the timer was
+ * live, the roster as it stands, and how far the published timer reached.
+ * The session end and a single leaver both mint rows from this one reading.
+ *
+ * The plan comes off the handle and the snapshot, never off the library. A
+ * workout that was deleted while the session ran therefore takes nothing away
+ * from the rows the session leaves behind.
+ */
+export const completionInputs = (handle: SessionHandle, state: SessionState) =>
+  Effect.gen(function* () {
+    return {
+      sessionId: handle.id,
+      workoutName: state.workoutName,
+      workout: yield* Ref.get(handle.workout),
+      host: handle.host,
+      participants: [...HashMap.values(yield* Ref.get(handle.roster))],
+      startedAt: handle.startedAt,
+      endedAt: yield* DateTime.now,
+      progress: progressOf(state.timer, state.compiled.segments.length),
+    } as const
+  })
+
 /** Structural equality on timer states — used to suppress no-op republishes. */
 export const timersEqual = (a: TimerState, b: TimerState): boolean => {
   if (a._tag !== b._tag) {
@@ -272,6 +304,8 @@ export const withState = (
     // The two plan-change fields travel together or not at all, so a
     // snapshot can never say "changed by nobody" at a raised revision.
     readonly planChange?: { readonly revision: number; readonly changedBy: string }
+    // Set once, on the last snapshot a session ever publishes.
+    readonly ended?: SessionEnd
   },
 ): SessionState =>
   new SessionState({
@@ -286,6 +320,8 @@ export const withState = (
     // republish the snapshot, and none of them is a plan change.
     planRevision: over.planChange?.revision ?? state.planRevision,
     planChangedBy: over.planChange?.changedBy ?? state.planChangedBy,
+    // Carried, so no ordinary republish can revive an ended session.
+    ended: over.ended ?? state.ended,
   })
 
 export const addPresence =

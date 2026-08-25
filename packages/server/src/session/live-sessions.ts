@@ -11,6 +11,7 @@ import {
   type Participant,
   type Segment,
   type SessionCommand,
+  type SessionEnd,
   type SessionNotFound,
   type SessionState,
   type SessionSummary,
@@ -44,12 +45,12 @@ import {
 import { applyPlanChange, snapshotAfterMove } from './plan-sync.js'
 import {
   addPresence,
+  completionInputs,
   getHandle,
   initialState,
   isProgressed,
   listSessions,
   participantsOf,
-  progressOf,
   removePresence,
   sessionsOfWorkout,
   summaryOf,
@@ -157,26 +158,23 @@ const leave = (handle: SessionHandle, sub: Sub): Effect.Effect<void> =>
     yield* republishParticipants(handle)
   })
 
-// The facts every completion row of one session shares, read at the moment
-// the row is written: the plan and the name last in force while the timer was
-// live, the roster as it stands, and how far the published timer reached.
-// `endSession` and `recordLeaver` both mint rows from this one reading.
-const completionInputs = (handle: SessionHandle, state: SessionState) =>
+// Ends one session, for the stated reason. Three paths reach here — the
+// garbage collector, the last participant leaving, and the deletion of the
+// workout the session runs — and `handle.ending` is the single claim token
+// that lets exactly one of them through. Two ends would write the rows twice.
+//
+// The last act is one final snapshot carrying `ended`. Every watcher's stream
+// stops on it (see `watch`), so a participant learns that the session is over,
+// and why, without asking.
+const endSession = (
+  registry: Registry,
+  handle: SessionHandle,
+  reason: SessionEnd,
+): Effect.Effect<void> =>
   Effect.gen(function* () {
-    return {
-      sessionId: handle.id,
-      workoutName: state.workoutName,
-      workout: yield* Ref.get(handle.workout),
-      host: handle.host,
-      participants: [...HashMap.values(yield* Ref.get(handle.roster))],
-      startedAt: handle.startedAt,
-      endedAt: yield* DateTime.now,
-      progress: progressOf(state.timer, state.compiled.segments.length),
-    } as const
-  })
-
-const endSession = (registry: Registry, handle: SessionHandle): Effect.Effect<void> =>
-  Effect.gen(function* () {
+    if (yield* Ref.getAndSet(handle.ending, true)) {
+      return
+    }
     // --- session-ended seam -------------------------------------------------
     // A session that progressed past the ready segment leaves history: one
     // `SessionCompletion` per ever-participant (the roster), each with a fresh
@@ -184,14 +182,20 @@ const endSession = (registry: Registry, handle: SessionHandle): Effect.Effect<vo
     // (`completionRowsForSession` mints them). A session that never left the
     // ready segment writes nothing. Teardown (below) runs regardless — a
     // failed insert is logged and swallowed, never blocking the reaper.
+    //
+    // The rows carry the plan the session last applied while its timer was
+    // live, off the handle and its snapshot. Nothing here reads the library,
+    // so a deleted workout takes nothing from them.
+    const state = yield* SubscriptionRef.get(handle.stateRef)
     if (yield* Ref.get(handle.progressed)) {
-      const state = yield* SubscriptionRef.get(handle.stateRef)
       const rows = completionRowsForSession(yield* completionInputs(handle, state))
       yield* Effect.catchAllCause(registry.completionsRepo.insertAll(rows), (cause) =>
         Effect.logError('session completion write failed', cause),
       )
     }
     yield* Ref.update(registry.sessions, HashMap.remove(handle.id))
+    const now = yield* Clock.currentTimeMillis
+    yield* SubscriptionRef.set(handle.stateRef, withState(state, { serverNow: now, ended: reason }))
     yield* Deferred.succeed(handle.ended, undefined)
   })
 
@@ -231,7 +235,7 @@ const collect = (registry: Registry, handle: SessionHandle): Effect.Effect<void>
         awaitCount((n) => n > 0).pipe(Effect.as(false)),
       )
       if (idledOut) {
-        return yield* endSession(registry, handle)
+        return yield* endSession(registry, handle, 'closed')
       }
     }
   })
@@ -266,6 +270,7 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
       subs: yield* Ref.make(HashMap.empty<number, Sub>()),
       nextSubId: yield* Ref.make(0),
       progressed: yield* Ref.make(false),
+      ending: yield* Ref.make(false),
       sem: yield* Effect.makeSemaphore(1),
       wakeup: yield* Queue.unbounded<undefined>(),
       ended: yield* Deferred.make<undefined>(),
@@ -299,11 +304,23 @@ const watch = (
       const sub = yield* Effect.acquireRelease(join(handle, participant), (sub) =>
         leave(handle, sub),
       )
-      // Ends on the session-wide `ended` (everyone) or this user's own
-      // `interrupt` (a `leaveSession` detaching just them).
+      // Two things end this stream, and each is decided on the element rather
+      // than by a race against it:
+      //
+      // - `sub.interrupt`, when a `leaveSession` detaches this one user. The
+      //   deferred alone is a race: the snapshot `leaveSession` publishes just
+      //   after it can beat it. The filter drops what a detached subscription
+      //   is offered, so the stream runs dry and the deferred then ends it.
+      // - The session's own last snapshot, the one `endSession` publishes with
+      //   `ended` set. `takeUntil` emits it and stops. The session-wide `ended`
+      //   deferred deliberately does not end this stream: it would race that
+      //   snapshot out of the queue, and the loser is the participant, who
+      //   would be sent home with no reason.
+      const stillAttached = Effect.map(Deferred.isDone(sub.interrupt), (done) => !done)
       return handle.stateRef.changes.pipe(
-        Stream.interruptWhenDeferred(handle.ended),
         Stream.interruptWhenDeferred(sub.interrupt),
+        Stream.filterEffect(() => stillAttached),
+        Stream.takeUntil((state) => state.ended !== null),
       )
     }),
   )
@@ -400,7 +417,7 @@ const leaveSession = (
         const presenceEmpty = HashMap.isEmpty(yield* Ref.get(handle.presence))
         const rosterEmpty = HashMap.isEmpty(yield* Ref.get(handle.roster))
         if (presenceEmpty && rosterEmpty) {
-          yield* endSession(registry, handle)
+          yield* endSession(registry, handle, 'closed')
         }
       }),
     ),
@@ -426,7 +443,11 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
     // change, and this registry applies it to the sessions that run that
     // plan. `library/` has no import of `LiveSessions`.
     const planChanges = yield* PlanChanges
-    yield* planChanges.subscribe((change) => applyPlanChange(registry, change))
+    yield* planChanges.subscribe((change) =>
+      applyPlanChange(registry, change, {
+        endForPlanDeleted: (handle) => endSession(registry, handle, 'plan-deleted'),
+      }),
+    )
 
     return {
       start: (params: StartParams) => start(registry, params),

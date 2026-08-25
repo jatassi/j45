@@ -41,6 +41,15 @@ contract).
 > timer re-entering at the same work ordinal. `planRevision` counts the
 > changes that landed, so a client can raise one notice for each. A session
 > launched with a reflow overlay is exempt: its plan was never in the library.
+>
+> Deleting the workout ends every session that tracks it. Each such session
+> publishes one last snapshot with `ended` set, which says whether it stopped
+> for the ordinary reasons (`closed`) or because the plan went
+> (`plan-deleted`). That snapshot is also what ends a watcher's stream, so a
+> participant always learns why they were sent home. The session-wide `ended`
+> deferred no longer stops the stream: it would race that last snapshot out
+> of the subscriber's queue. Completion rows are still written, from the plan
+> the session last applied — the deleted library row is never read.
 
 ## Domain additions (`packages/domain/src/session.ts`)
 
@@ -64,7 +73,10 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
   participants: Schema.Array(Participant),
   planRevision: Schema.Int,           // rises only when a plan change lands
   planChangedBy: Schema.NullOr(Schema.String), // who made that change
+  ended: Schema.NullOr(SessionEnd),   // set on the last snapshot only; says why
 }) {}
+
+export const SessionEnd = Schema.Literal('closed', 'plan-deleted')
 
 export class SessionSummary extends Schema.Class<SessionSummary>('SessionSummary')({
   id: SessionId,
@@ -181,6 +193,11 @@ Semantics:
   were away: stop retrying, navigate home with a notice (same destination
   as clean stream completion). Every other failure is transport: show
   "reconnecting", retry with backoff, heal via the fresh snapshot.
+  **The notice, pinned:** it travels as the `notice` search parameter of
+  `/`, which that route validates and `HomeScreen` reads. A snapshot with
+  `ended: 'plan-deleted'` sends `plan-deleted`; every other ending sends
+  `session-ended`. An unknown value is dropped rather than thrown, so a
+  stale url still renders home.
 
 ## Testing
 

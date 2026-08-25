@@ -40,6 +40,15 @@ export type PlanChange =
       /** Display name of whoever saved the edit, for the notice to name. */
       readonly changedBy: string
     }
+  | {
+      /**
+       * The workout is gone from the library. Nothing else travels: there is
+       * no plan left to send. A session that runs this plan has no source to
+       * follow any more, so it ends.
+       */
+      readonly _tag: 'deleted'
+      readonly workoutId: WorkoutId
+    }
 
 /**
  * What a consumer does with one change. The signature has no error channel:

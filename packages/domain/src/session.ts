@@ -24,6 +24,20 @@ export class Participant extends Schema.Class<Participant>('Participant')({
 }) {}
 
 /**
+ * Why a live session stopped.
+ *
+ * - `closed` — the ordinary end: everybody left, or nobody was left watching
+ *   and the session was collected.
+ * - `plan-deleted` — the host removed the workout from the library, so there
+ *   is no plan left for the session to follow.
+ *
+ * A participant must be able to tell the two apart. One means the workout is
+ * over; the other means it was taken away.
+ */
+export const SessionEnd = Schema.Literal('closed', 'plan-deleted')
+export type SessionEnd = typeof SessionEnd.Type
+
+/**
  * Full live-session snapshot streamed to watchers. Carries the compiled
  * workout and timer state so a late joiner can render without replaying
  * history, plus `serverNow` so the client can correct for clock skew.
@@ -57,6 +71,13 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
    * `null` until the first change lands.
    */
   planChangedBy: Schema.NullOr(Schema.String),
+  /**
+   * `null` while the session is live. The server publishes exactly one
+   * snapshot with this set, and it is the last snapshot of the session: the
+   * watch stream stops on it. A client therefore learns that the session
+   * ended, and why, from the stream it already holds — it never has to ask.
+   */
+  ended: Schema.NullOr(SessionEnd),
 }) {}
 
 /**

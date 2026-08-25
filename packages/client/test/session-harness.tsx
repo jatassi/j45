@@ -10,6 +10,7 @@ import {
   Station,
   UserId,
   Workout,
+  type SessionEnd,
   type SessionId,
   type TimerState,
 } from '@j45/domain'
@@ -101,6 +102,8 @@ export function makeState(id: SessionId, timer: TimerState, serverNow: number): 
     // No plan change has landed: the fresh-session case.
     planRevision: 0,
     planChangedBy: null,
+    // A live session: the end carries no reason yet.
+    ended: null,
     participants: [host, joiner],
   })
 }
@@ -121,6 +124,23 @@ export function withPlanRevision(
     participants: state.participants,
     planRevision: revision,
     planChangedBy: changedBy,
+    ended: state.ended,
+  })
+}
+
+/** The last snapshot a session publishes: the same state, plus why it ended. */
+export function withEnded(state: SessionState, ended: SessionEnd): SessionState {
+  return new SessionState({
+    id: state.id,
+    host: state.host,
+    workoutName: state.workoutName,
+    compiled: state.compiled,
+    timer: state.timer,
+    serverNow: state.serverNow,
+    participants: state.participants,
+    planRevision: state.planRevision,
+    planChangedBy: state.planChangedBy,
+    ended,
   })
 }
 
