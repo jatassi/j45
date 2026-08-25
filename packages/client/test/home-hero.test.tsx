@@ -21,7 +21,7 @@ import {
   RouterProvider,
   useParams,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
@@ -209,6 +209,55 @@ describe('HomeHero', () => {
     expect(extra.textContent).toContain('Sam')
     expect(extra.textContent).toContain('Athletica')
     expect(extra.getAttribute('href')).toBe(`/session/${extraSession.id}`)
+  })
+
+  it('live pick: the elapsed line keeps counting with no new session data', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-03-01T10:00:00.000Z'))
+
+    const pick: HeroPick = {
+      _tag: 'live',
+      session: liveSession,
+      extras: [],
+      workout: ironCircuit,
+    }
+    renderHomeHero(pick)
+
+    const hero = await screen.findByTestId('home-hero')
+    // Correct on the first render — no tick needed to become right.
+    expect(hero.textContent).toContain('12 min in')
+
+    // The same `pick` object throughout: nothing but the clock moves.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+    expect(hero.textContent).toContain('13 min in')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+    expect(hero.textContent).toContain('14 min in')
+  })
+
+  it('live pick: a session that has just started reads as zero minutes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-03-01T10:00:00.000Z'))
+
+    const pick: HeroPick = {
+      _tag: 'live',
+      session: makeSession({
+        id: 'session-fresh-1',
+        workoutId: 'workout-iron',
+        workoutName: 'Iron Circuit',
+        startedAt: DateTime.unsafeMake('2026-03-01T10:00:00.000Z'),
+      }),
+      extras: [],
+      workout: ironCircuit,
+    }
+    renderHomeHero(pick)
+
+    const hero = await screen.findByTestId('home-hero')
+    expect(hero.textContent).toContain('0 min in')
   })
 
   it('live pick falls back to hybrid hue when no resolved workout', async () => {

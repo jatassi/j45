@@ -3,7 +3,6 @@ import * as React from 'react'
 import { useAtom } from '@effect-atom/atom-react'
 import type { Focus, LibraryWorkout, SessionSummary, WorkoutId } from '@j45/domain'
 import { Link, useNavigate } from '@tanstack/react-router'
-import * as DateTime from 'effect/DateTime'
 import { toast } from 'sonner'
 
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -11,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { startWorkoutAtom } from '@/lib/home'
 import type { HeroPick } from '@/lib/home'
+import { useElapsedMinutes } from '@/lib/use-elapsed-minutes'
 import { cn } from '@/lib/utils'
 
 /** Sport-tint card surface for each focus literal; hybrid is the unresolved fallback. */
@@ -25,20 +25,6 @@ const HUE_TEXT: Record<Focus, string> = {
   cardio: 'text-hue-cardio',
   strength: 'text-hue-strength',
   hybrid: 'text-hue-hybrid',
-}
-
-/**
- * Minutes elapsed since `startedAt` (clamped at 0), rendered as
- * `"N min in"` for the live-hero meta line. Uses `DateTime.unsafeNow` so
- * wall clock drives the display outside Effect fibers.
- */
-function formatElapsedSince(startedAt: DateTime.Utc): string {
-  const elapsedMs = Math.max(
-    0,
-    DateTime.toEpochMillis(DateTime.unsafeNow()) - DateTime.toEpochMillis(startedAt),
-  )
-  const minutes = Math.floor(elapsedMs / 60_000)
-  return `${minutes} min in`
 }
 
 /** Pulsing LIVE indicator in the sport-tint accent color. */
@@ -117,9 +103,15 @@ type LiveHeroProps = {
   readonly workout?: LibraryWorkout
 }
 
-/** Live-session hero: sport-tinted card, join CTA, optional compact extras. */
+/**
+ * Live-session hero: sport-tinted card, join CTA, optional compact extras.
+ *
+ * The meta line's `"N min in"` runs off `useElapsedMinutes`, not off the
+ * render, so it counts on its own however rarely session data arrives.
+ */
 function LiveHero({ session, extras, workout }: LiveHeroProps) {
   const focus: Focus = workout?.workout.focus ?? 'hybrid'
+  const elapsedMinutes = useElapsedMinutes(session.startedAt)
   return (
     <div className="flex w-full max-w-sm flex-col gap-3">
       <Card data-testid="home-hero" className={cn('ring-1', HUE_CARD[focus])} size="default">
@@ -135,7 +127,7 @@ function LiveHero({ session, extras, workout }: LiveHeroProps) {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
-            {formatElapsedSince(session.startedAt)} · {session.participantCount} participants
+            {elapsedMinutes} min in · {session.participantCount} participants
           </p>
           <Link
             to={`/session/${session.id}`}
