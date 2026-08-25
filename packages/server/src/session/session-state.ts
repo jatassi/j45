@@ -2,7 +2,6 @@ import {
   CompletionProgress,
   SessionNotFound,
   SessionState,
-  SessionSummary,
   start as startTimer,
   type CompiledWorkout,
   type Participant,
@@ -164,7 +163,10 @@ type EndedSession = { readonly id: SessionId; readonly reason: SessionEnd }
 
 /** The shared registry every session actor is filed under. */
 export type Registry = {
-  readonly sessions: Ref.Ref<HashMap.HashMap<SessionId, SessionHandle>>
+  // A `SubscriptionRef`, not a plain `Ref`, so the lobby feed can watch the
+  // live set change. Every existing `Ref` operation still reads and writes it;
+  // the only difference is that a write is also published.
+  readonly sessions: SubscriptionRef.SubscriptionRef<HashMap.HashMap<SessionId, SessionHandle>>
   // The last `RECENTLY_ENDED_LIMIT` endings, newest first. A session that
   // ends leaves the registry, so nothing about it can be read off a handle
   // any more; this is what a lookup of a gone session answers from.
@@ -243,76 +245,6 @@ export const getHandle = (
       onSome: Effect.succeed,
     }),
   )
-
-/**
- * The lobby-listing summary for one session, sized by current presence. The
- * name comes from the published snapshot, so the lobby row and the player
- * show the same name after a rename.
- */
-export const summaryOf = (handle: SessionHandle): Effect.Effect<SessionSummary> =>
-  Effect.map(
-    Effect.all({ presence: Ref.get(handle.presence), state: SubscriptionRef.get(handle.stateRef) }),
-    ({ presence, state }) =>
-      new SessionSummary({
-        id: handle.id,
-        workoutId: handle.workoutId,
-        hostDisplayName: handle.host.displayName,
-        workoutName: state.workoutName,
-        startedAt: handle.startedAt,
-        participantCount: HashMap.size(presence),
-      }),
-  )
-
-/**
- * The lobby summaries of every live session that `keep` accepts. Both registry
- * queries are this one scan with a different predicate.
- */
-const summarize = (
-  registry: Registry,
-  keep: (handle: SessionHandle) => boolean,
-): Effect.Effect<readonly SessionSummary[]> =>
-  Effect.flatMap(Ref.get(registry.sessions), (map) =>
-    Effect.forEach([...HashMap.values(map)].filter(keep), summaryOf),
-  )
-
-/** Every live session on this server, as lobby summaries. */
-export const listSessions = (registry: Registry): Effect.Effect<readonly SessionSummary[]> =>
-  summarize(registry, () => true)
-
-/**
- * The live sessions of one library workout, split by what a change to that
- * workout can reach. `tracking` holds the sessions that run the stored plan.
- * `reflowLaunched` holds the sessions that started with a launch-time reflow
- * overlay: they hold the same source id, but their compiled plan was never in
- * the library, so a change to it has nothing to apply to them.
- */
-export type SessionsOfWorkout = {
-  readonly tracking: readonly SessionSummary[]
-  readonly reflowLaunched: readonly SessionSummary[]
-}
-
-/**
- * Every live session that started from `workoutId`, in the two groups above.
- * This is the reverse of the source id that each handle holds.
- *
- * A scan of the registry gives the answer. A second map does not hold it: the
- * registry has one entry for each live session, which is a small set, and a
- * derived answer cannot become stale when a session ends.
- */
-export const sessionsOfWorkout = (
-  registry: Registry,
-  workoutId: WorkoutId,
-): Effect.Effect<SessionsOfWorkout> =>
-  Effect.all({
-    tracking: summarize(
-      registry,
-      (handle) => handle.workoutId === workoutId && !handle.reflowLaunched,
-    ),
-    reflowLaunched: summarize(
-      registry,
-      (handle) => handle.workoutId === workoutId && handle.reflowLaunched,
-    ),
-  })
 
 /**
  * The facts every completion row of one session shares, read at the moment

@@ -42,19 +42,17 @@ import {
   completionRowsForSession,
   CompletionsRepo,
 } from './completions-repo.js'
+import { listSessions, sessionsOfWorkout, summaryOf, watchLobby } from './lobby.js'
 import { applyPlanChange, snapshotAfterMove } from './plan-sync.js'
 import {
   addPresence,
   completionInputs,
   getHandle,
   initialState,
-  listSessions,
   participantsOf,
   publishSnapshot,
   rememberEnded,
   removePresence,
-  sessionsOfWorkout,
-  summaryOf,
   timersEqual,
   withState,
   type PendingPlan,
@@ -433,16 +431,18 @@ const leaveSession = (
 /**
  * The server-authoritative registry of live workout sessions — one in-memory
  * actor per running session, exactly as the architecture pins it: a
- * `Ref<HashMap<SessionId, handle>>`, each handle a `SubscriptionRef` mutated
- * only through serialized updates plus a ticker fiber owned by the session's
- * `Scope`. Nothing here is persisted: a rebuilt layer is an empty registry,
- * and a server restart drops every live session while durable data is
- * untouched.
+ * `HashMap<SessionId, handle>`, each handle a `SubscriptionRef` mutated only
+ * through serialized updates plus a ticker fiber owned by the session's
+ * `Scope`. The map itself is a `SubscriptionRef` too, which is the one thing
+ * the architecture's `Ref` does not say: the lobby feed in `lobby.ts` watches
+ * the live set for sessions starting and ending. Nothing here is persisted: a
+ * rebuilt layer is an empty registry, and a server restart drops every live
+ * session while durable data is untouched.
  */
 export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions', {
   scoped: Effect.gen(function* () {
     const layerScope = yield* Effect.scope
-    const sessions = yield* Ref.make(HashMap.empty<SessionId, SessionHandle>())
+    const sessions = yield* SubscriptionRef.make(HashMap.empty<SessionId, SessionHandle>())
     const recentlyEnded = yield* Ref.make<readonly { id: SessionId; reason: SessionEnd }[]>([])
     const completionsRepo = yield* CompletionsRepo
     const registry: Registry = { sessions, recentlyEnded, layerScope, completionsRepo }
@@ -458,6 +458,7 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
     return {
       start: (params: StartParams) => start(registry, params),
       list: () => listSessions(registry),
+      watchLobby: () => watchLobby(registry),
       sessionsOfWorkout: (workoutId: WorkoutId) => sessionsOfWorkout(registry, workoutId),
       snapshot: (id: SessionId) => snapshot(registry, id),
       watch: (id: SessionId, participant: Participant) => watch(registry, id, participant),

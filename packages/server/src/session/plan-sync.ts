@@ -19,16 +19,15 @@ import * as Ref from 'effect/Ref'
 import * as SubscriptionRef from 'effect/SubscriptionRef'
 
 import type { PlanChange } from '../library/plan-changes.js'
+import { sessionsOfWorkout, type SessionsOfWorkout } from './lobby.js'
 import {
   getHandle,
   publishSnapshot,
   segmentIndexOf,
-  sessionsOfWorkout,
   withState,
   type PendingPlan,
   type Registry,
   type SessionHandle,
-  type SessionsOfWorkout,
 } from './session-state.js'
 
 /**
