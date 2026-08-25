@@ -20,21 +20,11 @@ import { toast } from 'sonner'
 
 import { FocusBadge } from '@/components/focus-badge'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Field, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { DeleteDialog, RenameDialog } from '@/components/workout-detail-dialogs'
+import { useLiveSessionCount } from '@/lib/live-workout'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import { formatDuration, listWorkoutsAtom } from '@/lib/workouts'
 
@@ -92,82 +82,18 @@ function PodCard({ pod, round }: { readonly pod: Pod; readonly round: Round }) {
   )
 }
 
-function RenameDialog(p: {
-  open: boolean
-  name: string
-  onNameChange: (n: string) => void
-  onCancel: () => void
-  onSubmit: (e: React.SubmitEvent<HTMLFormElement>) => void
-}) {
-  return (
-    <Dialog open={p.open} onOpenChange={(n) => (n ? undefined : p.onCancel())}>
-      <DialogContent data-testid="rename-dialog" showCloseButton={false}>
-        <DialogTitle>Rename workout</DialogTitle>
-        <form className="flex flex-col gap-4" onSubmit={p.onSubmit}>
-          <Field orientation="vertical">
-            <FieldLabel htmlFor="rename-workout-name">Name</FieldLabel>
-            <Input
-              id="rename-workout-name"
-              data-testid="rename-input"
-              value={p.name}
-              onChange={(e) => p.onNameChange(e.target.value)}
-            />
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="rename-cancel"
-              onClick={p.onCancel}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" data-testid="rename-confirm">
-              Save
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function DeleteDialog(p: { open: boolean; onCancel: () => void; onConfirm: () => void }) {
-  return (
-    <AlertDialog open={p.open} onOpenChange={(n) => (n ? undefined : p.onCancel())}>
-      <AlertDialogContent data-testid="delete-dialog" size="sm">
-        <AlertDialogTitle>Delete workout</AlertDialogTitle>
-        <AlertDialogDescription>This can&apos;t be undone.</AlertDialogDescription>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="delete-cancel" size="sm">
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            type="button"
-            variant="destructive"
-            size="sm"
-            data-testid="delete-confirm"
-            onClick={p.onConfirm}
-          >
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-}
-
-function useWorkoutMutations(id: WorkoutId, name: string) {
-  const navigate = useNavigate()
+/**
+ * Rename dialog state and the `RenameWorkout` write. Nothing gates a rename:
+ * a rename changes no work, so it prompts under no circumstances. It writes
+ * the name this screen displays, so it refreshes this workout as well as the
+ * list — the two writes below touch the list only.
+ */
+function useRenameWorkout(id: WorkoutId, name: string) {
   const refreshList = useAtomRefresh(listWorkoutsAtom)
   const refreshWorkout = useAtomRefresh(ServerRpcClient.query('GetWorkout', { id }))
   const [renameOpen, setRenameOpen] = React.useState(false)
   const [renameName, setRenameName] = React.useState(name)
-  const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [, rename] = useAtom(renameWorkoutAtom, { mode: 'promise' })
-  const [, duplicate] = useAtom(duplicateWorkoutAtom, { mode: 'promise' })
-  const [, remove] = useAtom(deleteWorkoutAtom, { mode: 'promise' })
   return {
     renameOpen,
     renameName,
@@ -187,7 +113,24 @@ function useWorkoutMutations(id: WorkoutId, name: string) {
         })
         .catch(() => toastFailed('Could not rename the workout.'))
     },
+  }
+}
+
+/** Rename, duplicate and delete, as the action row drives them. */
+function useWorkoutMutations(id: WorkoutId, name: string) {
+  const navigate = useNavigate()
+  const refreshList = useAtomRefresh(listWorkoutsAtom)
+  const [deleteOpen, setDeleteOpen] = React.useState(false)
+  const liveCount = useLiveSessionCount(id)
+  const [, duplicate] = useAtom(duplicateWorkoutAtom, { mode: 'promise' })
+  const [, remove] = useAtom(deleteWorkoutAtom, { mode: 'promise' })
+  return {
+    ...useRenameWorkout(id, name),
     deleteOpen,
+    // Read live, never frozen at the click: the lobby answer can arrive after
+    // the prompt opens, and a prompt that keeps a stale zero would show the
+    // weak wording for a workout that people are running right now.
+    deleteLiveCount: liveCount,
     openDelete: () => setDeleteOpen(true),
     closeDelete: () => setDeleteOpen(false),
     confirmDelete: () => {
@@ -242,7 +185,12 @@ function WorkoutActions({ id, name }: { readonly id: WorkoutId; readonly name: s
         onCancel={m.closeRename}
         onSubmit={m.submitRename}
       />
-      <DeleteDialog open={m.deleteOpen} onCancel={m.closeDelete} onConfirm={m.confirmDelete} />
+      <DeleteDialog
+        open={m.deleteOpen}
+        liveCount={m.deleteLiveCount}
+        onCancel={m.closeDelete}
+        onConfirm={m.confirmDelete}
+      />
     </>
   )
 }

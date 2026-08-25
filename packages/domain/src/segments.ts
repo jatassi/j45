@@ -1,4 +1,5 @@
 import type { NonEmptyReadonlyArray } from 'effect/Array'
+import type * as Equivalence from 'effect/Equivalence'
 import * as Schema from 'effect/Schema'
 
 import { Station, type Workout } from './workout.js'
@@ -35,6 +36,29 @@ export class CompiledWorkout extends Schema.Class<CompiledWorkout>('CompiledWork
   workTotal: Schema.Int,
   totalDurationMillis: Schema.Int,
 }) {}
+
+/**
+ * Structural equality on compiled plans — whether two stored workouts give a
+ * participant the same thing to run.
+ *
+ * The workout *name* is not in a compiled plan, so two workouts that differ
+ * only by name are equal here. That is the point: a new name is a rename, and
+ * a rename changes nothing anyone runs.
+ */
+export const compiledEquals: Equivalence.Equivalence<CompiledWorkout> =
+  Schema.equivalence(CompiledWorkout)
+
+/**
+ * Structural equality on one segment — whether two plans give a participant
+ * the same interval to run at some position.
+ *
+ * Same kind, same duration, and the same work context: the station, its pod,
+ * its place in the pod, its round, and its ordinal. A segment that is equal
+ * under this is one that nothing the participant is doing has changed.
+ *
+ * A plan change reads it to decide whether a paused countdown must restart.
+ */
+export const segmentsEqual: Equivalence.Equivalence<Segment> = Schema.equivalence(Segment)
 
 type WorkEntry = {
   readonly context: WorkContext

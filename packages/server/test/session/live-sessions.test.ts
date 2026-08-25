@@ -10,6 +10,7 @@ import {
   Station,
   UserId,
   Workout,
+  WorkoutId,
   type SessionId,
   type SessionState,
 } from '@j45/domain'
@@ -24,6 +25,7 @@ import * as Scope from 'effect/Scope'
 import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
@@ -48,8 +50,17 @@ const userId = (id: string) => Schema.decodeSync(UserId)(id)
 const alice = new Participant({ userId: userId('alice'), displayName: 'Alice' })
 const bob = new Participant({ userId: userId('bob'), displayName: 'Bob' })
 
+const fixtureWorkoutId = Schema.decodeSync(WorkoutId)('workout-fixture')
+
 const startFixture = (svc: LiveSessions) =>
-  svc.start({ host: alice, workoutName: 'Fixture', workout: fixtureWorkout, compiled })
+  svc.start({
+    host: alice,
+    workoutId: fixtureWorkoutId,
+    reflowLaunched: false,
+    workoutName: 'Fixture',
+    workout: fixtureWorkout,
+    compiled,
+  })
 
 /**
  * `LiveSessions` wired over a real `CompletionsRepo` — the one dependency it
@@ -61,7 +72,7 @@ const startFixture = (svc: LiveSessions) =>
  * `test/session/session-history.test.ts`.
  */
 const TestLive = LiveSessions.Default.pipe(
-  Layer.provide(CompletionsRepo.Default),
+  Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
   Layer.provideMerge(
     MigratorLive.pipe(
       Layer.provideMerge(SqliteClient.layer({ filename: ':memory:' })),

@@ -110,6 +110,7 @@ const libraryWorkoutOf = (id: string, workout: Workout) =>
 
 const sampleSession = new SessionSummary({
   id: Schema.decodeSync(SessionId)('session-reflow-1'),
+  workoutId: Schema.decodeSync(WorkoutId)('workout-athletica'),
   hostDisplayName: 'Alex',
   workoutName: 'Athletica',
   startedAt: seededAt,

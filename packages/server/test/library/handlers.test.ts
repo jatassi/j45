@@ -25,6 +25,7 @@ import { SESSION_COOKIE_NAME } from '../../src/auth/cookie.js'
 import { AuthMiddlewareLive } from '../../src/auth/middleware.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
 import { LibraryHandlersLive } from '../../src/library/handlers.js'
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { MigratorLive } from '../../src/sql.js'
 
@@ -51,7 +52,12 @@ const TestServicesLive = Layer.mergeAll(
   AuthSessions.Default,
   WorkoutsRepo.Default,
   AuthMiddlewareLive.pipe(Layer.provide(Layer.mergeAll(AuthSessions.Default, UserRepo.Default))),
-  LibraryHandlersLive.pipe(Layer.provide(WorkoutsRepo.Default)),
+  // `PlanChanges` is all that the rename announcement adds to this layer.
+  // There is no `LiveSessions` here, and the layer still builds: the library
+  // handlers do not depend on the live-session service.
+  LibraryHandlersLive.pipe(
+    Layer.provide(Layer.mergeAll(WorkoutsRepo.Default, PlanChanges.Default)),
+  ),
 ).pipe(Layer.provideMerge(SqlTestLive))
 
 const makeWorkout = (name: string) =>

@@ -31,6 +31,7 @@ import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { SESSION_COOKIE_NAME } from '../../src/auth/cookie.js'
 import { AuthMiddlewareLive } from '../../src/auth/middleware.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
@@ -61,7 +62,9 @@ const TestServicesLive = Layer.mergeAll(
   UserRepo.Default,
   AuthSessions.Default,
   CompletionsRepo.Default,
-  LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default)),
+  LiveSessions.Default.pipe(
+    Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
+  ),
   AuthMiddlewareLive.pipe(Layer.provide(Layer.mergeAll(AuthSessions.Default, UserRepo.Default))),
   HistoryHandlersLive.pipe(Layer.provide(CompletionsRepo.Default)),
 ).pipe(Layer.provideMerge(SqlTestLive))
@@ -82,14 +85,18 @@ const makeFileBackedServices = (dbPath: string) => {
     AuthSessions.Default,
     CompletionsRepo.Default,
     WorkoutsRepo.Default,
-    LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default)),
+    LiveSessions.Default.pipe(
+      Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
+    ),
     AuthMiddlewareLive.pipe(Layer.provide(Layer.mergeAll(AuthSessions.Default, UserRepo.Default))),
     HistoryHandlersLive.pipe(Layer.provide(CompletionsRepo.Default)),
     SessionHandlersLive.pipe(
       Layer.provide(
         Layer.mergeAll(
           WorkoutsRepo.Default,
-          LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default)),
+          LiveSessions.Default.pipe(
+            Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
+          ),
         ),
       ),
     ),

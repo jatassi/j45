@@ -33,6 +33,7 @@ import { UserRepo } from '../../src/auth/user-repo.js'
 import { GenerationHandlersLive } from '../../src/generation/handlers.js'
 import { ExercisesRepo } from '../../src/library/exercises-repo.js'
 import { LibraryHandlersLive } from '../../src/library/handlers.js'
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { MigratorLive } from '../../src/sql.js'
@@ -66,7 +67,9 @@ const TestServicesLive = Layer.mergeAll(
   GenerationHandlersLive.pipe(
     Layer.provide(Layer.mergeAll(ExercisesRepo.Default, CompletionsRepo.Default)),
   ),
-  LibraryHandlersLive.pipe(Layer.provide(WorkoutsRepo.Default)),
+  LibraryHandlersLive.pipe(
+    Layer.provide(Layer.mergeAll(WorkoutsRepo.Default, PlanChanges.Default)),
+  ),
 ).pipe(Layer.provideMerge(SqlTestLive))
 
 const insertUser = (id: UserId, displayName = 'Test User') =>

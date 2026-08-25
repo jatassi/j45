@@ -1,11 +1,22 @@
 import type { Rpc } from '@effect/rpc'
 import type { SqlError } from '@effect/sql/SqlError'
-import { CurrentUser, LibraryRpcs, type LibraryWorkout } from '@j45/domain'
+import {
+  CurrentUser,
+  LibraryRpcs,
+  type LibraryWorkout,
+  type UserId,
+  type Workout,
+  type WorkoutConflict,
+  type WorkoutId,
+  type WorkoutNotFound,
+} from '@j45/domain'
 import * as Arr from 'effect/Array'
+import type * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import type * as Layer from 'effect/Layer'
 import * as Order from 'effect/Order'
 
+import { PlanChanges } from './plan-changes.js'
 import { WorkoutsRepo } from './workouts-repo.js'
 
 /**
@@ -30,6 +41,110 @@ const asDefect = (error: SqlError): Effect.Effect<never> => Effect.die(error)
 const sortByNameCaseInsensitive = (workouts: readonly LibraryWorkout[]) =>
   Arr.sortWith(workouts, (workout) => workout.workout.name.toLowerCase(), Order.string)
 
+/** `RenameWorkout`'s target: whose workout, which one, and its new name. */
+type RenameInput = {
+  readonly id: WorkoutId
+  readonly name: string
+  readonly ownerId: UserId
+}
+
+/**
+ * Renames the caller's own workout, then announces the change.
+ *
+ * A stored plan that a live session runs must not go stale, so the new name
+ * is published through `PlanChanges`. Whoever runs that plan consumes the
+ * announcement; this module keeps its dependency set and does not know that
+ * live sessions exist. It mirrors the session-ended seam, which runs the
+ * other way.
+ *
+ * The announcement follows the write, so a consumer never sees a name that
+ * the store does not hold. It carries the stored name back from the repo for
+ * the same reason.
+ */
+const renameAndAnnounce = (
+  workoutsRepo: WorkoutsRepo,
+  planChanges: PlanChanges,
+  input: RenameInput,
+): Effect.Effect<LibraryWorkout, WorkoutNotFound | SqlError> =>
+  Effect.gen(function* () {
+    const renamed = yield* workoutsRepo.rename(input.id, input.ownerId, input.name)
+    yield* planChanges.publish({
+      _tag: 'renamed',
+      workoutId: renamed.id,
+      name: renamed.workout.name,
+    })
+    return renamed
+  })
+
+/** `UpdateWorkout`'s target: whose workout, which one, and the version read. */
+type UpdateInput = {
+  readonly id: WorkoutId
+  readonly workout: Workout
+  readonly expectedUpdatedAt: DateTime.Utc
+  readonly ownerId: UserId
+  readonly changedBy: string
+}
+
+/**
+ * Saves new content into the caller's own workout, then announces it — the
+ * content twin of `renameAndAnnounce`, and the same rules hold.
+ *
+ * `expectedUpdatedAt` is the version the caller read. The repo makes it a
+ * precondition, so a save built on a stale read fails `WorkoutConflict`
+ * instead of clobbering whoever wrote in between.
+ *
+ * The announcement follows the write and carries the stored plan back from
+ * the repo, so a live session never runs a plan the store does not hold.
+ * `changedBy` is who saved it, which the participant's notice names.
+ */
+const updateAndAnnounce = (
+  workoutsRepo: WorkoutsRepo,
+  planChanges: PlanChanges,
+  input: UpdateInput,
+): Effect.Effect<LibraryWorkout, WorkoutNotFound | WorkoutConflict | SqlError> =>
+  Effect.gen(function* () {
+    const updated = yield* workoutsRepo.update({
+      id: input.id,
+      ownerId: input.ownerId,
+      workout: input.workout,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    })
+    yield* planChanges.publish({
+      _tag: 'edited',
+      workoutId: updated.id,
+      workout: updated.workout,
+      changedBy: input.changedBy,
+    })
+    return updated
+  })
+
+/** `DeleteWorkout`'s target: whose workout, and which one. */
+type DeleteInput = {
+  readonly id: WorkoutId
+  readonly ownerId: UserId
+}
+
+/**
+ * Removes the caller's own workout, then announces that it is gone — the
+ * third and last announcing path, and the same rules hold.
+ *
+ * The announcement follows the write, so nothing acts on a delete that the
+ * store did not make. A delete that finds no row fails `WorkoutNotFound`
+ * before this point and announces nothing.
+ *
+ * Only the id travels. There is no plan left to send, and a consumer that
+ * runs the deleted plan needs none: it holds the last plan it applied.
+ */
+const deleteAndAnnounce = (
+  workoutsRepo: WorkoutsRepo,
+  planChanges: PlanChanges,
+  input: DeleteInput,
+): Effect.Effect<void, WorkoutNotFound | SqlError> =>
+  Effect.gen(function* () {
+    yield* workoutsRepo.delete(input.id, input.ownerId)
+    yield* planChanges.publish({ _tag: 'deleted', workoutId: input.id })
+  })
+
 /**
  * Implements every `LibraryRpcs` member in one `toLayer` — like
  * `OwnerHandlersLive`, no other task contributes to this group. Every
@@ -50,10 +165,11 @@ export const LibraryHandlersLive: Layer.Layer<
   | Rpc.Handler<'CreateWorkout'>
   | Rpc.Handler<'UpdateWorkout'>,
   never,
-  WorkoutsRepo
+  WorkoutsRepo | PlanChanges
 > = LibraryRpcs.toLayer(
   Effect.gen(function* () {
     const workoutsRepo = yield* WorkoutsRepo
+    const planChanges = yield* PlanChanges
 
     return {
       ListWorkouts: () =>
@@ -78,13 +194,13 @@ export const LibraryHandlersLive: Layer.Layer<
       RenameWorkout: ({ id, name }) =>
         Effect.gen(function* () {
           const user = yield* CurrentUser
-          return yield* workoutsRepo.rename(id, user.id, name)
+          return yield* renameAndAnnounce(workoutsRepo, planChanges, { id, name, ownerId: user.id })
         }).pipe(Effect.catchTag('SqlError', asDefect)),
 
       DeleteWorkout: ({ id }) =>
         Effect.gen(function* () {
           const user = yield* CurrentUser
-          yield* workoutsRepo.delete(id, user.id)
+          yield* deleteAndAnnounce(workoutsRepo, planChanges, { id, ownerId: user.id })
         }).pipe(Effect.catchTag('SqlError', asDefect)),
 
       CreateWorkout: ({ workout }) =>
@@ -93,17 +209,15 @@ export const LibraryHandlersLive: Layer.Layer<
           return yield* workoutsRepo.insert(user.id, workout)
         }).pipe(Effect.catchTag('SqlError', asDefect)),
 
-      // `updatedAt` is the version the caller read: the repo makes it a
-      // precondition, so a save built on a stale read fails `WorkoutConflict`
-      // instead of clobbering whoever wrote in between.
       UpdateWorkout: ({ id, workout, updatedAt }) =>
         Effect.gen(function* () {
           const user = yield* CurrentUser
-          return yield* workoutsRepo.update({
+          return yield* updateAndAnnounce(workoutsRepo, planChanges, {
             id,
-            ownerId: user.id,
             workout,
             expectedUpdatedAt: updatedAt,
+            ownerId: user.id,
+            changedBy: user.displayName,
           })
         }).pipe(Effect.catchTag('SqlError', asDefect)),
     }

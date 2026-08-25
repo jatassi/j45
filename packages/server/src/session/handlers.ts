@@ -83,6 +83,10 @@ export const SessionHandlersLive: Layer.Layer<
           const compiled = compile(workout)
           return yield* liveSessions.start({
             host: new Participant({ userId: user.id, displayName: user.displayName }),
+            // The source workout, and whether the session runs an overlay of
+            // that workout in place of the stored plan.
+            workoutId: library.id,
+            reflowLaunched: reflow !== undefined,
             workoutName: library.workout.name,
             // The as-run snapshot: the reflowed workout when a reflow applied,
             // else the stored plan — the same value `compile` just consumed.

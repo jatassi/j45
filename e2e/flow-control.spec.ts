@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import type { Page, TestInfo } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
@@ -177,6 +178,16 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
       await expect(page.locator('[data-testid^="session-progress-cell-"]')).toHaveCount(4)
       await expect(page.getByTestId('session-pod-group-0')).toBeVisible()
       await expect(page.getByTestId('session-pod-group-1')).toHaveCount(0)
+
+      // Leave the launched session. Do not navigate away from it. A session
+      // that stays live keeps its row in every account's lobby until the
+      // 60-second collector removes it.
+      await page.getByTestId('session-leave').evaluate((node: HTMLElement) => {
+        node.click()
+      })
+      await expect(page.getByTestId('session-leave-dialog')).toBeVisible()
+      await page.getByTestId('session-leave-confirm').click()
+      await expect(page.getByTestId('home-screen')).toBeVisible()
 
       // The saved plan is untouched — still two pods, three stations, sets.
       await page.goto(`${env.baseUrl}/workouts/${workoutId}`)

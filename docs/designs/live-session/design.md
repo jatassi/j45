@@ -33,6 +33,63 @@ Depends on `plan-library` (sessions start from a library workout) and
 lives there; this feature reuses it, per the architecture's player-kit
 contract).
 
+> **Amended by `live-plan-sync`.** This document first said that a session's
+> compiled workout "changes never". That is no longer true, and the reversal
+> is deliberate: a running session is a live view of its source workout, not a
+> frozen instantiation of it. An edit to the workout recompiles into every
+> session that tracks it and lands at the next segment boundary, with the
+> timer re-entering at the same work ordinal. `planRevision` counts the
+> changes that landed, so a client can raise one notice for each. A session
+> launched with a reflow overlay is exempt: its plan was never in the library.
+>
+> Three timer positions have no next boundary to wait for. A paused session
+> takes the edit at once — an edit that arrives during the pause, and an edit
+> already held when the pause began. The time it has left is re-derived from
+> the segment now in force whenever that segment differs from the one the
+> participant holds, so the resume counts down the segment it is actually in.
+> A segment equal to the one they hold keeps the time left as it stands: an
+> edit that touches a later station leaves this interval alone, and a
+> re-derive there would make the participant run the whole interval a second
+> time. A done session is frozen: no later change reaches it, and its
+> completion row keeps the plan that was in force while the timer ran — the
+> name and the progress with it. A new plan that no longer reaches
+> the current work ordinal finishes the session on the plan it was running;
+> the alternative, a clamp backwards, replays a station the participant
+> completed. That finish raises no notice and moves no revision, so on screen
+> a participant cannot tell it from the last segment of the plan. The
+> completion row does show the difference, and it must. The row records the
+> furthest segment that the session published. A session that a host trims two
+> stations from the end is therefore not recorded as having run them.
+>
+> Deleting the workout ends every live session of it, the reflow-launched ones
+> with the rest. The reflow exemption covers *content* changes only: an edit
+> or a rename can never apply to a plan the library never held, but a reflow
+> session runs an overlay of a plan that is now gone, so it has no source left
+> to follow. Before the delete, the host is told how many sessions stop. That
+> count comes from lobby rows, and a lobby row does not say which sessions are
+> reflow-launched. A session left running is thus a session that the host was
+> told would stop.
+>
+> Each ended session publishes one last snapshot with `ended` set, which says
+> whether it stopped for the ordinary reasons (`closed`) or because the plan
+> went (`plan-deleted`). A session whose timer already reached the end takes
+> `closed` for a delete as well: its participants completed the workout and
+> sit on the finished screen, so nothing was taken from them. That snapshot is
+> also what ends a watcher's stream, so a participant always learns why they
+> were sent home. The session-wide `ended` deferred no longer stops the
+> stream: it would race that last snapshot out of the subscriber's queue.
+> Completion rows are still written, from the plan the session last applied —
+> the deleted library row is never read.
+>
+> A participant who is disconnected when the session ends receives no last
+> snapshot at all: by the time they retry the watch, the session is gone from
+> the registry. The registry therefore keeps a short record of how the last
+> sessions ended, and a lookup that finds no session answers `SessionNotFound`
+> with the reason from it. The record is bounded by count, not by age — a
+> count needs no clock and no sweeper fiber, and it gives an exact ceiling on
+> what the record can hold. An ending the server can no longer name reads as
+> the ordinary one, which is the safe answer.
+
 ## Domain additions (`packages/domain/src/session.ts`)
 
 Pure Schema; package deps stay exactly `effect` + `@effect/rpc`.
@@ -49,14 +106,21 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
   id: SessionId,
   host: Participant,
   workoutName: Schema.NonEmptyTrimmedString,
-  compiled: CompiledWorkout,          // sent in every snapshot; a few KB, changes never
+  compiled: CompiledWorkout,          // sent in every snapshot; a few KB
+                                      // — an applied plan change replaces it
   timer: TimerState,                  // endsAtMillis is server-epoch absolute
   serverNow: Schema.Number,           // epoch millis at emit — client computes clock offset
   participants: Schema.Array(Participant),
+  planRevision: Schema.Int,           // rises only when a plan change lands
+  planChangedBy: Schema.NullOr(Schema.String), // who made that change
+  ended: Schema.NullOr(SessionEnd),   // set on the last snapshot only; says why
 }) {}
+
+export const SessionEnd = Schema.Literal('closed', 'plan-deleted')
 
 export class SessionSummary extends Schema.Class<SessionSummary>('SessionSummary')({
   id: SessionId,
+  workoutId: WorkoutId,               // the library workout the session was started from
   hostDisplayName: Schema.String,
   workoutName: Schema.NonEmptyTrimmedString,
   startedAt: Schema.DateTimeUtc,
@@ -69,6 +133,8 @@ export const SessionCommand = Schema.Literal('pause', 'resume', 'skip', 'prev', 
 // mandatory oxlint workaround documented in auth.ts/library.ts
 export class SessionNotFound extends taggedError<SessionNotFound>()('SessionNotFound', {
   id: SessionId,
+  endedAs: Schema.NullOr(SessionEnd),  // why that session ended, while the
+                                       // server still remembers; else null
 }) {}
 ```
 
@@ -109,7 +175,9 @@ Semantics:
 - **ListActiveSessions** returns every live session on the server — at
   friends/family scale, seeing each other's sessions is the point (it is
   session *content* that stays private until you join; the summary leaks
-  only host display name and workout name, which is exactly the invitation).
+  only host display name, workout name, and the source `WorkoutId` — which
+  is exactly the invitation. The id is an opaque handle, not access: every
+  library rpc still gates on ownership, so a foreign id opens nothing).
 
 ## Server (`packages/server/src/session/`)
 
@@ -167,6 +235,13 @@ Semantics:
   were away: stop retrying, navigate home with a notice (same destination
   as clean stream completion). Every other failure is transport: show
   "reconnecting", retry with backoff, heal via the fresh snapshot.
+  **The notice, pinned:** it travels as the `notice` search parameter of
+  `/`, which that route validates and `HomeScreen` reads. A snapshot with
+  `ended: 'plan-deleted'` sends `plan-deleted`, and so does a
+  `SessionNotFound` that carries `endedAs: 'plan-deleted'` — the reconnect
+  path, where the session is already gone. Every other ending sends
+  `session-ended`. An unknown value is dropped rather than thrown, so a
+  stale url still renders home.
 
 ## Testing
 

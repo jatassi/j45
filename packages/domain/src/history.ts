@@ -25,10 +25,11 @@ export class CompletionProgress extends Schema.Class<CompletionProgress>('Comple
 }) {}
 
 /**
- * One user's record of one ended session. `workout` is the as-run snapshot
- * (post-reflow), so history stays truthful when the plan later changes.
- * `progress` is how far the session had run when this row was written —
- * optional, because rows written before per-participant leave carry none.
+ * One user's record of one ended session. `workout` is the as-run snapshot:
+ * post-reflow, and the last plan applied while the timer was still live. A
+ * change made after the timer is done never reaches it. `progress` is how far
+ * the session got, counted in that same plan — optional, because rows written
+ * before per-participant leave carry none.
  */
 export class SessionCompletion extends Schema.Class<SessionCompletion>('SessionCompletion')({
   id: CompletionId,

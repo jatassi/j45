@@ -9,9 +9,11 @@ import {
   READY_SECONDS,
   ReadySegment,
   Segment,
+  segmentsEqual,
+  WorkContext as WorkContextClass,
+  WorkSegment,
   type RestSegment,
   type WorkContext,
-  type WorkSegment,
 } from '../src/segments.js'
 import { Flow, Pod, Round, Station, Workout } from '../src/workout.js'
 import {
@@ -188,4 +190,54 @@ describe('Segment and CompiledWorkout schemas', () => {
       expect(decodedCompiled).toStrictEqual(compiled)
     }),
   )
+})
+
+describe('segmentsEqual', () => {
+  const [, workA, restA] = compile(athletica).segments
+  const work = asWork(defined(workA, 'missing work segment'))
+  const rest = asRest(defined(restA, 'missing rest segment'))
+
+  const retimed = (segment: WorkSegment, durationMillis: number): WorkSegment =>
+    new WorkSegment({ durationMillis, work: segment.work })
+
+  const restationed = (segment: WorkSegment, name: string): WorkSegment =>
+    new WorkSegment({
+      durationMillis: segment.durationMillis,
+      work: new WorkContextClass({
+        station: new Station({ name }),
+        podIndex: segment.work.podIndex,
+        podName: segment.work.podName,
+        stationInPod: segment.work.stationInPod,
+        round: segment.work.round,
+        workIndex: segment.work.workIndex,
+      }),
+    })
+
+  it('holds for a segment rebuilt from the same values', () => {
+    expect(segmentsEqual(work, retimed(work, work.durationMillis))).toBe(true)
+    expect(segmentsEqual(rest, rest)).toBe(true)
+  })
+
+  it('fails when the kind differs', () => {
+    expect(segmentsEqual(work, rest)).toBe(false)
+    expect(segmentsEqual(work, new ReadySegment({ durationMillis: work.durationMillis }))).toBe(
+      false,
+    )
+  })
+
+  it('fails when the duration differs', () => {
+    expect(segmentsEqual(work, retimed(work, work.durationMillis + 1000))).toBe(false)
+  })
+
+  it('fails when the work context differs', () => {
+    expect(segmentsEqual(work, restationed(work, 'Something else'))).toBe(false)
+  })
+
+  it('holds across a whole recompile of the same workout', () => {
+    const first = compile(athletica).segments
+    const second = compile(athletica).segments
+    expect(
+      first.every((segment, index) => segmentsEqual(segment, defined(second[index], 'gap'))),
+    ).toBe(true)
+  })
 })

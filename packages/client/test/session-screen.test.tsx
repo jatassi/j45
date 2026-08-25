@@ -1,41 +1,27 @@
 // @vitest-environment jsdom
-import { RegistryProvider, Result } from '@effect-atom/atom-react'
-import {
-  compile,
-  Flow,
-  Participant,
-  Pod,
-  Round,
-  SessionId,
-  SessionNotFound,
-  SessionState,
-  Station,
-  TimerDone,
-  TimerPaused,
-  TimerRunning,
-  UserId,
-  Workout,
-  type TimerState,
-} from '@j45/domain'
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from '@tanstack/react-router'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { SessionId, SessionNotFound, TimerDone, TimerPaused, TimerRunning } from '@j45/domain'
+import type { SessionState, TimerState } from '@j45/domain'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import * as Effect from 'effect/Effect'
 import * as Queue from 'effect/Queue'
-import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
 import * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { SessionScreen } from '@/components/session-screen'
-import { ServerRpcClient } from '@/lib/rpc-client'
 import * as audio from '@/player/audio'
+
+import {
+  liveStream,
+  makeState,
+  push,
+  renderLive,
+  renderSession,
+  withEnded,
+} from './session-harness'
+
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+}))
 
 vi.mock('@/player/audio', () => ({
   audioState: vi.fn(() => 'on'),
@@ -53,114 +39,12 @@ afterEach(() => {
   Reflect.deleteProperty(navigator, 'wakeLock')
 })
 
-/** Fake rpc runtime — the shared idiom from `library-screen.test.tsx`. */
-function makeFakeRuntime(handlers: Partial<Record<string, (payload: unknown) => unknown>>) {
-  const client = (tag: string, payload: unknown) => {
-    const handler = handlers[tag]
-    if (handler === undefined) {
-      throw new Error(`unexpected rpc call: ${tag}`)
-    }
-    return handler(payload)
-  }
-  return Runtime.defaultRuntime.pipe(Runtime.provideService(ServerRpcClient, client as never))
-}
-
-/**
- * 1 pod ("Pod 1"), 2 stations (Rower w/ detail, Burpee), laps × 2 rounds of
- * 30″/10″. Compiled segments: ready, work Rr1, rest, work Br1, rest, work
- * Rr2, rest, work Br2 — works at indices 1, 3, 5, 7.
- */
-const compiled = compile(
-  new Workout({
-    name: 'Athletica',
-    focus: 'cardio',
-    pods: [
-      new Pod({
-        name: 'Pod 1',
-        stations: [
-          new Station({ name: 'Rower', detail: '10 cal' }),
-          new Station({ name: 'Burpee' }),
-        ],
-      }),
-    ],
-    flow: new Flow({
-      type: 'laps',
-      rounds: [
-        new Round({ workSeconds: 30, restSeconds: 10 }),
-        new Round({ workSeconds: 30, restSeconds: 10 }),
-      ],
-    }),
-  }),
-)
-
-const host = new Participant({ userId: Schema.decodeSync(UserId)('u-ann'), displayName: 'Ann' })
-const joiner = new Participant({ userId: Schema.decodeSync(UserId)('u-ben'), displayName: 'Ben' })
-
-function makeState(id: SessionId, timer: TimerState, serverNow: number): SessionState {
-  return new SessionState({
-    id,
-    host,
-    workoutName: 'Athletica',
-    compiled,
-    timer,
-    serverNow,
-    participants: [host, joiner],
-  })
-}
-
-/**
- * Mounts `SessionScreen` at `/session/<id>` in a throwaway memory router
- * whose `/` renders a marker, so a navigate-home is observable. Seeds the
- * fake rpc runtime the same way the other screen tests do.
- */
-function renderSession(
-  id: string,
-  handlers: Partial<Record<string, (payload: unknown) => unknown>>,
-) {
-  const fakeRuntime = makeFakeRuntime(handlers)
-  const rootRoute = createRootRoute({ component: Outlet })
-  const indexRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: () => <div data-testid="home-screen" />,
-  })
-  const sessionRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/session/$sessionId',
-    component: SessionScreen,
-  })
-  const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, sessionRoute]),
-    history: createMemoryHistory({ initialEntries: [`/session/${id}`] }),
-  })
-  render(
-    <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
-      <RouterProvider router={testRouter} />
-    </RegistryProvider>,
-  )
-  return testRouter
-}
-
-/** A live single-state render — the common case for a static snapshot. */
-function renderLive(id: string, state: SessionState) {
-  return renderSession(id, { WatchSession: () => liveStream(state) })
-}
-
-/** A stream that emits `state` and then stays open (never `ended`). */
-const liveStream = (state: SessionState) => Stream.make(state).pipe(Stream.concat(Stream.never))
-
-/** Offer one snapshot onto a feed queue inside `act`, flushing React effects. */
-const push = (queue: Queue.Queue<SessionState>, state: SessionState) =>
-  act(async () => {
-    await Effect.runPromise(Queue.offer(queue, state))
-  })
-
 describe('SessionScreen — stream retry discrimination', () => {
   it('SessionNotFound stops retrying and navigates home', async () => {
     const id = 'sess-not-found'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const router = renderSession(id, {
-      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId })),
+      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId, endedAs: null })),
     })
 
     await screen.findByTestId('home-screen')
@@ -175,6 +59,86 @@ describe('SessionScreen — stream retry discrimination', () => {
 
     await screen.findByTestId('session-reconnecting')
     expect(screen.queryByTestId('home-screen')).toBeNull()
+  })
+})
+
+describe('SessionScreen — where an ended session sends its people', () => {
+  /** A snapshot mid-work, so the session is plainly live before it ends. */
+  const runningNow = (id: string) => {
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const now = Date.now()
+    return makeState(
+      sessionId,
+      new TimerRunning({ segmentIndex: 1, endsAtMillis: now + 30_000 }),
+      now,
+    )
+  }
+
+  it('a deleted plan sends them home with the notice that says so', async () => {
+    const id = 'sess-deleted'
+    const queue = Effect.runSync(Queue.unbounded<SessionState>())
+    const router = renderSession(id, { WatchSession: () => Stream.fromQueue(queue) })
+
+    await push(queue, runningNow(id))
+    await screen.findByTestId('session-screen')
+
+    // The last snapshot the server publishes for a deleted plan.
+    await push(queue, withEnded(runningNow(id), 'plan-deleted'))
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.pathname).toBe('/')
+    expect(router.state.location.search).toEqual({ notice: 'plan-deleted' })
+  })
+
+  it('any other ending sends them home with the ordinary notice', async () => {
+    const id = 'sess-closed'
+    const queue = Effect.runSync(Queue.unbounded<SessionState>())
+    const router = renderSession(id, { WatchSession: () => Stream.fromQueue(queue) })
+
+    await push(queue, runningNow(id))
+    await screen.findByTestId('session-screen')
+
+    await push(queue, withEnded(runningNow(id), 'closed'))
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.search).toEqual({ notice: 'session-ended' })
+  })
+
+  it('a session that is simply gone reads as an ordinary ending', async () => {
+    const id = 'sess-vanished'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const router = renderSession(id, {
+      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId, endedAs: null })),
+    })
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.search).toEqual({ notice: 'session-ended' })
+  })
+
+  it('a reconnect that finds a deleted plan still gets the notice that says so', async () => {
+    // The participant was disconnected when the host deleted the workout, so
+    // they never received the session's last snapshot. The retried watch
+    // finds nothing — and the server still says why.
+    const id = 'sess-deleted-while-away'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const router = renderSession(id, {
+      WatchSession: () =>
+        Stream.fail(new SessionNotFound({ id: sessionId, endedAs: 'plan-deleted' })),
+    })
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.search).toEqual({ notice: 'plan-deleted' })
+  })
+
+  it('a reconnect that finds an ordinary close reads as one', async () => {
+    const id = 'sess-closed-while-away'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const router = renderSession(id, {
+      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId, endedAs: 'closed' })),
+    })
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.search).toEqual({ notice: 'session-ended' })
   })
 })
 

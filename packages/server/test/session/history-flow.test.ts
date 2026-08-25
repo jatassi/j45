@@ -17,6 +17,7 @@ import {
   Station,
   UserId,
   Workout,
+  WorkoutId,
   type SessionId,
   type Username,
 } from '@j45/domain'
@@ -32,6 +33,7 @@ import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { SESSION_COOKIE_NAME } from '../../src/auth/cookie.js'
 import { AuthMiddlewareLive } from '../../src/auth/middleware.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { WorkoutsRepo } from '../../src/library/workouts-repo.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
@@ -53,7 +55,9 @@ const SqlTestLive = MigratorLive.pipe(
 // One shared, memoized `LiveSessions` built over its `CompletionsRepo` — the
 // same reference wherever the test body, SessionHandlers, and HistoryHandlers
 // need it, so they drive one registry and one connection.
-const LiveSessionsLive = LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default))
+const LiveSessionsLive = LiveSessions.Default.pipe(
+  Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
+)
 
 /**
  * Full stack: LiveSessions + CompletionsRepo (write), SessionHandlers (StartSession
@@ -86,8 +90,17 @@ const uid = (id: string) => Schema.decodeSync(UserId)(id)
 const alice = new Participant({ userId: uid('alice'), displayName: 'Alice' })
 const bob = new Participant({ userId: uid('bob'), displayName: 'Bob' })
 
+const fixtureWorkoutId = Schema.decodeSync(WorkoutId)('workout-fixture')
+
 const startFixture = (svc: LiveSessions) =>
-  svc.start({ host: alice, workoutName: 'Fixture', workout: fixtureWorkout, compiled })
+  svc.start({
+    host: alice,
+    workoutId: fixtureWorkoutId,
+    reflowLaunched: false,
+    workoutName: 'Fixture',
+    workout: fixtureWorkout,
+    compiled,
+  })
 
 const seedUser = (id: UserId, displayName = 'Test User') =>
   Effect.gen(function* () {

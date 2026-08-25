@@ -10,6 +10,7 @@ import {
   Station,
   UserId,
   Workout,
+  WorkoutId,
   type SessionId,
   type SessionState,
   type Username,
@@ -26,6 +27,7 @@ import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
 import { UserRepo } from '../../src/auth/user-repo.js'
+import { PlanChanges } from '../../src/library/plan-changes.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
@@ -45,7 +47,9 @@ const SqlTestLive = MigratorLive.pipe(
 
 // One shared, memoized `LiveSessions` over its `CompletionsRepo` — the same
 // reference for the test body and the registry's writes.
-const LiveSessionsLive = LiveSessions.Default.pipe(Layer.provide(CompletionsRepo.Default))
+const LiveSessionsLive = LiveSessions.Default.pipe(
+  Layer.provide(Layer.mergeAll(CompletionsRepo.Default, PlanChanges.Default)),
+)
 
 const FlowLive = Layer.mergeAll(LiveSessionsLive, CompletionsRepo.Default, UserRepo.Default).pipe(
   Layer.provideMerge(SqlTestLive),
@@ -66,8 +70,17 @@ const uid = (id: string) => Schema.decodeSync(UserId)(id)
 const alice = new Participant({ userId: uid('alice'), displayName: 'Alice' })
 const bob = new Participant({ userId: uid('bob'), displayName: 'Bob' })
 
+const fixtureWorkoutId = Schema.decodeSync(WorkoutId)('workout-fixture')
+
 const startFixture = (svc: LiveSessions) =>
-  svc.start({ host: alice, workoutName: 'Fixture', workout: fixtureWorkout, compiled })
+  svc.start({
+    host: alice,
+    workoutId: fixtureWorkoutId,
+    reflowLaunched: false,
+    workoutName: 'Fixture',
+    workout: fixtureWorkout,
+    compiled,
+  })
 
 const seedUser = (id: UserId, displayName = 'Test User') =>
   Effect.gen(function* () {

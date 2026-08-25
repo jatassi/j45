@@ -82,6 +82,19 @@ async function clickSessionControl(page: Page, testId: string): Promise<void> {
   await page.getByTestId(testId).evaluate((node: HTMLElement) => node.click())
 }
 
+/**
+ * Leaves the player through its confirm, then waits for home. The Leave
+ * control only opens the dialog. A click alone keeps the session live, and a
+ * live session stays in every account's lobby until the 60-second collector
+ * removes it.
+ */
+async function leaveWithConfirm(page: Page): Promise<void> {
+  await clickSessionControl(page, 'session-leave')
+  await expect(page.getByTestId('session-leave-dialog')).toBeVisible()
+  await page.getByTestId('session-leave-confirm').click()
+  await expect(page.getByTestId('home-screen')).toBeVisible()
+}
+
 async function progressAndSkipToDone(page: Page): Promise<void> {
   for (let i = 0; i < 20; i++) {
     const before = await page.getByTestId('session-phase').textContent()
@@ -298,8 +311,8 @@ test.describe('home dashboard (chromium + webkit)', () => {
           return Boolean(phaseA) && phaseA === phaseB && contextA === contextB
         })
         .toBe(true)
-      await clickSessionControl(pageB, 'session-leave')
-      await clickSessionControl(page, 'session-leave')
+      await leaveWithConfirm(pageB)
+      await leaveWithConfirm(page)
     } finally {
       await contextB.close()
     }
@@ -308,7 +321,14 @@ test.describe('home dashboard (chromium + webkit)', () => {
   test('fresh account: browse-fallback hero and library-padded recent list (≤5 rows)', async ({
     page,
   }, testInfo) => {
-    test.setTimeout(150_000)
+    // The browse hero has the lowest priority. A live session anywhere on the
+    // server outranks it, because `ListActiveSessions` is not scoped to the
+    // caller. This test thus needs one moment with no live session at all, and
+    // a session ends 60 seconds after its last watcher goes. Under a loaded
+    // parallel run, the other specs can keep that moment away until they stop.
+    // The wait below is therefore long. It ends in milliseconds on a quiet
+    // server.
+    test.setTimeout(330_000)
     const projectName = projectNameFrom(testInfo)
     const env = readE2eEnv()
     const [code] = await mintInviteCodes(page, env.baseUrl, { ...env.owner, count: 1 })
@@ -319,8 +339,7 @@ test.describe('home dashboard (chromium + webkit)', () => {
       pin: '1357',
     })
     await expect(page.getByTestId('home-screen')).toBeVisible()
-    // Wait for foreign live sessions to idle-GC (60s) so browse pick wins.
-    await expect(page.getByTestId('hero-browse-link')).toBeVisible({ timeout: 120_000 })
+    await expect(page.getByTestId('hero-browse-link')).toBeVisible({ timeout: 300_000 })
     await expect(page.getByTestId('home-hero')).toContainText('From your library')
     await expect(page.locator('[data-testid^="recent-row-"]')).toHaveCount(5)
   })
@@ -347,6 +366,6 @@ test.describe('home dashboard (chromium + webkit)', () => {
     await expect(hero).toContainText('Apex')
     await page.getByTestId('hero-start').click()
     await expect(page).toHaveURL(/\/session\/[^/?#]+/)
-    await clickSessionControl(page, 'session-leave')
+    await leaveWithConfirm(page)
   })
 })

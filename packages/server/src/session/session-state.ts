@@ -3,14 +3,17 @@ import {
   SessionNotFound,
   SessionState,
   SessionSummary,
+  start as startTimer,
   type CompiledWorkout,
   type Participant,
+  type SessionEnd,
   type SessionId,
   type TimerState,
   type UserId,
   type Workout,
+  type WorkoutId,
 } from '@j45/domain'
-import type * as DateTime from 'effect/DateTime'
+import * as DateTime from 'effect/DateTime'
 import type * as Deferred from 'effect/Deferred'
 import * as Effect from 'effect/Effect'
 import * as HashMap from 'effect/HashMap'
@@ -19,7 +22,7 @@ import * as Option from 'effect/Option'
 import type * as Queue from 'effect/Queue'
 import * as Ref from 'effect/Ref'
 import type * as Scope from 'effect/Scope'
-import type * as SubscriptionRef from 'effect/SubscriptionRef'
+import * as SubscriptionRef from 'effect/SubscriptionRef'
 
 import type { CompletionsRepo } from './completions-repo.js'
 
@@ -60,15 +63,32 @@ export type Sub = {
  * the ticker never interleave a read-modify-write. `wakeup` re-arms the
  * ticker when a command changes the deadline out from under its sleep;
  * `rawSubs` (counting every subscription, not distinct users) drives the GC;
- * `ended` completes every watcher stream and, via the reaper, closes `scope`
- * (which owns the ticker and GC fibers).
+ * `ended` releases the reaper, which closes `scope` (owner of the ticker and
+ * GC fibers). It does not stop the watcher streams: they stop on the final
+ * snapshot instead, which is the one that says why the session ended.
  */
 export type SessionHandle = {
   readonly id: SessionId
   readonly host: Participant
-  readonly workoutName: string
-  readonly workout: Workout
-  readonly compiled: CompiledWorkout
+  // The library workout that this session started from, and whether a
+  // launch-time reflow overlay changed that workout. A reflow-launched
+  // session runs a plan that the library never held. It keeps the id of its
+  // source, but it tracks nothing, so `sessionsTracking` omits it.
+  readonly workoutId: WorkoutId
+  readonly reflowLaunched: boolean
+  // The as-run plan: the last plan applied while the timer was still live.
+  // A `Ref`, not a value, because a session is a live view of its workout —
+  // an applied edit replaces it. The compiled form of the same plan lives on
+  // `stateRef` alone, so the snapshot participants hold and the plan the
+  // ticker runs are one value and can never disagree. `stateRef` holds the
+  // one current name that the snapshot, the lobby summary, and a completion
+  // row all read; a rename writes it through to the name on this plan too,
+  // because a completion row carries both and must not hold two names.
+  readonly workout: Ref.Ref<Workout>
+  // A content edit that waits for the next segment boundary. No interval is
+  // cut short: an edit stays here until the next timer move that changes
+  // segment, and that move puts it in force.
+  readonly pending: Ref.Ref<Option.Option<PendingPlan>>
   readonly startedAt: DateTime.Utc
   readonly stateRef: SubscriptionRef.SubscriptionRef<SessionState>
   readonly rawSubs: SubscriptionRef.SubscriptionRef<number>
@@ -89,52 +109,243 @@ export type SessionHandle = {
   // Flips true the first time a published timer crosses into segment 1 (past
   // the ready segment) or reaches done; gates whether ending writes any rows.
   readonly progressed: Ref.Ref<boolean>
+  // The furthest segment that a published snapshot entered, counted in the
+  // plan now in force. A completion row records it as progress.
+  //
+  // The final timer does not give this number. A `done` timer holds no
+  // segment index. A plan that exhausts the session sets `done` before the
+  // participant reached the end of the plan that the row records. Only a
+  // published position counts here. An intermediate move that a plan change
+  // replaced was never on a screen.
+  //
+  // An applied plan change sets this to the segment that the remap gives, so
+  // the number always names a segment of the plan that it is counted in.
+  readonly reachedSegment: Ref.Ref<number>
+  // The single claim token for ending: whoever flips it from `false` to
+  // `true` first owns the end, and every later caller returns at once. The
+  // garbage collector, the last leaver, and a deleted workout can all reach
+  // the end, and two of them must not write the history rows twice.
+  readonly ending: Ref.Ref<boolean>
   readonly sem: Effect.Semaphore
   readonly wakeup: Queue.Queue<undefined>
   readonly ended: Deferred.Deferred<undefined>
   readonly scope: Scope.CloseableScope
 }
 
+/**
+ * A content edit that is accepted, but not yet in force: it waits for the
+ * next segment boundary. `compiled` is built once, when the edit arrives,
+ * so the boundary does no work that can be done early.
+ */
+export type PendingPlan = {
+  readonly workout: Workout
+  readonly compiled: CompiledWorkout
+  /** Who saved the edit, carried onto the snapshot for the notice to name. */
+  readonly changedBy: string
+}
+
+/**
+ * How many endings the server remembers after the sessions themselves are
+ * gone.
+ *
+ * The bound is a count, not an age. A count needs no clock and no sweeper
+ * fiber, and it gives an exact ceiling on the memory the record can hold. An
+ * age bound gives no such ceiling: between two reads the record can still
+ * take any number of endings.
+ *
+ * The record has one reader: a participant who retries a watch some seconds
+ * after the session ended, because the connection was lost. At the scale this
+ * server runs, 64 endings are much more than such a window holds.
+ */
+export const RECENTLY_ENDED_LIMIT = 64
+
+/** One session that ended, and why. */
+type EndedSession = { readonly id: SessionId; readonly reason: SessionEnd }
+
 /** The shared registry every session actor is filed under. */
 export type Registry = {
   readonly sessions: Ref.Ref<HashMap.HashMap<SessionId, SessionHandle>>
+  // The last `RECENTLY_ENDED_LIMIT` endings, newest first. A session that
+  // ends leaves the registry, so nothing about it can be read off a handle
+  // any more; this is what a lookup of a gone session answers from.
+  readonly recentlyEnded: Ref.Ref<readonly EndedSession[]>
   readonly layerScope: Scope.Scope
   readonly completionsRepo: CompletionsRepo
 }
 
+/**
+ * Puts one ending into the short record, and drops the oldest to stay inside
+ * the bound. The caller is the code that removes the session from the
+ * registry, so the two moves are one act. A session is live, or remembered,
+ * but never both.
+ */
+export const rememberEnded = (
+  registry: Registry,
+  id: SessionId,
+  reason: SessionEnd,
+): Effect.Effect<void> =>
+  Ref.update(registry.recentlyEnded, (recent) =>
+    [{ id, reason }, ...recent].slice(0, RECENTLY_ENDED_LIMIT),
+  )
+
 /** The facts `LiveSessions.start` needs to stand up a fresh session actor. */
 export type StartParams = {
   readonly host: Participant
+  readonly workoutId: WorkoutId
+  readonly reflowLaunched: boolean
   readonly workoutName: string
   readonly workout: Workout
   readonly compiled: CompiledWorkout
 }
 
-/** The session actor filed under `id`, or `SessionNotFound` if there is none. */
+/**
+ * The snapshot a fresh session opens on: the compiled plan it starts from,
+ * its timer at the ready segment, nobody present yet, and no plan change
+ * applied — so a client that joins at once has nothing to notice.
+ */
+export const initialState = (id: SessionId, params: StartParams, now: number): SessionState =>
+  new SessionState({
+    id,
+    host: params.host,
+    workoutName: params.workoutName,
+    compiled: params.compiled,
+    timer: startTimer(params.compiled.segments, now),
+    serverNow: now,
+    participants: [],
+    planRevision: 0,
+    planChangedBy: null,
+    ended: null,
+  })
+
+/**
+ * The session actor filed under `id`, or `SessionNotFound` if there is none.
+ *
+ * The failure carries why that session ended, when the short record still
+ * holds it. Every path that looks a session up — a watch, a command, a leave —
+ * therefore tells a caller as much as the server can still say, rather than
+ * only that the session is gone.
+ */
 export const getHandle = (
   registry: Registry,
   id: SessionId,
 ): Effect.Effect<SessionHandle, SessionNotFound> =>
   Effect.flatMap(Ref.get(registry.sessions), (map) =>
     Option.match(HashMap.get(map, id), {
-      onNone: () => Effect.fail(new SessionNotFound({ id })),
+      onNone: () =>
+        Effect.flatMap(Ref.get(registry.recentlyEnded), (recent) =>
+          Effect.fail(
+            new SessionNotFound({
+              id,
+              endedAs: recent.find((ended) => ended.id === id)?.reason ?? null,
+            }),
+          ),
+        ),
       onSome: Effect.succeed,
     }),
   )
 
-/** The lobby-listing summary for one session, sized by current presence. */
+/**
+ * The lobby-listing summary for one session, sized by current presence. The
+ * name comes from the published snapshot, so the lobby row and the player
+ * show the same name after a rename.
+ */
 export const summaryOf = (handle: SessionHandle): Effect.Effect<SessionSummary> =>
   Effect.map(
-    Ref.get(handle.presence),
-    (map) =>
+    Effect.all({ presence: Ref.get(handle.presence), state: SubscriptionRef.get(handle.stateRef) }),
+    ({ presence, state }) =>
       new SessionSummary({
         id: handle.id,
+        workoutId: handle.workoutId,
         hostDisplayName: handle.host.displayName,
-        workoutName: handle.workoutName,
+        workoutName: state.workoutName,
         startedAt: handle.startedAt,
-        participantCount: HashMap.size(map),
+        participantCount: HashMap.size(presence),
       }),
   )
+
+/**
+ * The lobby summaries of every live session that `keep` accepts. Both registry
+ * queries are this one scan with a different predicate.
+ */
+const summarize = (
+  registry: Registry,
+  keep: (handle: SessionHandle) => boolean,
+): Effect.Effect<readonly SessionSummary[]> =>
+  Effect.flatMap(Ref.get(registry.sessions), (map) =>
+    Effect.forEach([...HashMap.values(map)].filter(keep), summaryOf),
+  )
+
+/** Every live session on this server, as lobby summaries. */
+export const listSessions = (registry: Registry): Effect.Effect<readonly SessionSummary[]> =>
+  summarize(registry, () => true)
+
+/**
+ * The live sessions of one library workout, split by what a change to that
+ * workout can reach. `tracking` holds the sessions that run the stored plan.
+ * `reflowLaunched` holds the sessions that started with a launch-time reflow
+ * overlay: they hold the same source id, but their compiled plan was never in
+ * the library, so a change to it has nothing to apply to them.
+ */
+export type SessionsOfWorkout = {
+  readonly tracking: readonly SessionSummary[]
+  readonly reflowLaunched: readonly SessionSummary[]
+}
+
+/**
+ * Every live session that started from `workoutId`, in the two groups above.
+ * This is the reverse of the source id that each handle holds.
+ *
+ * A scan of the registry gives the answer. A second map does not hold it: the
+ * registry has one entry for each live session, which is a small set, and a
+ * derived answer cannot become stale when a session ends.
+ */
+export const sessionsOfWorkout = (
+  registry: Registry,
+  workoutId: WorkoutId,
+): Effect.Effect<SessionsOfWorkout> =>
+  Effect.all({
+    tracking: summarize(
+      registry,
+      (handle) => handle.workoutId === workoutId && !handle.reflowLaunched,
+    ),
+    reflowLaunched: summarize(
+      registry,
+      (handle) => handle.workoutId === workoutId && handle.reflowLaunched,
+    ),
+  })
+
+/**
+ * The facts every completion row of one session shares, read at the moment
+ * the row is written: the plan and the name last in force while the timer was
+ * live, the roster as it stands, and how far the published timer reached.
+ * The session end and a single leaver both mint rows from this one reading.
+ *
+ * The plan comes off the handle and the snapshot, never off the library. A
+ * workout that was deleted while the session ran therefore takes nothing away
+ * from the rows the session leaves behind.
+ *
+ * Progress is counted in that same plan. The total is the segment count of
+ * the plan, and the position is the furthest segment that the session
+ * published while it ran that plan. Both numbers come from one plan, so
+ * "segment N of M" has one meaning.
+ */
+export const completionInputs = (handle: SessionHandle, state: SessionState) =>
+  Effect.gen(function* () {
+    return {
+      sessionId: handle.id,
+      workoutName: state.workoutName,
+      workout: yield* Ref.get(handle.workout),
+      host: handle.host,
+      participants: [...HashMap.values(yield* Ref.get(handle.roster))],
+      startedAt: handle.startedAt,
+      endedAt: yield* DateTime.now,
+      progress: yield* progressOf(
+        handle.id,
+        yield* Ref.get(handle.reachedSegment),
+        state.compiled.segments.length,
+      ),
+    } as const
+  })
 
 /** Structural equality on timer states — used to suppress no-op republishes. */
 export const timersEqual = (a: TimerState, b: TimerState): boolean => {
@@ -151,9 +362,10 @@ export const timersEqual = (a: TimerState, b: TimerState): boolean => {
 }
 
 /**
- * A fresh snapshot with a new `serverNow` plus whichever of `timer` /
- * `participants` the caller overrides — everything else carried from `state`.
- * The two publish paths (a timer advance, a presence change) each vary one.
+ * A fresh snapshot with a new `serverNow` plus whichever fields the caller
+ * overrides — everything else carried from `state`. A timer advance varies
+ * `timer`; a presence change varies `participants`; a rename varies
+ * `workoutName`; an applied content edit varies the rest together.
  */
 export const withState = (
   state: SessionState,
@@ -161,16 +373,29 @@ export const withState = (
     readonly serverNow: number
     readonly timer?: TimerState
     readonly participants?: readonly Participant[]
+    readonly workoutName?: string
+    readonly compiled?: CompiledWorkout
+    // The two plan-change fields travel together or not at all, so a
+    // snapshot can never say "changed by nobody" at a raised revision.
+    readonly planChange?: { readonly revision: number; readonly changedBy: string }
+    // Set once, on the last snapshot a session ever publishes.
+    readonly ended?: SessionEnd
   },
 ): SessionState =>
   new SessionState({
     id: state.id,
     host: state.host,
-    workoutName: state.workoutName,
-    compiled: state.compiled,
+    workoutName: over.workoutName ?? state.workoutName,
+    compiled: over.compiled ?? state.compiled,
     timer: over.timer ?? state.timer,
     serverNow: over.serverNow,
     participants: over.participants ?? state.participants,
+    // Carried, never derived: a join, a leave, and a timer advance all
+    // republish the snapshot, and none of them is a plan change.
+    planRevision: over.planChange?.revision ?? state.planRevision,
+    planChangedBy: over.planChange?.changedBy ?? state.planChangedBy,
+    // Carried, so no ordinary republish can revive an ended session.
+    ended: over.ended ?? state.ended,
   })
 
 export const addPresence =
@@ -206,37 +431,66 @@ export const participantsOf = (
     )
 
 /**
+ * The segment a timer sits in, or `undefined` when it is idle or done. The
+ * one place that reads a segment index off a timer state.
+ */
+export const segmentIndexOf = (timer: TimerState): number | undefined =>
+  timer._tag === 'running' || timer._tag === 'paused' ? timer.segmentIndex : undefined
+
+/**
  * Whether a timer state counts as having progressed past the ready segment —
  * any running/paused segment beyond index 0, or a finished workout. A session
  * that only ever sat at the ready segment never progressed.
  */
 export const isProgressed = (timer: TimerState): boolean =>
-  timer._tag === 'done' ||
-  ((timer._tag === 'running' || timer._tag === 'paused') && timer.segmentIndex >= 1)
+  timer._tag === 'done' || (segmentIndexOf(timer) ?? 0) >= 1
 
 /**
- * The index of the furthest segment entered for a timer position (the ready
- * segment is `0`). A done workout entered its last segment, so it reports
- * `totalSegments - 1`; `idle` never occurs for a live session but maps to the
- * ready segment for totality.
+ * Publishes one snapshot to the watchers, with the bookkeeping that every
+ * published timer move needs. A timer that left the ready segment, or that
+ * finished, sets `progressed`, and that flag alone decides whether the
+ * session leaves any history behind. A timer that holds a segment index
+ * raises `reachedSegment`, which is the progress that history records.
+ *
+ * The caller holds the session's semaphore. It also owns the ticker wakeup:
+ * only a move that changes the deadline needs one.
  */
-const furthestSegment = (timer: TimerState, totalSegments: number): number => {
-  if (timer._tag === 'running' || timer._tag === 'paused') {
-    return timer.segmentIndex
-  }
-  if (timer._tag === 'done') {
-    return Math.max(0, totalSegments - 1)
-  }
-  return 0
-}
+export const publishSnapshot = (handle: SessionHandle, state: SessionState): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* SubscriptionRef.set(handle.stateRef, state)
+    if (isProgressed(state.timer)) {
+      yield* Ref.set(handle.progressed, true)
+    }
+    const segmentIndex = segmentIndexOf(state.timer)
+    if (segmentIndex !== undefined) {
+      yield* Ref.update(handle.reachedSegment, (furthest) => Math.max(furthest, segmentIndex))
+    }
+  })
 
 /**
- * The furthest-segment progress a completion row records for a given timer
- * position — `segmentsCompleted` as the furthest segment entered against the
- * as-run workout's `totalSegments` segment count.
+ * The progress that a completion row records: how far the session got,
+ * counted in the plan that the row carries. `reachedSegment` is the furthest
+ * segment that the session published (the ready segment is `0`).
+ * `totalSegments` is the segment count of that same plan.
+ *
+ * The clamp guards an invariant, and it must never do work. Every plan that
+ * comes into force sets `reachedSegment` to a segment of itself, so the two
+ * numbers always agree. If they do not, the state is a defect: the row would
+ * name a segment that its own plan does not hold. The defect is logged as an
+ * error, and the row is still written with a clamped count — a participant
+ * must not lose the record of a session because a count was wrong.
  */
-export const progressOf = (timer: TimerState, totalSegments: number): CompletionProgress =>
-  new CompletionProgress({
-    segmentsCompleted: furthestSegment(timer, totalSegments),
-    totalSegments,
+const progressOf = (
+  sessionId: SessionId,
+  reachedSegment: number,
+  totalSegments: number,
+): Effect.Effect<CompletionProgress> =>
+  Effect.gen(function* () {
+    const segmentsCompleted = Math.max(0, Math.min(reachedSegment, totalSegments - 1))
+    if (segmentsCompleted !== reachedSegment) {
+      yield* Effect.logError('completion progress fell outside the plan it is counted in').pipe(
+        Effect.annotateLogs({ sessionId, reachedSegment, totalSegments }),
+      )
+    }
+    return new CompletionProgress({ segmentsCompleted, totalSegments })
   })

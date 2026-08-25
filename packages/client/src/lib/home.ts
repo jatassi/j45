@@ -1,4 +1,4 @@
-import type { LibraryWorkout, SessionCompletion, SessionSummary } from '@j45/domain'
+import type { LibraryWorkout, SessionCompletion, SessionSummary, WorkoutId } from '@j45/domain'
 import * as DateTime from 'effect/DateTime'
 
 import { ServerRpcClient } from '@/lib/rpc-client'
@@ -50,10 +50,23 @@ export function resolveWorkoutByName(
 }
 
 /**
+ * The caller's library entry with this id, or `undefined`. A live session of a
+ * different host refers to a workout in *that host's* library. An id that is
+ * absent here thus resolves to nothing, and this is the correct result.
+ */
+export function resolveWorkoutById(
+  id: WorkoutId,
+  workouts: readonly LibraryWorkout[],
+): LibraryWorkout | undefined {
+  return workouts.find((entry) => entry.id === id)
+}
+
+/**
  * Picks the home hero by priority: live → start-last → browse.
  *
  * - **live**: `sessions` non-empty — newest by `startedAt` is the hero, the
- *   rest are extras; optionally attaches a name-resolved library workout.
+ *   rest are extras; attaches the library workout by id. A workout with the
+ *   same name is not the same workout.
  * - **start-last**: no live sessions, history head resolves by name.
  * - **browse**: first library workout, or `undefined` if the library is empty
  *   (never throws). Unresolved history head falls through here too.
@@ -68,7 +81,7 @@ export function pickHero(
       (a, b) => DateTime.toEpochMillis(b.startedAt) - DateTime.toEpochMillis(a.startedAt),
     )
     const [session, ...extras] = ordered
-    const workout = resolveWorkoutByName(session.workoutName, workouts)
+    const workout = resolveWorkoutById(session.workoutId, workouts)
     return workout === undefined
       ? { _tag: 'live', session, extras }
       : { _tag: 'live', session, extras, workout }

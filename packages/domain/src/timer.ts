@@ -1,7 +1,7 @@
 import * as Option from 'effect/Option'
 import * as Schema from 'effect/Schema'
 
-import type { Segment } from './segments.js'
+import { segmentsEqual, type Segment } from './segments.js'
 
 export class TimerIdle extends Schema.TaggedClass<TimerIdle>()('idle', {}) {}
 export class TimerRunning extends Schema.TaggedClass<TimerRunning>()('running', {
@@ -19,13 +19,66 @@ export type TimerState = typeof TimerState.Type
 const durationAt = (segments: readonly Segment[], index: number): number =>
   segments[index]?.durationMillis ?? 0
 
-/** Enter `segmentIndex` at full duration, anchored to `nowMillis`. */
-const enter = (segmentIndex: number, segments: readonly Segment[], nowMillis: number): TimerState =>
+/**
+ * Enter `segmentIndex` at full duration, anchored to `nowMillis`.
+ *
+ * Exported because a deadline must sometimes be recomputed from the current
+ * instant rather than chained off the previous one — applying a plan change
+ * to a running session is the case, since the segment it enters has a
+ * duration the old chain knew nothing about.
+ */
+export const enterSegment = (
+  segmentIndex: number,
+  segments: readonly Segment[],
+  nowMillis: number,
+): TimerState =>
   new TimerRunning({ segmentIndex, endsAtMillis: nowMillis + durationAt(segments, segmentIndex) })
+
+/**
+ * Enter `segmentIndex` paused, with the whole of that segment still to run.
+ *
+ * The paused twin of `enterSegment`, and it exists for the same reason. A
+ * paused session that takes a plan change enters the mapped segment of the
+ * new plan, and the time it has left must come from that segment. Frozen
+ * milliseconds carried across from the old plan would count down a duration
+ * that the segment now in force never had.
+ */
+export const enterSegmentPaused = (
+  segmentIndex: number,
+  segments: readonly Segment[],
+): TimerState =>
+  new TimerPaused({ segmentIndex, remainingMillis: durationAt(segments, segmentIndex) })
+
+/**
+ * The paused timer for a plan change that moves a paused participant from the
+ * segment `held` onto `landing.index` of `landing.segments`, with
+ * `remainingMillis` left of `held`.
+ *
+ * The segment decides between two answers.
+ *
+ * A different segment takes `enterSegmentPaused`: the whole of the segment
+ * now in force. Milliseconds carried across would count down a duration that
+ * this segment never had.
+ *
+ * An equal segment keeps the time left. An edit that changes a later station
+ * leaves this interval as it was, second for second. A participant with 10s
+ * left must resume with 10s left. A full re-derive makes them do the whole
+ * interval a second time, for a change that did not touch it.
+ */
+export const remapPaused = (
+  remainingMillis: number,
+  held: Segment | undefined,
+  landing: { readonly index: number; readonly segments: readonly Segment[] },
+): TimerState => {
+  const to = landing.segments[landing.index]
+  return held !== undefined && to !== undefined && segmentsEqual(held, to)
+    ? new TimerPaused({ segmentIndex: landing.index, remainingMillis })
+    : enterSegmentPaused(landing.index, landing.segments)
+}
 
 /** Begin a compiled workout at its first (`ready`) segment. */
 export const start = (segments: readonly Segment[], nowMillis: number): TimerState =>
-  enter(0, segments, nowMillis)
+  enterSegment(0, segments, nowMillis)
 
 /**
  * While running and the deadline has passed, enter the next segment —
@@ -83,7 +136,9 @@ export const skip = (
     return state
   }
   const nextIndex = state.segmentIndex + 1
-  return nextIndex >= segments.length ? new TimerDone({}) : enter(nextIndex, segments, nowMillis)
+  return nextIndex >= segments.length
+    ? new TimerDone({})
+    : enterSegment(nextIndex, segments, nowMillis)
 }
 
 /**
@@ -96,12 +151,14 @@ export const prev = (
   nowMillis: number,
 ): TimerState => {
   if (state._tag === 'done') {
-    return enter(segments.length - 1, segments, nowMillis)
+    return enterSegment(segments.length - 1, segments, nowMillis)
   }
   if (state._tag !== 'running' && state._tag !== 'paused') {
     return state
   }
-  return state.segmentIndex === 0 ? state : enter(state.segmentIndex - 1, segments, nowMillis)
+  return state.segmentIndex === 0
+    ? state
+    : enterSegment(state.segmentIndex - 1, segments, nowMillis)
 }
 
 /** Any state → idle. */
