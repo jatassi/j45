@@ -54,12 +54,22 @@ schema rejects instead of coercing, per the error posture).
 - `handlers.ts` adds the two members to `LibraryHandlersLive`, both scoped to
   `CurrentUser` with the existing `asDefect` SqlError posture.
 
-**Live sessions are unaffected by edits** — free, by construction: a running
-session holds its own `CompiledWorkout` copy (live-session design); editing
-or deleting the source workout changes the next session, never a running one.
-Exactly the legacy behavior ("running segments keep their text; edits take
-effect on the next start"). Asserting this is live-session's acceptance, not
-this feature's — no session code exists in this feature's dependency closure.
+**Live sessions were unaffected by edits.** That was true when this document
+was written: a running session held its own frozen `CompiledWorkout` copy, so
+editing or deleting the source workout changed the next session and never a
+running one. **Live plan sync reverses it.** A running session now tracks its
+source workout: a content edit reaches it at the next segment boundary, a
+rename reaches it immediately, and a delete stops it. See the live-session
+design for the propagation rules.
+
+Because a save now reaches other people, the editor asks first. A save into a
+workout that live sessions run stops at a confirm that states how many
+sessions get the change; deleting such a workout stops at a stronger confirm,
+because that action stops other people's workouts and has no undo. A rename
+is ungated — it changes no work. With no live session neither path prompts,
+so the common case keeps its speed. The count comes from the lobby list the
+client already holds (`ListActiveSessions`, whose rows carry their
+`WorkoutId`), never from a new rpc.
 
 ## Client
 

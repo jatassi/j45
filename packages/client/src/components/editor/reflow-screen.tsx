@@ -15,6 +15,7 @@ import * as Either from 'effect/Either'
 import * as Schema from 'effect/Schema'
 import { toast } from 'sonner'
 
+import { LiveSaveDialog } from '@/components/editor/live-save-dialog'
 import { ReflowFlowSection } from '@/components/editor/reflow-flow-section'
 import { ReflowPodsSection } from '@/components/editor/reflow-pods-section'
 import { useWorkoutSave } from '@/components/editor/use-workout-save'
@@ -125,7 +126,7 @@ function ReflowForm({ libraryWorkout }: { readonly libraryWorkout: LibraryWorkou
   const onStart = useReflowStart(libraryWorkout)
   // On a conflict the shared hook re-fetches; `ReflowWorkoutScreen`'s key then
   // remounts this form, so the description below is a statement of fact.
-  const onSave = useWorkoutSave({
+  const save = useWorkoutSave({
     source: libraryWorkout,
     conflictDescription:
       'This workout changed on another device — the launch setup was rebuilt from the new version.',
@@ -145,13 +146,14 @@ function ReflowForm({ libraryWorkout }: { readonly libraryWorkout: LibraryWorkou
           disabled={!Either.isRight(result)}
           onClick={() => {
             if (Either.isRight(result)) {
-              onSave(result.right.workout)
+              save.save(result.right.workout)
             }
           }}
         >
           Save to plan
         </Button>
       </div>
+      <LiveSaveDialog save={save} />
     </div>
   )
 }

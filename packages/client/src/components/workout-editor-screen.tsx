@@ -7,6 +7,7 @@ import * as Schema from 'effect/Schema'
 import { toast } from 'sonner'
 
 import { WorkoutEditorForm } from '@/components/editor/editor-form'
+import { LiveSaveDialog } from '@/components/editor/live-save-dialog'
 import { useWorkoutSave } from '@/components/editor/use-workout-save'
 import { takeInitialDraft } from '@/lib/editor-draft'
 import { ServerRpcClient } from '@/lib/rpc-client'
@@ -72,18 +73,21 @@ function EditWorkoutForm({ libraryWorkout }: EditFormProps) {
   const { id, workout } = libraryWorkout
   const navigate = useNavigate()
   const goDetail = () => void navigate({ to: '/workouts/$workoutId', params: { workoutId: id } })
-  const onSave = useWorkoutSave({
+  const save = useWorkoutSave({
     source: libraryWorkout,
     conflictDescription:
       'This workout changed on another device. Your edits are still here — save again to apply them on top.',
   })
   return (
-    <WorkoutEditorForm
-      heading="Edit"
-      initial={Editor.workoutToState(workout)}
-      onSave={onSave}
-      onExitFallback={goDetail}
-    />
+    <>
+      <WorkoutEditorForm
+        heading="Edit"
+        initial={Editor.workoutToState(workout)}
+        onSave={save.save}
+        onExitFallback={goDetail}
+      />
+      <LiveSaveDialog save={save} />
+    </>
   )
 }
 

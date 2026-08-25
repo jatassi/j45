@@ -59,6 +59,7 @@ Apply on every screen:
 | Server-pushed news | `sonner` toast, no sound (see below)        |
 | Landing notice     | dismissible inline `alert` (see below)      |
 | Destructive action | `alert-dialog` confirm                      |
+| Reaches others     | `alert-dialog` confirm, counted (see below) |
 
 Loading and failure must never look the same. Success stays quiet unless the
 outcome is otherwise invisible on-screen.
@@ -69,6 +70,22 @@ does it: a session that ends sends its Participants home. It travels as a
 search parameter the destination route validates, so a reload does not lose
 it. It is an inline alert, not a toast: the user did not ask to be moved, so
 the message must wait for them to read it, and it must be dismissible.
+
+"Reaches others" is the narrow case where a write on the caller's own
+content changes what other people see right now: today only a save into, or
+a delete of, a workout that live sessions run. The confirm must state how
+many sessions it reaches, and a delete must say that those sessions stop and
+that there is no undo. Take the count from data the client already holds —
+the lobby rows of `ListActiveSessions` carry their `WorkoutId`. A write that
+reaches nobody must not prompt, and a cosmetic write (a rename) must not
+prompt at all.
+
+This count is the one query failure the table above does not apply to. A
+read that has not answered, or one that failed, counts as nobody: the prompt
+exists to stop a surprise, and it must never become the reason the owner
+cannot write to their own content. Read the count live while the prompt is
+open, so a late answer strengthens the wording rather than leaving a stale
+zero on screen.
 
 "Server-pushed news" is the narrow case where the server changes something
 under the user without them asking: today only a plan change reaching a live

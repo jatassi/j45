@@ -20,16 +20,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useSceneSurface } from '@/glass/use-scene-surface'
 import { listHistoryAtom, pickHero, recentRows, startWorkoutAtom } from '@/lib/home'
 import { HOME_NOTICE_TEXT, homeNotice } from '@/lib/home-notice'
-import { ServerRpcClient } from '@/lib/rpc-client'
+import { listActiveSessionsAtom } from '@/lib/live-workout'
 import { cn } from '@/lib/utils'
 import { formatDuration, listWorkoutsAtom } from '@/lib/workouts'
-
-/**
- * Active live sessions (`ListActiveSessions`), hoisted to module scope for a
- * stable atom identity — same pattern as `listWorkoutsAtom` / `listHistoryAtom`.
- * Not exported: this file only exports components (`react/only-export-components`).
- */
-const listActiveSessionsAtom = ServerRpcClient.query('ListActiveSessions', undefined)
 
 /** How many recent rows the home list shows (history-first, library-padded). */
 const RECENT_COUNT = 5
