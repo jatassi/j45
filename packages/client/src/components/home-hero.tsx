@@ -27,18 +27,59 @@ const HUE_TEXT: Record<Focus, string> = {
   hybrid: 'text-hue-hybrid',
 }
 
+/** One minute in milliseconds — the live hero's elapsed line counts in whole minutes. */
+const MINUTE_MILLIS = 60_000
+
+/** Whole minutes between two epoch instants, clamped at 0. */
+function elapsedMinutes(startedAtMillis: number, nowMillis: number): number {
+  return Math.floor(Math.max(0, nowMillis - startedAtMillis) / MINUTE_MILLIS)
+}
+
 /**
- * Minutes elapsed since `startedAt` (clamped at 0), rendered as
- * `"N min in"` for the live-hero meta line. Uses `DateTime.unsafeNow` so
- * wall clock drives the display outside Effect fibers.
+ * Milliseconds until the displayed minute next changes. A start in the future
+ * (clock skew between server and phone) waits for the start itself. The result
+ * is capped at one minute so a far-off value never overflows `setTimeout`,
+ * which would otherwise fire at once and spin.
  */
-function formatElapsedSince(startedAt: DateTime.Utc): string {
-  const elapsedMs = Math.max(
-    0,
-    DateTime.toEpochMillis(DateTime.unsafeNow()) - DateTime.toEpochMillis(startedAt),
-  )
-  const minutes = Math.floor(elapsedMs / 60_000)
-  return `${minutes} min in`
+function millisToNextMinute(startedAtMillis: number, nowMillis: number): number {
+  const elapsed = nowMillis - startedAtMillis
+  if (elapsed < 0) {
+    return Math.min(-elapsed, MINUTE_MILLIS)
+  }
+  return MINUTE_MILLIS - (elapsed % MINUTE_MILLIS)
+}
+
+/**
+ * Whole minutes since `startedAt`, ticking on its own.
+ *
+ * The line must stay correct however rarely Session data arrives, so it does
+ * not ride on re-renders from the lobby feed. It seeds from the wall clock on
+ * first render — never blank, never a tick behind — then re-reads on each
+ * whole-minute boundary. One chained `setTimeout` aligned to the boundary, not
+ * a frame loop: the display only ever changes once a minute. The effect clears
+ * its pending timeout on unmount, so a hero that stops being displayed leaves
+ * nothing running.
+ */
+function useElapsedMinutes(startedAt: DateTime.Utc): number {
+  const startedAtMillis = DateTime.toEpochMillis(startedAt)
+  const [minutes, setMinutes] = React.useState(() => elapsedMinutes(startedAtMillis, Date.now()))
+
+  React.useEffect(() => {
+    let handle: ReturnType<typeof globalThis.setTimeout> | undefined
+
+    const tick = (): void => {
+      const now = Date.now()
+      setMinutes(elapsedMinutes(startedAtMillis, now))
+      handle = globalThis.setTimeout(tick, millisToNextMinute(startedAtMillis, now))
+    }
+
+    tick()
+    return () => {
+      globalThis.clearTimeout(handle)
+    }
+  }, [startedAtMillis])
+
+  return minutes
 }
 
 /** Pulsing LIVE indicator in the sport-tint accent color. */
@@ -120,6 +161,7 @@ type LiveHeroProps = {
 /** Live-session hero: sport-tinted card, join CTA, optional compact extras. */
 function LiveHero({ session, extras, workout }: LiveHeroProps) {
   const focus: Focus = workout?.workout.focus ?? 'hybrid'
+  const minutes = useElapsedMinutes(session.startedAt)
   return (
     <div className="flex w-full max-w-sm flex-col gap-3">
       <Card data-testid="home-hero" className={cn('ring-1', HUE_CARD[focus])} size="default">
@@ -134,8 +176,8 @@ function LiveHero({ session, extras, workout }: LiveHeroProps) {
           <CardDescription>{session.hostDisplayName} is hosting</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <p className="text-sm text-muted-foreground">
-            {formatElapsedSince(session.startedAt)} · {session.participantCount} participants
+          <p className="text-sm text-muted-foreground" data-testid="hero-elapsed">
+            {minutes} min in · {session.participantCount} participants
           </p>
           <Link
             to={`/session/${session.id}`}
