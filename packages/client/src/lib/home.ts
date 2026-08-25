@@ -41,9 +41,9 @@ export type HeroPick =
  * different host refers to a workout in *that host's* library. An id that is
  * absent here thus resolves to nothing, and this is the correct result.
  *
- * Identity is the only join Home makes. There is deliberately no fallback to
- * the workout name: names are free text and nothing keeps them unique, so a
- * name match can return a workout the user never chose.
+ * Identity is the only join Home makes. There is no fallback to the workout
+ * name. Names are free text, and two workouts can hold one name. A name match
+ * can thus return a workout the user did not choose.
  */
 export function resolveWorkoutById(
   id: WorkoutId,
@@ -53,13 +53,12 @@ export function resolveWorkoutById(
 }
 
 /**
- * The library workout one completion came from, or `undefined` when it cannot
- * be resolved — the record carries no identity (written before completions
- * had one), the workout is deleted, or it belongs to another user's library.
- * All three are ordinary, and all three resolve to nothing rather than to a
- * same-named substitute.
+ * The source workout of one completion, or `undefined` when it does not
+ * resolve. Three causes, all ordinary: the record holds no id, the workout is
+ * deleted, or the workout is another user's. Each gives nothing, never a
+ * workout of the same name.
  */
-function resolveCompletion(
+function resolveSourceWorkout(
   completion: SessionCompletion,
   workouts: readonly LibraryWorkout[],
 ): LibraryWorkout | undefined {
@@ -73,14 +72,16 @@ function resolveCompletion(
  * - **live**: `sessions` non-empty — newest by `startedAt` is the hero, the
  *   rest are extras; attaches the library workout by id. A workout with the
  *   same name is not the same workout.
- * - **start-last**: no live sessions, and some completion resolves to a
- *   workout in the caller's library. The walk goes newest-first and takes the
- *   first that resolves, rather than giving up at the newest: after a session
- *   on someone else's plan the newest records point at a library that is not
- *   the caller's, and the hero must stay useful.
+ * - **start-last**: no live sessions, and some completion resolves. The walk
+ *   takes the first record that resolves, not only the newest. After a session
+ *   on somebody else's plan the newest records name a library that is not the
+ *   caller's, and the hero must stay useful.
  * - **browse**: first library workout, or `undefined` if the library is empty
- *   (never throws). A history where nothing resolves falls through here too,
- *   so the fold is never dead.
+ *   (never throws). A history that resolves to nothing comes here too. The
+ *   fold always offers something.
+ *
+ * `history` must be newest-first, as `ListHistory` returns it. The walk keeps
+ * that order, so "start last" means the newest record it can resolve.
  */
 export function pickHero(
   sessions: readonly SessionSummary[],
@@ -99,7 +100,7 @@ export function pickHero(
   }
 
   for (const completion of history) {
-    const workout = resolveCompletion(completion, workouts)
+    const workout = resolveSourceWorkout(completion, workouts)
     if (workout !== undefined) {
       return { _tag: 'start-last', workout }
     }
@@ -115,9 +116,9 @@ export function pickHero(
  * from `workouts` in library order without re-adding anything already
  * included.
  *
- * A completion that resolves to nothing contributes no row. Its Start button
- * could not work, so a row for it would be worse than its absence — and the
- * padding keeps the list full either way.
+ * A completion that resolves to nothing gives no row. Its Start button could
+ * not work, so a row for it is worse than no row. The padding keeps the list
+ * full either way.
  */
 export function recentRows(
   history: readonly SessionCompletion[],
@@ -129,7 +130,7 @@ export function recentRows(
 
   for (const completion of history) {
     if (rows.length >= count) break
-    const resolved = resolveCompletion(completion, workouts)
+    const resolved = resolveSourceWorkout(completion, workouts)
     if (resolved === undefined || seen.has(resolved.id)) continue
     seen.add(resolved.id)
     rows.push(resolved)

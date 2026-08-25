@@ -80,9 +80,11 @@ type InsertRow = {
 /**
  * The as-ended facts of one session, minus the per-participant identity.
  * `progress` is how far the session had run when the row is written (absent for
- * legacy call sites); `sourceWorkoutId` is the library workout the session
- * started from, in the *host's* library. Both ride onto every
- * `SessionCompletion` this record mints, guest rows included.
+ * legacy call sites). `sourceWorkoutId` is the library workout the session
+ * started from, in the *host's* library; a live session always knows it, so it
+ * is required here even though the stored record makes it optional for rows
+ * written before it existed. Both ride onto every `SessionCompletion` this
+ * record mints, guest rows included.
  */
 export type SessionRecord = {
   readonly sessionId: SessionId
@@ -93,7 +95,7 @@ export type SessionRecord = {
   readonly startedAt: DateTime.Utc
   readonly endedAt: DateTime.Utc
   readonly progress?: CompletionProgress
-  readonly sourceWorkoutId?: WorkoutId
+  readonly sourceWorkoutId: WorkoutId
 }
 
 /** Mints one `SessionCompletion` from a record — the shared row shape. */

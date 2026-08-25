@@ -154,7 +154,7 @@ describe('migration 0007_completion_source_workout', () => {
   )
 
   it.effect(
-    'a row written before 0007 survives it and still reads, with the source workout absent — no backfill by name',
+    'a row written before 0007 reads with no source workout on either schema, and survives the migration — no backfill by name',
     () =>
       Effect.gen(function* () {
         yield* migrateThrough0006
@@ -189,6 +189,14 @@ describe('migration 0007_completion_source_workout', () => {
           progress_total_segments: null,
         })}`
 
+        // Read it back on the 0006 schema first. `SELECT *` returns no
+        // `source_workout_id` key at all there, which must read the same way a
+        // NULL does: no source workout.
+        const completionsRepo = yield* CompletionsRepo
+        const before = yield* completionsRepo.listForUser(userId)
+        expect(before).toHaveLength(1)
+        expect(before[0]?.sourceWorkoutId).toBeUndefined()
+
         // 0001–0006 are already recorded — only 0007 actually runs here.
         yield* migrateAll
 
@@ -200,7 +208,6 @@ describe('migration 0007_completion_source_workout', () => {
         expect(raw[0]?.id).toBe('completion-pre-0007')
         expect(raw[0]?.source_workout_id).toBeNull()
 
-        const completionsRepo = yield* CompletionsRepo
         const history = yield* completionsRepo.listForUser(userId)
         expect(history).toHaveLength(1)
         expect(history[0]?.workoutName).toBe('Pre-0007 Athletica')

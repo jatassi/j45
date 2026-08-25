@@ -8,13 +8,13 @@ import * as Effect from 'effect/Effect'
  * optional `sourceWorkoutId`); this column mirrors it, the same way
  * `ended_at` mirrors `endedAt`.
  *
- * Forward-only, and deliberately **not** backfilled. A pre-0007 row records
- * only a workout *name*, and a name is not an identity: two workouts can share
- * one, and a record of someone else's plan carries their name, not yours.
- * Matching on it is the exact defect this column removes, so a guessed id
- * would bake that defect into stored data, where a wrong match becomes
- * indistinguishable from a real one. Old rows keep NULL, keep rendering from
- * their own as-run snapshots, and simply stop feeding the home recent list.
+ * Forward-only, and not backfilled. A pre-0007 row records only a workout
+ * name. A name is not an identity: two workouts can hold one name, and a
+ * record of somebody else's plan holds their name. A match on the name is the
+ * defect this column removes. A guessed id would put that defect into stored
+ * data, where a wrong id looks the same as a true one. Old rows keep NULL.
+ * They render from their own as-run snapshots, and no longer feed the home
+ * recent list.
  */
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient

@@ -324,11 +324,11 @@ export const sessionsOfWorkout = (
  * workout that was deleted while the session ran therefore takes nothing away
  * from the rows the session leaves behind.
  *
- * `sourceWorkoutId` is the one exception in kind: not a plan, but the identity
- * of the library workout this session started from, carried on the handle
- * since launch. It is the host's id, so a guest's row holds an id that
- * resolves to nothing in their own library — the truthful answer, and the
- * reason readers must join on it rather than on the name.
+ * `sourceWorkoutId` is not a plan. It is the identity of the library workout
+ * this session started from, held on the handle since launch. The id is the
+ * host's. A guest's row thus holds an id that resolves to nothing in their own
+ * library. That is the true answer, and it is why a reader must join on the
+ * id and not on the name.
  *
  * Progress is counted in that same plan. The total is the segment count of
  * the plan, and the position is the furthest segment that the session

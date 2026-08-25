@@ -62,6 +62,32 @@ describe('HomeScreen — history resolves by identity', () => {
     expect(startPayload).toEqual({ workoutId: ironTwin.id })
   })
 
+  it('starts and links a recent row by the record’s identity when two library workouts share a name', async () => {
+    let startPayload: unknown
+    renderHomeScreen(
+      defaultHandlers({
+        ListWorkouts: () => Effect.succeed([ironCircuit, ironTwin]),
+        ListHistory: () => Effect.succeed([makeCompletion('c-twin', 'Iron Circuit', ironTwin.id)]),
+        StartSession: (payload) => {
+          startPayload = payload
+          return Effect.succeed(startedSummary)
+        },
+      }),
+    )
+
+    // The twin leads the list; the library head follows as padding.
+    const list = await screen.findByTestId('home-recent-list')
+    expect(rowOrder(list)).toEqual([`recent-row-${ironTwin.id}`, `recent-row-${ironCircuit.id}`])
+    // The row and its destination agree — both name the twin.
+    expect(screen.getByTestId(`recent-row-${ironTwin.id}`).getAttribute('href')).toBe(
+      `/workouts/${ironTwin.id}`,
+    )
+
+    fireEvent.click(screen.getByTestId(`recent-start-${ironTwin.id}`))
+    await screen.findByTestId(`session-screen-${startedSummary.id}`)
+    expect(startPayload).toEqual({ workoutId: ironTwin.id })
+  })
+
   it('keeps a renamed workout leading the recent list, under its current name', async () => {
     renderHomeScreen(
       defaultHandlers({
