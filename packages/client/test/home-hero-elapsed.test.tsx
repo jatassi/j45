@@ -47,8 +47,8 @@ const livePick = (id: string, startedAt: string): HeroPick => ({
   extras: [],
 })
 
-/** The pick with no elapsed line at all, used to calibrate the timer count. */
-const idlePick: HeroPick = { _tag: 'browse', workout: undefined }
+/** A pick with no elapsed line, used to calibrate the timer count. */
+const pickWithoutElapsedLine: HeroPick = { _tag: 'browse', workout: undefined }
 
 /**
  * Mounts `HomeHero` under a throwaway memory router so its `Link`s
@@ -170,22 +170,22 @@ describe('HomeHero live elapsed line', () => {
     // timers of its own, so only the difference between the two renders is
     // the hero's own ticker.
     const before = vi.getTimerCount()
-    renderHero(idlePick)
+    renderHero(pickWithoutElapsedLine)
     await screen.findByTestId('home-hero')
-    const idleMounted = vi.getTimerCount() - before
+    const mountedWithoutLine = vi.getTimerCount() - before
     cleanup()
-    const idleResidue = vi.getTimerCount() - before
-    const afterIdle = vi.getTimerCount()
+    const residueWithoutLine = vi.getTimerCount() - before
+    const afterWithoutLine = vi.getTimerCount()
 
     renderHero(livePick('session-unmounted', '2026-03-01T09:58:00.000Z'))
     expect(await elapsedLine()).toContain('2 min in')
 
-    // Exactly one timer more than the idle hero while displayed...
-    expect(vi.getTimerCount() - afterIdle).toBe(idleMounted + 1)
+    // Exactly one timer more than the hero without the line while displayed...
+    expect(vi.getTimerCount() - afterWithoutLine).toBe(mountedWithoutLine + 1)
 
     cleanup()
 
-    // ...and, once it is gone, no more left behind than the idle hero left.
-    expect(vi.getTimerCount() - afterIdle).toBe(idleResidue)
+    // ...and, once it is gone, no more left behind than the hero without the line left.
+    expect(vi.getTimerCount() - afterWithoutLine).toBe(residueWithoutLine)
   })
 })

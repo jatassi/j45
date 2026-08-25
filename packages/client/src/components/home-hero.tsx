@@ -36,10 +36,10 @@ function elapsedMinutes(startedAtMillis: number, nowMillis: number): number {
 }
 
 /**
- * Milliseconds until the displayed minute next changes. A start in the future
- * (clock skew between server and phone) waits for the start itself. The result
- * is capped at one minute so a far-off value never overflows `setTimeout`,
- * which would otherwise fire at once and spin.
+ * Milliseconds until the displayed minute changes next. A start in the future
+ * (clock skew between the server and the phone) waits for the start. The
+ * result is capped at one minute. A larger value would overflow `setTimeout`,
+ * which then fires immediately and spins.
  */
 function millisToNextMinute(startedAtMillis: number, nowMillis: number): number {
   const elapsed = nowMillis - startedAtMillis
@@ -50,15 +50,17 @@ function millisToNextMinute(startedAtMillis: number, nowMillis: number): number 
 }
 
 /**
- * Whole minutes since `startedAt`, ticking on its own.
+ * Whole minutes since `startedAt`, with a ticking source of its own.
  *
- * The line must stay correct however rarely Session data arrives, so it does
- * not ride on re-renders from the lobby feed. It seeds from the wall clock on
- * first render — never blank, never a tick behind — then re-reads on each
- * whole-minute boundary. One chained `setTimeout` aligned to the boundary, not
- * a frame loop: the display only ever changes once a minute. The effect clears
- * its pending timeout on unmount, so a hero that stops being displayed leaves
- * nothing running.
+ * Home's 5s `ListActiveSessions` poll re-renders this line today. That is
+ * incidental. A feed that stays quiet when nothing changes would freeze the
+ * line, so the hero counts for itself.
+ *
+ * The hook reads the wall clock when it first renders, so the line is correct
+ * immediately. It then re-reads on each whole-minute boundary. It uses one
+ * chained `setTimeout` aligned to the boundary, not a frame loop, because the
+ * display changes only once a minute. The effect clears its pending timeout,
+ * so a hero that is no longer displayed leaves no timer behind.
  */
 function useElapsedMinutes(startedAt: DateTime.Utc): number {
   const startedAtMillis = DateTime.toEpochMillis(startedAt)
