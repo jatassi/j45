@@ -401,7 +401,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         // tab: the only place it can take B is home, never into a session.
         const indicator = pageB.getByTestId('tab-home').getByTestId('tab-live-count')
         await expect(indicator).toBeVisible()
-        await expect(indicator).toHaveAttribute('aria-label', /live sessions? running/)
+        await expect(indicator).toHaveAttribute('aria-label', /^\d+ live sessions?$/)
 
         // End the session before the browsers close, so that its row does not
         // stay in every account's lobby until the 60-second collector removes

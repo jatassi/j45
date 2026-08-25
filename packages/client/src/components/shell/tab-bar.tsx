@@ -109,12 +109,18 @@ function TabLink({
  * read as no live sessions — so a broken feed shows no count, never an error.
  *
  * The count is a number, not a dot: one friend warming up and the whole group
- * are different news. It carries its meaning in an accessible label, because
- * a numeral in a corner says nothing on its own. `role="status"` announces a
- * change without taking the user away from what they do.
+ * are different news. A numeral in a corner says nothing on its own, so the
+ * label names what the number counts. The label sits on the badge, and it
+ * therefore also joins the Home tab's own name: that tab reads as "Home, 2
+ * live sessions", which is what the indicator is for.
+ *
+ * The label says what is true, and nothing more. It is not an instruction to
+ * join: the indicator routes attention to home, and home is the only place a
+ * session is joined from. Nothing here is a live region either — an
+ * announcement over whatever the user does is not what this ticket asks for.
  *
  * It sits inside the Home tab link, so the only thing it can do is take the
- * user to home. Home is where you join a session.
+ * user to home.
  */
 function LiveSessionCount() {
   const count = useActiveSessions().length
@@ -124,8 +130,9 @@ function LiveSessionCount() {
   return (
     <span
       data-testid="tab-live-count"
-      role="status"
-      aria-label={`${liveSessionPhrase(count)} running. Open Home to join.`}
+      aria-label={liveSessionPhrase(count)}
+      // `left-1/2` puts the badge on the icon's centre line; the small
+      // translate then carries it out to the icon's top right corner.
       className="absolute top-0.5 left-1/2 min-w-4 translate-x-1.5 rounded-full bg-primary px-1 text-center text-[10px] leading-4 font-semibold text-primary-foreground"
     >
       {count}

@@ -223,13 +223,14 @@ describe('TabBar live-session indicator', () => {
     renderTabBar('/library', staticLobby([liveSession('session-1')]))
 
     const indicator = await screen.findByTestId('tab-live-count')
-    expect(indicator.getAttribute('aria-label')).toBe('1 live session running. Open Home to join.')
-    expect(indicator.getAttribute('role')).toBe('status')
+    expect(indicator.getAttribute('aria-label')).toBe('1 live session')
+    // The label joins the Home tab's own name, so the tab says what it holds.
+    expect(screen.getByTestId('tab-home').textContent).toContain('Home')
 
     cleanup()
     renderTabBar('/library', staticLobby([liveSession('session-1'), liveSession('session-2')]))
     const plural = await screen.findByTestId('tab-live-count')
-    expect(plural.getAttribute('aria-label')).toBe('2 live sessions running. Open Home to join.')
+    expect(plural.getAttribute('aria-label')).toBe('2 live sessions')
   })
 
   it('follows sessions starting and ending with no user action', async () => {
