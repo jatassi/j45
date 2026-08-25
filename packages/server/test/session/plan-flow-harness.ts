@@ -12,11 +12,15 @@ import {
   UserId,
   Workout,
   type SessionId,
+  type SessionNotFound,
   type SessionState,
   type Username,
 } from '@j45/domain'
 import * as Effect from 'effect/Effect'
+import type * as Exit from 'effect/Exit'
 import * as Layer from 'effect/Layer'
+import type * as Option from 'effect/Option'
+import * as Queue from 'effect/Queue'
 import * as Schema from 'effect/Schema'
 
 import { AuthSessions } from '../../src/auth/auth-sessions.js'
@@ -159,3 +163,14 @@ export const paused = (state: SessionState) =>
 
 /** The snapshot of one session, by id. */
 export const snapshotOf = (svc: LiveSessions, id: SessionId) => svc.snapshot(id)
+
+/** Drains queued snapshots until one satisfies `predicate`, and returns it. */
+export const latestWith = (
+  queue: Queue.Dequeue<Exit.Exit<SessionState, Option.Option<SessionNotFound>>>,
+  predicate: (state: SessionState) => boolean,
+): Effect.Effect<SessionState> =>
+  // A stream that ends or fails before the predicate holds is a defect here:
+  // the session is still live and the test is still waiting on it.
+  Effect.flatMap(Effect.orDie(Effect.flatten(Queue.take(queue))), (state) =>
+    predicate(state) ? Effect.succeed(state) : latestWith(queue, predicate),
+  )

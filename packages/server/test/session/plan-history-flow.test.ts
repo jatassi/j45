@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@effect/vitest'
-import type { SessionCompletion } from '@j45/domain'
+import { Workout, type Focus, type SessionCompletion } from '@j45/domain'
 import * as Effect from 'effect/Effect'
 import * as TestClock from 'effect/TestClock'
 
@@ -18,6 +18,16 @@ import { asOwner, FlowLive, makeWorkout, owner, paused, snapshotOf } from './pla
  * B 10s | rest 5s | C 10s — six segments over 45s, with work ordinals 0, 1
  * and 2.
  */
+
+/** The same workout under a new focus and note — the fields no segment reads. */
+const withFocusAndNote = (workout: Workout, focus: Focus, note: string): Workout =>
+  new Workout({
+    name: workout.name,
+    focus,
+    note,
+    pods: workout.pods,
+    flow: workout.flow,
+  })
 
 /** The station names of the plan that one completion row recorded. */
 const recordedStations = (row: SessionCompletion | undefined) =>
@@ -76,6 +86,50 @@ describe('a completion of a session whose plan changed while the timer ran', () 
       expect(rows[0]?.progress?.totalSegments).toBe(8)
       // Still the same work, so still the segment the remap put them in.
       expect(rows[0]?.progress?.segmentsCompleted).toBe(2)
+    }).pipe(Effect.provide(FlowLive)),
+  )
+})
+
+describe('a completion of a session edited only where no segment reads', () => {
+  it.scoped('records the corrected focus and note beside the corrected name', () =>
+    Effect.gen(function* () {
+      const { headers, history, library, sessions } = yield* asOwner
+      const created = yield* library.CreateWorkout(
+        { workout: makeWorkout(['A', 'B', 'C']) },
+        { headers },
+      )
+      const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
+      const svc = yield* LiveSessions
+
+      // Focus and note live on the stored plan and in no compiled segment,
+      // so this edit compiles to exactly the plan already in force. Nothing
+      // anybody runs changed — and the row still has to hold one plan.
+      yield* TestClock.adjust('7 seconds')
+      yield* library.UpdateWorkout(
+        {
+          id: created.id,
+          workout: withFocusAndNote(
+            makeWorkout(['A', 'B', 'C'], {}, 'Corrected'),
+            'strength',
+            'Bring a mat',
+          ),
+          updatedAt: created.updatedAt,
+        },
+        { headers },
+      )
+
+      // No notice: nothing anyone runs has changed.
+      expect((yield* snapshotOf(svc, started.id)).planRevision).toBe(0)
+
+      yield* svc.leaveSession(started.id, owner)
+      const rows = yield* history.ListHistory(undefined, { headers })
+      expect(rows[0]?.workoutName).toBe('Corrected')
+      expect(rows[0]?.workout.name).toBe('Corrected')
+      // One row, one version of the plan — never the new name beside the old
+      // focus and the old note.
+      expect(rows[0]?.workout.focus).toBe('strength')
+      expect(rows[0]?.workout.note).toBe('Bring a mat')
+      expect(recordedStations(rows[0])).toEqual(['A', 'B', 'C'])
     }).pipe(Effect.provide(FlowLive)),
   )
 })

@@ -35,7 +35,10 @@ const findRestBefore = (segments: readonly Segment[], workIndex: number): number
  * Maps a timer position on one compiled workout onto the equivalent position
  * on another, so a running session can move to an edited plan without losing
  * the participant's place. Pure: it reads two segment lists and returns an
- * index into the second. The caller re-enters that segment at full duration.
+ * index into the second. What the caller does with the time left is its own
+ * decision: a running timer re-enters at full duration, and a paused one
+ * keeps what it had whenever the mapped segment equals the segment it holds
+ * (`segmentsEqual`).
  *
  * The key is the flat work ordinal (`WorkContext.workIndex`) that each work
  * and rest segment carries — how far into the plan the participant is, not

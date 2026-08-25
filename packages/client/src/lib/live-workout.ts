@@ -23,7 +23,9 @@ export const listActiveSessionsAtom = ServerRpcClient.query('ListActiveSessions'
  * How many of these live sessions run this workout.
  *
  * A session launched with a reflow overlay is counted with the others,
- * because the lobby row does not say which sessions those are. Such a session
+ * because the lobby row does not say which sessions those are. For a delete
+ * the count is exact: a delete ends every live session of the workout, an
+ * overlay one with the rest. For a save it is an upper bound: such a session
  * tracks nothing, so an edit will not in fact reach it. This is the honest
  * limit of a count taken from data the client already has, and the count is
  * never lower than the truth.

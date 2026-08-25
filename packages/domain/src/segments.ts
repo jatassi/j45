@@ -48,6 +48,18 @@ export class CompiledWorkout extends Schema.Class<CompiledWorkout>('CompiledWork
 export const compiledEquals: Equivalence.Equivalence<CompiledWorkout> =
   Schema.equivalence(CompiledWorkout)
 
+/**
+ * Structural equality on one segment — whether two plans give a participant
+ * the same interval to run at some position.
+ *
+ * Same kind, same duration, and the same work context: the station, its pod,
+ * its place in the pod, its round, and its ordinal. A segment that is equal
+ * under this is one that nothing the participant is doing has changed.
+ *
+ * A plan change reads it to decide whether a paused countdown must restart.
+ */
+export const segmentsEqual: Equivalence.Equivalence<Segment> = Schema.equivalence(Segment)
+
 type WorkEntry = {
   readonly context: WorkContext
   readonly workSeconds: number

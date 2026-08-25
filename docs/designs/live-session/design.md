@@ -44,11 +44,15 @@ contract).
 >
 > Three timer positions have no next boundary to wait for. A paused session
 > takes the edit at once — an edit that arrives during the pause, and an edit
-> already held when the pause began — and the frozen milliseconds are
-> re-derived from the segment now in force, so the resume counts down the
-> segment it is actually in. A done session is frozen: no later change reaches
-> it, and its completion row keeps the plan that was in force while the timer
-> ran — the name and the progress with it. A new plan that no longer reaches
+> already held when the pause began. The time it has left is re-derived from
+> the segment now in force whenever that segment differs from the one the
+> participant holds, so the resume counts down the segment it is actually in.
+> A segment equal to the one they hold keeps the time left as it stands: an
+> edit that touches a later station leaves this interval alone, and a
+> re-derive there would make the participant run the whole interval a second
+> time. A done session is frozen: no later change reaches it, and its
+> completion row keeps the plan that was in force while the timer ran — the
+> name and the progress with it. A new plan that no longer reaches
 > the current work ordinal finishes the session on the plan it was running;
 > the alternative, a clamp backwards, replays a station the participant
 > completed. That finish raises no notice and moves no revision, so on screen
@@ -57,16 +61,34 @@ contract).
 > furthest segment that the session published. A session that a host trims two
 > stations from the end is therefore not recorded as having run them.
 >
-> Deleting the workout ends every session that tracks it — and only those. A
-> reflow-launched session keeps running: its compiled plan was never in the
-> library, so the row that went was never its plan. Each ended session
-> publishes one last snapshot with `ended` set, which says whether it stopped
-> for the ordinary reasons (`closed`) or because the plan went
-> (`plan-deleted`). That snapshot is also what ends a watcher's stream, so a
-> participant always learns why they were sent home. The session-wide `ended`
-> deferred no longer stops the stream: it would race that last snapshot out
-> of the subscriber's queue. Completion rows are still written, from the plan
-> the session last applied — the deleted library row is never read.
+> Deleting the workout ends every live session of it, the reflow-launched ones
+> with the rest. The reflow exemption covers *content* changes only: an edit
+> or a rename can never apply to a plan the library never held, but a reflow
+> session runs an overlay of a plan that is now gone, so it has no source left
+> to follow. Before the delete, the host is told how many sessions stop. That
+> count comes from lobby rows, and a lobby row does not say which sessions are
+> reflow-launched. A session left running is thus a session that the host was
+> told would stop.
+>
+> Each ended session publishes one last snapshot with `ended` set, which says
+> whether it stopped for the ordinary reasons (`closed`) or because the plan
+> went (`plan-deleted`). A session whose timer already reached the end takes
+> `closed` for a delete as well: its participants completed the workout and
+> sit on the finished screen, so nothing was taken from them. That snapshot is
+> also what ends a watcher's stream, so a participant always learns why they
+> were sent home. The session-wide `ended` deferred no longer stops the
+> stream: it would race that last snapshot out of the subscriber's queue.
+> Completion rows are still written, from the plan the session last applied —
+> the deleted library row is never read.
+>
+> A participant who is disconnected when the session ends receives no last
+> snapshot at all: by the time they retry the watch, the session is gone from
+> the registry. The registry therefore keeps a short record of how the last
+> sessions ended, and a lookup that finds no session answers `SessionNotFound`
+> with the reason from it. The record is bounded by count, not by age — a
+> count needs no clock and no sweeper fiber, and it gives an exact ceiling on
+> what the record can hold. An ending the server can no longer name reads as
+> the ordinary one, which is the safe answer.
 
 ## Domain additions (`packages/domain/src/session.ts`)
 
@@ -111,6 +133,8 @@ export const SessionCommand = Schema.Literal('pause', 'resume', 'skip', 'prev', 
 // mandatory oxlint workaround documented in auth.ts/library.ts
 export class SessionNotFound extends taggedError<SessionNotFound>()('SessionNotFound', {
   id: SessionId,
+  endedAs: Schema.NullOr(SessionEnd),  // why that session ended, while the
+                                       // server still remembers; else null
 }) {}
 ```
 
@@ -213,7 +237,9 @@ Semantics:
   "reconnecting", retry with backoff, heal via the fresh snapshot.
   **The notice, pinned:** it travels as the `notice` search parameter of
   `/`, which that route validates and `HomeScreen` reads. A snapshot with
-  `ended: 'plan-deleted'` sends `plan-deleted`; every other ending sends
+  `ended: 'plan-deleted'` sends `plan-deleted`, and so does a
+  `SessionNotFound` that carries `endedAs: 'plan-deleted'` — the reconnect
+  path, where the session is already gone. Every other ending sends
   `session-ended`. An unknown value is dropped rather than thrown, so a
   stale url still renders home.
 

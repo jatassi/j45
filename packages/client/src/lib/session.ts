@@ -1,6 +1,6 @@
 import { Atom } from '@effect-atom/atom-react'
 import { SessionNotFound } from '@j45/domain'
-import type { Segment, SessionId, SessionState, WorkContext } from '@j45/domain'
+import type { Segment, SessionEnd, SessionId, SessionState, WorkContext } from '@j45/domain'
 import * as Duration from 'effect/Duration'
 import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
@@ -29,18 +29,24 @@ const endedFeed: SessionFeed = { _tag: 'ended', notice: 'session-ended' }
 const reconnectingFeed: SessionFeed = { _tag: 'reconnecting' }
 
 /**
- * One snapshot as a feed value. A snapshot carrying `ended` is the last one
- * the server publishes, and it says why the session stopped — the one place
- * the two home notices are told apart.
+ * What home tells a participant about one ending. `null` is an ending the
+ * server cannot name, and it reads as the ordinary one.
  *
  * The two vocabularies stay separate on purpose. `SessionEnd` says what
  * happened to a session; `HomeNotice` names a message on a screen. Mapping
  * them here keeps a rename of either one out of the other's file.
  */
+const endedBy = (end: SessionEnd | null): SessionFeed => ({
+  _tag: 'ended',
+  notice: end === 'plan-deleted' ? 'plan-deleted' : 'session-ended',
+})
+
+/**
+ * One snapshot as a feed value. A snapshot carrying `ended` is the last one
+ * the server publishes, and it says why the session stopped.
+ */
 const toFeed = (state: SessionState): SessionFeed =>
-  state.ended === null
-    ? { _tag: 'live', state }
-    : { _tag: 'ended', notice: state.ended === 'plan-deleted' ? 'plan-deleted' : 'session-ended' }
+  state.ended === null ? { _tag: 'live', state } : endedBy(state.ended)
 
 /** The flat rpc client `ServerRpcClient` resolves to. */
 type WatchClient = Effect.Effect.Success<typeof ServerRpcClient>
@@ -52,11 +58,20 @@ const reconnectDelay = (attempt: number): Duration.Duration =>
 /**
  * The retrying watch stream. Each server snapshot becomes a `live` feed,
  * except the last one a session publishes, which becomes `ended` and carries
- * why. A stream that stops without such a snapshot, and a `SessionNotFound`
- * failure, both become the plain `ended` (they mean "the session is over — go
- * home", with nothing more to say); every other failure emits
- * `reconnecting`, waits out the backoff, then resubscribes — the fresh
- * snapshot heals whatever drift the disconnect caused.
+ * why.
+ *
+ * A `SessionNotFound` failure is the other ending, and it carries a reason of
+ * its own. A participant who loses the connection never receives the last
+ * snapshot: the session is gone before they retry. The server remembers why
+ * it went, and answers the failed watch with that reason. A deleted plan thus
+ * reads the same to them as to everybody who stayed connected. An ending that
+ * the server can no longer name reads as the ordinary one.
+ *
+ * A stream that stops without a last snapshot means that the participant
+ * left, or that the server went away. That is the plain `ended`, with nothing
+ * more to say. Every other failure emits `reconnecting`, waits out the
+ * backoff, then resubscribes. The fresh snapshot heals the drift that the
+ * disconnect caused.
  */
 const watchFeed = (
   client: WatchClient,
@@ -72,7 +87,7 @@ const watchFeed = (
     Stream.takeUntil((feed) => feed._tag === 'ended'),
     Stream.catchAll((error) =>
       error instanceof SessionNotFound
-        ? Stream.make(endedFeed)
+        ? Stream.make(endedBy(error.endedAs))
         : Stream.make(reconnectingFeed).pipe(
             Stream.concat(
               Stream.fromEffect(Effect.sleep(reconnectDelay(attempt))).pipe(

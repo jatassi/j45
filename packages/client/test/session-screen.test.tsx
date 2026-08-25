@@ -44,7 +44,7 @@ describe('SessionScreen — stream retry discrimination', () => {
     const id = 'sess-not-found'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const router = renderSession(id, {
-      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId })),
+      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId, endedAs: null })),
     })
 
     await screen.findByTestId('home-screen')
@@ -108,7 +108,33 @@ describe('SessionScreen — where an ended session sends its people', () => {
     const id = 'sess-vanished'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const router = renderSession(id, {
-      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId })),
+      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId, endedAs: null })),
+    })
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.search).toEqual({ notice: 'session-ended' })
+  })
+
+  it('a reconnect that finds a deleted plan still gets the notice that says so', async () => {
+    // The participant was disconnected when the host deleted the workout, so
+    // they never received the session's last snapshot. The retried watch
+    // finds nothing — and the server still says why.
+    const id = 'sess-deleted-while-away'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const router = renderSession(id, {
+      WatchSession: () =>
+        Stream.fail(new SessionNotFound({ id: sessionId, endedAs: 'plan-deleted' })),
+    })
+
+    await screen.findByTestId('home-screen')
+    expect(router.state.location.search).toEqual({ notice: 'plan-deleted' })
+  })
+
+  it('a reconnect that finds an ordinary close reads as one', async () => {
+    const id = 'sess-closed-while-away'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    const router = renderSession(id, {
+      WatchSession: () => Stream.fail(new SessionNotFound({ id: sessionId, endedAs: 'closed' })),
     })
 
     await screen.findByTestId('home-screen')

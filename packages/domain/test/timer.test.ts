@@ -12,6 +12,7 @@ import {
   enterSegmentPaused,
   pause,
   prev,
+  remapPaused,
   resume,
   skip,
   start,
@@ -37,6 +38,13 @@ const segments: readonly Segment[] = [
   new RestSegment({ durationMillis: 5000, nextWork: workContext(2) }),
   new WorkSegment({ durationMillis: 10_000, work: workContext(2) }),
 ]
+
+const defined = <A>(value: A | undefined, message: string): A => {
+  if (value === undefined) {
+    throw new Error(message)
+  }
+  return value
+}
 
 const durationAt = (index: number): number => {
   const segment = segments[index]
@@ -182,6 +190,40 @@ describe('enterSegmentPaused', () => {
     )
     expect(enterSegmentPaused(3, segments)).toStrictEqual(
       new TimerPaused({ segmentIndex: 3, remainingMillis: 10_000 }),
+    )
+  })
+})
+
+describe('remapPaused', () => {
+  const held = segments[1]
+
+  it('keeps the time left when the segment it lands on is equal', () => {
+    // The same work, at the same duration, at a different index: an edit that
+    // put a station before this one but did not touch it.
+    const moved: readonly Segment[] = [segments[0], segments[2], segments[1], segments[3]].map(
+      (segment) => defined(segment, 'missing segment'),
+    )
+    expect(remapPaused(3000, held, { index: 2, segments: moved })).toStrictEqual(
+      new TimerPaused({ segmentIndex: 2, remainingMillis: 3000 }),
+    )
+  })
+
+  it('re-derives the whole segment when the one it lands on differs', () => {
+    const retimed: readonly Segment[] = [
+      new ReadySegment({ durationMillis: 5000 }),
+      new WorkSegment({ durationMillis: 20_000, work: workContext(0) }),
+    ]
+    expect(remapPaused(3000, held, { index: 1, segments: retimed })).toStrictEqual(
+      new TimerPaused({ segmentIndex: 1, remainingMillis: 20_000 }),
+    )
+  })
+
+  it('re-derives when there is no segment held, or none to land on', () => {
+    expect(remapPaused(3000, undefined, { index: 1, segments })).toStrictEqual(
+      new TimerPaused({ segmentIndex: 1, remainingMillis: 10_000 }),
+    )
+    expect(remapPaused(3000, held, { index: 99, segments })).toStrictEqual(
+      new TimerPaused({ segmentIndex: 99, remainingMillis: 0 }),
     )
   })
 })
