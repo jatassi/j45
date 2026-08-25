@@ -76,12 +76,12 @@ content changes what other people see right now: today only a save into, or
 a delete of, a workout that live sessions run. The confirm must state how
 many sessions it reaches, and a delete must say that those sessions stop and
 that there is no undo. Take the count from data the client already holds —
-the lobby rows of `ListActiveSessions` carry their `WorkoutId`. A write that
+the lobby rows of `WatchActiveSessions` carry their `WorkoutId`. A write that
 reaches nobody must not prompt, and a cosmetic write (a rename) must not
 prompt at all.
 
 This count is the one query failure the table above does not apply to. A
-read that has not answered, or one that failed, counts as nobody: the prompt
+feed that has not answered, or one that failed, counts as nobody: the prompt
 exists to stop a surprise, and it must never become the reason the owner
 cannot write to their own content. Read the count live while the prompt is
 open, so a late answer strengthens the wording rather than leaving a stale
@@ -96,6 +96,17 @@ session. Raise it from a monotonic counter on the snapshot, never by
 comparing one snapshot with the next — a snapshot is republished for reasons
 that are not news. The player adds no sound to it: every beep it makes
 carries timing meaning.
+
+The table above governs screens. Chrome — the tab bar, the headers — is the
+second case it does not apply to. Chrome shows a live count only when there
+is a count to show: no rows renders nothing, and a feed that has not
+answered or that failed renders nothing as well. It shows no skeleton and no
+alert. The user did not ask chrome for anything, so chrome must never report
+a background failure to them, and it must never take space for news it does
+not have. The tab bar's live-session count is the one piece of chrome that
+does this today. It is an indicator, not a control: it carries an accessible
+label that names what it counts, and the only route out of it goes to the
+screen that owns the data.
 
 ## Glass: positioned wrapper gotcha
 

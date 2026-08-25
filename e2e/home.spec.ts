@@ -322,7 +322,7 @@ test.describe('home dashboard (chromium + webkit)', () => {
     page,
   }, testInfo) => {
     // The browse hero has the lowest priority. A live session anywhere on the
-    // server outranks it, because `ListActiveSessions` is not scoped to the
+    // server outranks it, because the lobby feed is not scoped to the
     // caller. This test thus needs one moment with no live session at all, and
     // a session ends 60 seconds after its last watcher goes. Under a loaded
     // parallel run, the other specs can keep that moment away until they stop.

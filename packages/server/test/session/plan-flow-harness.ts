@@ -14,14 +14,16 @@ import {
   type SessionId,
   type SessionNotFound,
   type SessionState,
+  type SessionSummary,
   type Username,
 } from '@j45/domain'
 import * as Effect from 'effect/Effect'
 import type * as Exit from 'effect/Exit'
 import * as Layer from 'effect/Layer'
-import type * as Option from 'effect/Option'
+import * as Option from 'effect/Option'
 import * as Queue from 'effect/Queue'
 import * as Schema from 'effect/Schema'
+import * as Stream from 'effect/Stream'
 
 import { AuthSessions } from '../../src/auth/auth-sessions.js'
 import { SESSION_COOKIE_NAME } from '../../src/auth/cookie.js'
@@ -163,6 +165,19 @@ export const paused = (state: SessionState) =>
 
 /** The snapshot of one session, by id. */
 export const snapshotOf = (svc: LiveSessions, id: SessionId) => svc.snapshot(id)
+
+/**
+ * The lobby as it stands, read off the feed itself.
+ *
+ * The feed's first element is the current set, so one element is the whole
+ * answer. There is no unary listing to ask instead — the feed is the single
+ * path to this data, and a test must read it the way a caller does.
+ */
+export const lobbyNow = (svc: LiveSessions): Effect.Effect<readonly SessionSummary[]> =>
+  Effect.map(
+    Stream.runHead(svc.lobby()),
+    Option.getOrElse((): readonly SessionSummary[] => []),
+  )
 
 /** Drains queued snapshots until one satisfies `predicate`, and returns it. */
 export const latestWith = (

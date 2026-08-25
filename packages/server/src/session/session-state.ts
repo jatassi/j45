@@ -169,6 +169,12 @@ export type Registry = {
   // ends leaves the registry, so nothing about it can be read off a handle
   // any more; this is what a lookup of a gone session answers from.
   readonly recentlyEnded: Ref.Ref<readonly EndedSession[]>
+  // The last lobby snapshot published, and the lock that makes rebuilding
+  // and publishing it one step. `session/lobby.ts` owns both; nothing else
+  // reads or writes them. A subscriber to `lobby` sees the snapshot it holds
+  // now, then every later one.
+  readonly lobby: SubscriptionRef.SubscriptionRef<readonly SessionSummary[]>
+  readonly lobbySem: Effect.Semaphore
   readonly layerScope: Scope.Scope
   readonly completionsRepo: CompletionsRepo
 }

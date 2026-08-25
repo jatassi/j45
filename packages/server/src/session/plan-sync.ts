@@ -19,6 +19,7 @@ import * as Ref from 'effect/Ref'
 import * as SubscriptionRef from 'effect/SubscriptionRef'
 
 import type { PlanChange } from '../library/plan-changes.js'
+import { publishLobby } from './lobby.js'
 import {
   getHandle,
   publishSnapshot,
@@ -53,8 +54,19 @@ import {
  * A done session takes no more changes. Its plan is frozen, and the
  * completion row must record the plan that was in force while the timer was
  * live — not a change that came after the last rep.
+ *
+ * The lobby row of this session carries the workout name, and a change can
+ * move it. The row is therefore republished here, under the same permit, so
+ * it can never interleave with a ticker advance. A change that moved no name
+ * publishes nothing: `publishLobby` compares before it sends.
+ *
+ * The done gate holds for the lobby row too, and that is deliberate. A done
+ * session keeps the name it finished under, so a rename that the session
+ * refuses must not reach the lobby either. One name is on the player, in the
+ * lobby row, and in the completion row, or the three disagree.
  */
 const whileLive = (
+  registry: Registry,
   handle: SessionHandle,
   f: (state: SessionState) => Effect.Effect<void>,
 ): Effect.Effect<void> =>
@@ -65,6 +77,7 @@ const whileLive = (
         return
       }
       yield* f(state)
+      yield* publishLobby(registry)
     }),
   )
 
@@ -102,8 +115,12 @@ const publishName = (
  * well. Only the name moves: the stations stay as they are, and they stay
  * equal to the compiled plan that the ticker runs.
  */
-const applyRename = (handle: SessionHandle, name: string): Effect.Effect<void> =>
-  whileLive(handle, (state) =>
+const applyRename = (
+  registry: Registry,
+  handle: SessionHandle,
+  name: string,
+): Effect.Effect<void> =>
+  whileLive(registry, handle, (state) =>
     Effect.zipRight(
       publishName(handle, state, name),
       Ref.update(
@@ -262,8 +279,12 @@ const applyWhilePaused = (
  * A paused session is the exception: it waits for nothing, so the edit goes
  * into force here rather than into the hold.
  */
-const applyEdit = (handle: SessionHandle, plan: PendingPlan): Effect.Effect<void> =>
-  whileLive(handle, (state) => {
+const applyEdit = (
+  registry: Registry,
+  handle: SessionHandle,
+  plan: PendingPlan,
+): Effect.Effect<void> =>
+  whileLive(registry, handle, (state) => {
     if (compiledEquals(plan.compiled, state.compiled)) {
       return Effect.zipRight(
         Ref.set(handle.pending, Option.none()),
@@ -374,12 +395,13 @@ const applyDelete = (handle: SessionHandle, end: EndSession): Effect.Effect<void
  * A new kind of change is a new case here plus its own `apply…` above.
  */
 const applierFor = (
+  registry: Registry,
   change: PlanChange,
   end: EndSession,
 ): ((handle: SessionHandle) => Effect.Effect<void>) => {
   switch (change._tag) {
     case 'renamed': {
-      return (handle) => applyRename(handle, change.name)
+      return (handle) => applyRename(registry, handle, change.name)
     }
     case 'edited': {
       const plan: PendingPlan = {
@@ -387,7 +409,7 @@ const applierFor = (
         compiled: compile(change.workout),
         changedBy: change.changedBy,
       }
-      return (handle) => applyEdit(handle, plan)
+      return (handle) => applyEdit(registry, handle, plan)
     }
     case 'deleted': {
       return (handle) => applyDelete(handle, end)
@@ -427,7 +449,7 @@ export const applyPlanChange = (
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const targets = targetsOf(change, yield* sessionsOfWorkout(registry, change.workoutId))
-    const apply = applierFor(change, end)
+    const apply = applierFor(registry, change, end)
     yield* Effect.forEach(
       targets,
       (summary) => Effect.flatMap(getHandle(registry, summary.id), apply).pipe(Effect.ignore),

@@ -29,20 +29,28 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import type * as Stream from 'effect/Stream'
 
 import { HomeScreen } from '@/components/home-screen'
+import { TabBar } from '@/components/shell/tab-bar'
 import { ServerRpcClient } from '@/lib/rpc-client'
+
+import { emptyLobby } from './lobby-feed'
 
 /**
  * The shared mount and fixtures for the `HomeScreen` suites — the same
  * harness-module idiom as `session-harness.tsx`. `home-screen.test.tsx` covers
  * the screen's composition; `home-identity.test.tsx` covers how it resolves
- * completion records to library workouts.
+ * completion records to library workouts. Lobby feeds come from
+ * `lobby-feed.ts`, so every suite drives the subscription the same way.
  */
 
 /** The rpc handler map a `HomeScreen` mount runs against. */
 export type Handlers = Partial<
-  Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>
+  Record<
+    string,
+    (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+  >
 >
 
 /**
@@ -132,22 +140,50 @@ function WorkoutDetailDestination() {
   return <div data-testid={`workout-detail-${workoutId}`} />
 }
 
+/** What a mount can add beyond home itself. */
+export type RenderOptions = {
+  /**
+   * Mount the `TabBar` under home, as the tab layout does. Opt-in: it puts a
+   * second reader on the lobby subscription, and no suite must get that for
+   * free.
+   */
+  readonly withTabBar?: boolean
+}
+
 /**
  * Mounts `HomeScreen` as the `/` route of a throwaway router so its `Link`s
  * and navigates have router context.
  */
-export function renderHomeScreen(handlers: Handlers) {
+export function renderHomeScreen(handlers: Handlers, options: RenderOptions = {}) {
   const fakeRuntime = makeFakeRuntime(handlers)
   const rootRoute = createRootRoute({ component: Outlet })
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: HomeScreen,
+    component:
+      options.withTabBar === true
+        ? () => (
+            <>
+              <HomeScreen />
+              <TabBar />
+            </>
+          )
+        : HomeScreen,
   })
   const timerRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/timer',
     component: () => <div data-testid="timer-destination" />,
+  })
+  const libraryRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/library',
+    component: () => <div data-testid="library-destination" />,
+  })
+  const historyRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/history',
+    component: () => <div data-testid="history-destination" />,
   })
   const generateRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -173,6 +209,8 @@ export function renderHomeScreen(handlers: Handlers) {
     routeTree: rootRoute.addChildren([
       indexRoute,
       timerRoute,
+      libraryRoute,
+      historyRoute,
       generateRoute,
       newWorkoutRoute,
       workoutDetailRoute,
@@ -212,7 +250,7 @@ export const startedSummary = new SessionSummary({
 /** Default successful handlers for the three home queries. */
 export function defaultHandlers(overrides: Handlers = {}): Handlers {
   return {
-    ListActiveSessions: () => Effect.succeed([]),
+    WatchActiveSessions: emptyLobby,
     ListHistory: () => Effect.succeed([makeCompletion('c-1', 'Iron Circuit', ironCircuit.id)]),
     ListWorkouts: () => Effect.succeed([ironCircuit, athletica]),
     ...overrides,

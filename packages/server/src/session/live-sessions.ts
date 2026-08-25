@@ -42,17 +42,15 @@ import {
   completionRowsForSession,
   CompletionsRepo,
 } from './completions-repo.js'
+import { lobbyFeed, makeLobby, publishLobby } from './lobby.js'
 import { applyPlanChange, snapshotAfterMove } from './plan-sync.js'
+import { detachUser, join, leave } from './presence.js'
 import {
-  addPresence,
   completionInputs,
   getHandle,
   initialState,
-  listSessions,
-  participantsOf,
   publishSnapshot,
   rememberEnded,
-  removePresence,
   sessionsOfWorkout,
   summaryOf,
   timersEqual,
@@ -85,8 +83,13 @@ const freshSessionId = Schema.decodeSync(SessionId)
 // timer moves through are one value.
 //
 // A move that changes segment is also the boundary a waiting plan change
-// asked for, so the published snapshot comes from `snapshotAfterMove`.
+// asked for, so the published snapshot comes from `snapshotAfterMove`. That
+// is also the one timer move a lobby row can see: the released plan carries
+// its own workout name. The lobby is therefore republished under the same
+// permit — and stays silent for every ordinary advance, because the summary
+// it rebuilds says exactly what the last one said.
 const applyTimer = (
+  registry: Registry,
   handle: SessionHandle,
   f: (timer: TimerState, segments: readonly Segment[], now: number) => TimerState,
 ): Effect.Effect<void> =>
@@ -100,61 +103,10 @@ const applyTimer = (
       }
       const published = yield* snapshotAfterMove(handle, { state, moved: next, now })
       yield* publishSnapshot(handle, published)
+      yield* publishLobby(registry)
       yield* Queue.offer(handle.wakeup, undefined)
     }),
   )
-
-// Recompute the participant list from presence and publish it (with a fresh
-// `serverNow`), serialized against timer writes so a command and a join never
-// clobber each other.
-const republishParticipants = (handle: SessionHandle): Effect.Effect<void> =>
-  handle.sem.withPermits(1)(
-    Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis
-      const presence = yield* Ref.get(handle.presence)
-      const state = yield* SubscriptionRef.get(handle.stateRef)
-      yield* SubscriptionRef.set(
-        handle.stateRef,
-        withState(state, { serverNow: now, participants: participantsOf(presence) }),
-      )
-    }),
-  )
-
-// Acquiring a `watch`: register a fresh `Sub`, count its subscription, add the
-// user to presence, (re-)add them to the roster, and clear any departed flag —
-// a re-watch after leaving restores them as a fresh ever-participant. Returns
-// the `Sub` so the release finalizer can claim its own decrement.
-const join = (handle: SessionHandle, participant: Participant): Effect.Effect<Sub> =>
-  Effect.gen(function* () {
-    const id = yield* Ref.modify(handle.nextSubId, (n) => [n, n + 1])
-    const active = yield* Ref.make(true)
-    const interrupt = yield* Deferred.make<undefined>()
-    const sub: Sub = { id, userId: participant.userId, active, interrupt }
-    yield* Ref.update(handle.subs, HashMap.set(id, sub))
-    yield* SubscriptionRef.update(handle.rawSubs, (n) => n + 1)
-    yield* Ref.update(handle.presence, addPresence(participant))
-    // Add-only: a re-set refreshes their display name but never removes them.
-    yield* Ref.update(handle.roster, HashMap.set(participant.userId, participant))
-    yield* Ref.update(handle.departed, HashSet.remove(participant.userId))
-    yield* republishParticipants(handle)
-    return sub
-  })
-
-// Releasing a `watch`: drop the sub from the registry, then claim its
-// decrement — but only if `leaveSession` did not already detach this user (it
-// flips `active` false and does the decrement itself). Claiming is atomic, so
-// exactly one of the two paths decrements.
-const leave = (handle: SessionHandle, sub: Sub): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    yield* Ref.update(handle.subs, HashMap.remove(sub.id))
-    const claimed = yield* Ref.getAndSet(sub.active, false)
-    if (!claimed) {
-      return
-    }
-    yield* SubscriptionRef.update(handle.rawSubs, (n) => Math.max(0, n - 1))
-    yield* Ref.update(handle.presence, removePresence(sub.userId))
-    yield* republishParticipants(handle)
-  })
 
 // Ends one session, for the stated reason. Three paths reach here — the
 // garbage collector, the last participant leaving, and the deletion of the
@@ -196,6 +148,12 @@ const endSession = (
     // finds nothing to watch, and reads the reason from there.
     yield* Ref.update(registry.sessions, HashMap.remove(handle.id))
     yield* rememberEnded(registry, handle.id, reason)
+    // The session has left the registry, so the rebuilt lobby snapshot no
+    // longer holds it. Two of the three paths here already hold the session's
+    // semaphore; the garbage collector does not, exactly as the last snapshot
+    // write below does not. That is safe because the publish rebuilds the
+    // whole set from the registry and sends nothing when it did not move.
+    yield* publishLobby(registry)
     const now = yield* Clock.currentTimeMillis
     // Built on whatever the snapshot holds now, not on `state` above: a
     // ticker advance between the two must not be rolled back by this write.
@@ -209,7 +167,7 @@ const endSession = (
 // while paused or done, re-armed by a command via `wakeup`. Because
 // `advanceIfDue` chains deadlines, a single long clock jump lands on the
 // correct segment, catching up across every boundary crossed.
-const ticker = (handle: SessionHandle): Effect.Effect<void> =>
+const ticker = (registry: Registry, handle: SessionHandle): Effect.Effect<void> =>
   Effect.gen(function* () {
     for (;;) {
       const state = yield* SubscriptionRef.get(handle.stateRef)
@@ -223,7 +181,9 @@ const ticker = (handle: SessionHandle): Effect.Effect<void> =>
       if (delay > 0) {
         yield* Effect.race(Clock.sleep(Duration.millis(delay)), Queue.take(handle.wakeup))
       }
-      yield* applyTimer(handle, (timer, segments, at) => advanceIfDue(timer, segments, at))
+      yield* applyTimer(registry, handle, (timer, segments, at) =>
+        advanceIfDue(timer, segments, at),
+      )
     }
   })
 
@@ -284,9 +244,10 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
       scope,
     }
     yield* Ref.update(registry.sessions, HashMap.set(id, handle))
-    yield* Effect.forkIn(ticker(handle), scope)
+    yield* Effect.forkIn(ticker(registry, handle), scope)
     yield* Effect.forkIn(collect(registry, handle), scope)
     yield* Effect.forkIn(reaper(handle), registry.layerScope)
+    yield* publishLobby(registry)
     return yield* summaryOf(handle)
   })
 
@@ -308,8 +269,8 @@ const watch = (
   Stream.unwrapScoped(
     Effect.gen(function* () {
       const handle = yield* getHandle(registry, id)
-      const sub = yield* Effect.acquireRelease(join(handle, participant), (sub) =>
-        leave(handle, sub),
+      const sub = yield* Effect.acquireRelease(join(registry, handle, participant), (sub) =>
+        leave(registry, handle, sub),
       )
       // Two things end this stream:
       //
@@ -339,7 +300,7 @@ const command = (
 ): Effect.Effect<void, SessionNotFound> =>
   Effect.gen(function* () {
     const handle = yield* getHandle(registry, id)
-    yield* applyTimer(handle, (timer, segments, now) => {
+    yield* applyTimer(registry, handle, (timer, segments, now) => {
       switch (cmd) {
         case 'pause': {
           return pauseTimer(timer, now)
@@ -377,32 +338,6 @@ const recordLeaver = (
     )
   })
 
-// Step (3) of a leave: interrupt every one of the leaver's subscriptions and,
-// for each one we still own (an atomic `active` claim), drop its presence and
-// raw-sub count — so a later stream-release finalizer never double-decrements.
-const detachUser = (handle: SessionHandle, userId: UserId): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const subs = yield* Ref.get(handle.subs)
-    const userSubs = [...HashMap.values(subs)].filter((sub) => sub.userId === userId)
-    for (const sub of userSubs) {
-      yield* Ref.update(handle.subs, HashMap.remove(sub.id))
-      const claimed = yield* Ref.getAndSet(sub.active, false)
-      yield* Deferred.succeed(sub.interrupt, undefined)
-      if (claimed) {
-        yield* SubscriptionRef.update(handle.rawSubs, (n) => Math.max(0, n - 1))
-        yield* Ref.update(handle.presence, removePresence(userId))
-      }
-    }
-    // Republish the shrunken participant list (inline: the sem is held).
-    const now = yield* Clock.currentTimeMillis
-    const state = yield* SubscriptionRef.get(handle.stateRef)
-    const presence = yield* Ref.get(handle.presence)
-    yield* SubscriptionRef.set(
-      handle.stateRef,
-      withState(state, { serverNow: now, participants: participantsOf(presence) }),
-    )
-  })
-
 // One participant leaving a session, serialized through the handle's `sem` like
 // every other mutation. In order: (1) record the leaver's row; (2) unroster —
 // move the leaver from roster to `departed` so a later end never writes them
@@ -420,7 +355,7 @@ const leaveSession = (
         yield* recordLeaver(registry, handle, userId)
         yield* Ref.update(handle.roster, HashMap.remove(userId))
         yield* Ref.update(handle.departed, HashSet.add(userId))
-        yield* detachUser(handle, userId)
+        yield* detachUser(registry, handle, userId)
         const presenceEmpty = HashMap.isEmpty(yield* Ref.get(handle.presence))
         const rosterEmpty = HashMap.isEmpty(yield* Ref.get(handle.roster))
         if (presenceEmpty && rosterEmpty) {
@@ -445,7 +380,13 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
     const sessions = yield* Ref.make(HashMap.empty<SessionId, SessionHandle>())
     const recentlyEnded = yield* Ref.make<readonly { id: SessionId; reason: SessionEnd }[]>([])
     const completionsRepo = yield* CompletionsRepo
-    const registry: Registry = { sessions, recentlyEnded, layerScope, completionsRepo }
+    const registry: Registry = {
+      sessions,
+      recentlyEnded,
+      layerScope,
+      completionsRepo,
+      ...(yield* makeLobby),
+    }
 
     // The consuming half of the plan-changed seam. The library announces a
     // change, and this registry applies it to the sessions that run that
@@ -457,7 +398,7 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
 
     return {
       start: (params: StartParams) => start(registry, params),
-      list: () => listSessions(registry),
+      lobby: () => lobbyFeed(registry),
       sessionsOfWorkout: (workoutId: WorkoutId) => sessionsOfWorkout(registry, workoutId),
       snapshot: (id: SessionId) => snapshot(registry, id),
       watch: (id: SessionId, participant: Participant) => watch(registry, id, participant),

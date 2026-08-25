@@ -10,11 +10,11 @@ import {
   libraryWorkoutOf,
   liveSessionOf,
   otherWorkoutId,
-  refreshActiveSessions,
   renderApp,
   type Handlers,
   type RenderOptions,
 } from './live-workout-harness'
+import { makeLobby, staticLobby } from './lobby-feed'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn() },
@@ -49,12 +49,11 @@ describe('saving an edit into a workout that live sessions run', () => {
     let updateCalls = 0
     await openEditor(
       editorHandlers({
-        ListActiveSessions: () =>
-          Effect.succeed([
-            liveSessionOf('session-abc', athleticaId),
-            liveSessionOf('session-def', athleticaId),
-            liveSessionOf('session-ghi', otherWorkoutId),
-          ]),
+        WatchActiveSessions: staticLobby([
+          liveSessionOf('session-abc', athleticaId),
+          liveSessionOf('session-def', athleticaId),
+          liveSessionOf('session-ghi', otherWorkoutId),
+        ]),
         UpdateWorkout: () => {
           updateCalls++
           return Effect.succeed(athletica)
@@ -71,7 +70,7 @@ describe('saving an edit into a workout that live sessions run', () => {
     let updated: Workout | undefined
     await openEditor(
       editorHandlers({
-        ListActiveSessions: () => Effect.succeed([liveSessionOf('session-abc', athleticaId)]),
+        WatchActiveSessions: staticLobby([liveSessionOf('session-abc', athleticaId)]),
         UpdateWorkout: (payload) => {
           updated = (payload as { workout: Workout }).workout
           return Effect.succeed(libraryWorkoutOf(updated))
@@ -95,7 +94,7 @@ describe('saving an edit into a workout that live sessions run', () => {
     let updateCalls = 0
     await openEditor(
       editorHandlers({
-        ListActiveSessions: () => Effect.succeed([liveSessionOf('session-abc', athleticaId)]),
+        WatchActiveSessions: staticLobby([liveSessionOf('session-abc', athleticaId)]),
         UpdateWorkout: () => {
           updateCalls++
           return Effect.succeed(athletica)
@@ -118,7 +117,7 @@ describe('saving an edit into a workout that live sessions run', () => {
     let updateCalls = 0
     await openEditor(
       editorHandlers({
-        ListActiveSessions: () => Effect.succeed([liveSessionOf('session-ghi', otherWorkoutId)]),
+        WatchActiveSessions: staticLobby([liveSessionOf('session-ghi', otherWorkoutId)]),
         UpdateWorkout: (payload) => {
           updateCalls++
           return Effect.succeed(libraryWorkoutOf((payload as { workout: Workout }).workout))
@@ -132,33 +131,26 @@ describe('saving an edit into a workout that live sessions run', () => {
   })
 
   it('keeps its opening count when the last session ends under the open prompt', async () => {
-    let lobbyReads = 0
-    let lobby = [liveSessionOf('session-abc', athleticaId)]
+    const lobby = makeLobby([liveSessionOf('session-abc', athleticaId)])
     let updateCalls = 0
     await openEditor(
       editorHandlers({
-        ListActiveSessions: () =>
-          Effect.sync(() => {
-            lobbyReads++
-            return lobby
-          }),
+        WatchActiveSessions: lobby.handler,
         UpdateWorkout: () => {
           updateCalls++
           return Effect.succeed(athletica)
         },
       }),
-      { pollsSessions: true },
+      { probesSessions: true },
     )
 
     const dialog = await screen.findByTestId('live-save-dialog')
     expect(dialog.textContent).toContain('1 live session')
 
     // The session ends while the host reads the prompt.
-    const readsBefore = lobbyReads
-    lobby = []
-    refreshActiveSessions()
+    await lobby.publish([])
     await waitFor(() => {
-      expect(lobbyReads).toBeGreaterThan(readsBefore)
+      expect(screen.getByTestId('lobby-probe').dataset.count).toBe('0')
     })
 
     // The title says the workout is live, so the count must not say nobody.
@@ -168,20 +160,22 @@ describe('saving an edit into a workout that live sessions run', () => {
   })
 
   it('strengthens the wording when a session starts under the open prompt', async () => {
-    let lobby = [liveSessionOf('session-abc', athleticaId)]
+    const lobby = makeLobby([liveSessionOf('session-abc', athleticaId)])
     await openEditor(
       editorHandlers({
-        ListActiveSessions: () => Effect.sync(() => lobby),
+        WatchActiveSessions: lobby.handler,
         UpdateWorkout: () => Effect.succeed(athletica),
       }),
-      { pollsSessions: true },
+      { probesSessions: true },
     )
 
     const dialog = await screen.findByTestId('live-save-dialog')
     expect(dialog.textContent).toContain('1 live session')
 
-    lobby = [liveSessionOf('session-abc', athleticaId), liveSessionOf('session-def', athleticaId)]
-    refreshActiveSessions()
+    await lobby.publish([
+      liveSessionOf('session-abc', athleticaId),
+      liveSessionOf('session-def', athleticaId),
+    ])
 
     await waitFor(() => {
       expect(dialog.textContent).toContain('2 live sessions')
@@ -192,7 +186,7 @@ describe('saving an edit into a workout that live sessions run', () => {
     let updated: Workout | undefined
     renderApp(
       editorHandlers({
-        ListActiveSessions: () => Effect.succeed([liveSessionOf('session-abc', athleticaId)]),
+        WatchActiveSessions: staticLobby([liveSessionOf('session-abc', athleticaId)]),
         UpdateWorkout: (payload) => {
           updated = (payload as { workout: Workout }).workout
           return Effect.succeed(libraryWorkoutOf(updated))

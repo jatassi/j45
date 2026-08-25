@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import { RegistryProvider, Result } from '@effect-atom/atom-react'
 import { cleanup, render, screen } from '@testing-library/react'
-import * as Effect from 'effect/Effect'
+import type * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
+import type * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/app'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import { router } from '@/router'
+
+import { emptyLobby } from './lobby-feed'
 
 afterEach(() => {
   cleanup()
@@ -22,7 +25,12 @@ afterEach(() => {
  * below.
  */
 function makeFakeRuntime(
-  handlers: Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>,
+  handlers: Partial<
+    Record<
+      string,
+      (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+    >
+  >,
 ) {
   const client = (tag: string, payload: unknown) => {
     const handler = handlers[tag]
@@ -52,7 +60,7 @@ describe('router.tsx catch-all', () => {
         }),
       )
 
-      const fakeRuntime = makeFakeRuntime({ ListActiveSessions: () => Effect.succeed([]) })
+      const fakeRuntime = makeFakeRuntime({ WatchActiveSessions: emptyLobby })
 
       render(
         <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>

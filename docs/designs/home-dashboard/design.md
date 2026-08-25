@@ -14,8 +14,8 @@ deleted; screenshots live in the session record). Builds on `design-system` +
      card (hue from the workout focus) with a pulsing LIVE dot, workout name
      as the heavy display heading, "«host» is hosting", elapsed/participant
      meta line, and a full-width signature-orange **Join now** button →
-     `/session/$id`. Data: the existing `ListActiveSessions` 5s poll pattern
-     (today's `ActiveSessionsStrip` atom). Multiple live sessions: the hero
+     `/session/$id`. Data: the `WatchActiveSessions` lobby subscription
+     (`activeSessionsAtom`). Multiple live sessions: the hero
      shows the newest; others render as compact rows directly beneath it.
    - **Start last** (no live session, history non-empty): the caller's most
      recent completion (`ListHistory` head), resolved to a library workout by

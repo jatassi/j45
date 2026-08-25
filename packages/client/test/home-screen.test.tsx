@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { WorkoutId, WorkoutNotFound } from '@j45/domain'
+import { SessionSummary, WorkoutId, WorkoutNotFound } from '@j45/domain'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import * as Effect from 'effect/Effect'
 import * as Schema from 'effect/Schema'
+import * as Stream from 'effect/Stream'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,6 +14,29 @@ import {
   renderHomeScreen,
   startedSummary,
 } from './home-harness'
+import { makeLobby, silentLobby, staticLobby } from './lobby-feed'
+
+/** The same lobby row with a different number of people in the room. */
+const withParticipants = (row: SessionSummary, participantCount: number): SessionSummary =>
+  new SessionSummary({
+    id: row.id,
+    workoutId: row.workoutId,
+    hostDisplayName: row.hostDisplayName,
+    workoutName: row.workoutName,
+    startedAt: row.startedAt,
+    participantCount,
+  })
+
+/**
+ * Puts the document in front of the user, or takes it away, the way a phone
+ * does when the app goes to the background.
+ */
+const setVisibility = (state: 'hidden' | 'visible'): Promise<void> =>
+  act(async () => {
+    Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await Promise.resolve()
+  })
 
 vi.mock('sonner', () => ({
   toast: {
@@ -25,6 +49,8 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
   vi.mocked(toast.error).mockClear()
 })
 
@@ -32,7 +58,7 @@ describe('HomeScreen — hero composition', () => {
   it('computes pickHero for a live session and renders home-hero with join target', async () => {
     renderHomeScreen(
       defaultHandlers({
-        ListActiveSessions: () => Effect.succeed([liveSession]),
+        WatchActiveSessions: staticLobby([liveSession]),
       }),
     )
 
@@ -44,10 +70,10 @@ describe('HomeScreen — hero composition', () => {
     )
   })
 
-  it('silently downgrades a failed ListActiveSessions poll to the no-live pick (no error fold)', async () => {
+  it('silently downgrades a failing lobby feed to the no-live pick (no error fold)', async () => {
     renderHomeScreen(
       defaultHandlers({
-        ListActiveSessions: () => Effect.fail(new Error('poll boom')),
+        WatchActiveSessions: () => Stream.fail(new Error('socket dropped')),
       }),
     )
 
@@ -112,15 +138,23 @@ describe('HomeScreen — hero composition', () => {
     expect(screen.getAllByRole('button', { name: 'Retry' }).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('refetches ListActiveSessions every 5 seconds while mounted', async () => {
+  it('reads the no-live pick while the feed has said nothing at all', async () => {
+    renderHomeScreen(defaultHandlers({ WatchActiveSessions: silentLobby }))
+
+    const hero = await screen.findByTestId('home-hero')
+    expect(hero.textContent).toContain('Start last')
+    expect(screen.queryByTestId('query-boundary-error')).toBeNull()
+  })
+
+  it('subscribes once and never polls — time alone asks the server nothing', async () => {
     vi.useFakeTimers()
-    let listCalls = 0
+    let subscriptions = 0
 
     renderHomeScreen(
       defaultHandlers({
-        ListActiveSessions: () => {
-          listCalls++
-          return Effect.succeed([liveSession])
+        WatchActiveSessions: () => {
+          subscriptions++
+          return staticLobby([liveSession])()
         },
       }),
     )
@@ -128,17 +162,122 @@ describe('HomeScreen — hero composition', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1)
     })
-    expect(listCalls).toBe(1)
+    expect(subscriptions).toBe(1)
 
+    // Six poll intervals' worth of the clock, and the feed is still the one
+    // subscription it opened with.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000)
+      await vi.advanceTimersByTimeAsync(30_000)
     })
-    expect(listCalls).toBe(2)
+    expect(subscriptions).toBe(1)
+  })
+})
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000)
+describe('HomeScreen — the live lobby under the fold', () => {
+  it('shows a session that starts elsewhere, with no user action', async () => {
+    const lobby = makeLobby([])
+    renderHomeScreen(defaultHandlers({ WatchActiveSessions: lobby.handler }))
+
+    const hero = await screen.findByTestId('home-hero')
+    expect(hero.textContent).toContain('Start last')
+
+    await lobby.publish([liveSession])
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home-hero').textContent).toContain('LIVE')
     })
-    expect(listCalls).toBe(3)
+    expect(screen.getByTestId(`session-card-${liveSession.id}`)).toBeTruthy()
+  })
+
+  it('drops a session that ends', async () => {
+    const lobby = makeLobby([liveSession])
+    renderHomeScreen(defaultHandlers({ WatchActiveSessions: lobby.handler }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home-hero').textContent).toContain('LIVE')
+    })
+
+    await lobby.publish([])
+
+    await waitFor(() => {
+      expect(screen.queryByTestId(`session-card-${liveSession.id}`)).toBeNull()
+    })
+    expect(screen.getByTestId('home-hero').textContent).toContain('Start last')
+  })
+
+  it('moves the participant count of a session already on screen', async () => {
+    const lobby = makeLobby([liveSession])
+    renderHomeScreen(defaultHandlers({ WatchActiveSessions: lobby.handler }))
+
+    const line = await screen.findByTestId('hero-elapsed')
+    expect(line.textContent).toContain('4 participants')
+
+    await lobby.publish([withParticipants(liveSession, 5)])
+
+    await waitFor(() => {
+      expect(screen.getByTestId('hero-elapsed').textContent).toContain('5 participants')
+    })
+    // The same session, so the row moved in place rather than being replaced.
+    expect(screen.getByTestId(`session-card-${liveSession.id}`)).toBeTruthy()
+  })
+
+  it('recovers on its own when the connection drops, and shows what the server now holds', async () => {
+    let subscriptions = 0
+    renderHomeScreen(
+      defaultHandlers({
+        // The first subscription dies mid-flight. The second one heals from
+        // its own opening snapshot, which is the whole set.
+        WatchActiveSessions: () => {
+          subscriptions++
+          return subscriptions === 1
+            ? Stream.fail(new Error('socket dropped'))
+            : staticLobby([liveSession])()
+        },
+      }),
+    )
+
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('home-hero').textContent).toContain('LIVE')
+      },
+      { timeout: 4000 },
+    )
+    expect(subscriptions).toBeGreaterThanOrEqual(2)
+  })
+
+  it('stands the feed down while the document is hidden, and takes a fresh one on return', async () => {
+    let subscriptions = 0
+    let released = 0
+    renderHomeScreen(
+      defaultHandlers({
+        WatchActiveSessions: () => {
+          subscriptions++
+          return staticLobby([liveSession])().pipe(
+            Stream.ensuring(
+              Effect.sync(() => {
+                released++
+              }),
+            ),
+          )
+        },
+      }),
+    )
+
+    await waitFor(() => {
+      expect(subscriptions).toBe(1)
+    })
+
+    await setVisibility('hidden')
+    await waitFor(() => {
+      expect(released).toBe(1)
+    })
+    expect(subscriptions).toBe(1)
+
+    await setVisibility('visible')
+    await waitFor(() => {
+      expect(subscriptions).toBe(2)
+    })
+    expect(screen.getByTestId('home-hero').textContent).toContain('LIVE')
   })
 })
 

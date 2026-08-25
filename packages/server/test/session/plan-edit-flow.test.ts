@@ -20,6 +20,7 @@ import {
   caraId,
   FlowLive,
   latestWith,
+  lobbyNow,
   makeWorkout,
   running,
   seedUser,
@@ -286,7 +287,7 @@ describe('editing a workout that live sessions run', () => {
       expect(stationsOf(updated.workout)).toEqual(['A2', 'B2'])
       const read = yield* library.GetWorkout({ id: created.id }, { headers })
       expect(stationsOf(read.workout)).toEqual(['A2', 'B2'])
-      expect(yield* (yield* LiveSessions).list()).toEqual([])
+      expect(yield* lobbyNow(yield* LiveSessions)).toEqual([])
     }).pipe(Effect.provide(FlowLive)),
   )
 

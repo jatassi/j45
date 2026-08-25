@@ -38,6 +38,7 @@ import { SessionHandlersLive } from '../../src/session/handlers.js'
 import { HistoryHandlersLive } from '../../src/session/history-handlers.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
+import { lobbyNow } from './plan-flow-harness.js'
 
 const serverDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -250,7 +251,7 @@ describe('HistoryHandlersLive', () => {
   )
 
   it.scoped(
-    'rebuilding the server layer over the same database preserves session_completions while ListActiveSessions returns []',
+    'rebuilding the server layer over the same database preserves session_completions while the lobby feed opens empty',
     () =>
       Effect.gen(function* () {
         const dbDir = yield* Effect.acquireRelease(
@@ -290,8 +291,7 @@ describe('HistoryHandlersLive', () => {
             const sessionClient = yield* RpcTest.makeClient(SessionRpcs)
             yield* sessionClient.StartSession({ workoutId: library.id }, { headers })
 
-            const active = yield* sessionClient.ListActiveSessions(undefined, { headers })
-            expect(active).toHaveLength(1)
+            expect(yield* lobbyNow(yield* LiveSessions)).toHaveLength(1)
 
             const historyClient = yield* RpcTest.makeClient(HistoryRpcs)
             const history = yield* historyClient.ListHistory(undefined, { headers })
@@ -314,13 +314,8 @@ describe('HistoryHandlersLive', () => {
             expect(history).toHaveLength(1)
             expect(history[0]).toStrictEqual(seededCompletion)
 
-            const sessionClient = yield* RpcTest.makeClient(SessionRpcs)
-            const active = yield* sessionClient.ListActiveSessions(undefined, { headers })
-            expect(active).toStrictEqual([])
-
-            // Same truth via the in-memory registry directly.
-            const liveSessions = yield* LiveSessions
-            expect(yield* liveSessions.list()).toStrictEqual([])
+            // The registry is empty, so the lobby feed opens on nothing.
+            expect(yield* lobbyNow(yield* LiveSessions)).toStrictEqual([])
           }).pipe(Effect.provide(makeFileBackedServices(dbPath))),
         )
       }),

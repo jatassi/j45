@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import * as Duration from 'effect/Duration'
 import * as Effect from 'effect/Effect'
+import * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -12,6 +13,7 @@ import {
   renderApp,
   type Handlers,
 } from './live-workout-harness'
+import { staticLobby } from './lobby-feed'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn() },
@@ -40,12 +42,11 @@ describe('deleting a workout that live sessions run', () => {
     let deletePayload: unknown
     const dialog = await openDelete(
       detailHandlers({
-        ListActiveSessions: () =>
-          Effect.succeed([
-            liveSessionOf('session-abc', athleticaId),
-            liveSessionOf('session-def', athleticaId),
-            liveSessionOf('session-ghi', otherWorkoutId),
-          ]),
+        WatchActiveSessions: staticLobby([
+          liveSessionOf('session-abc', athleticaId),
+          liveSessionOf('session-def', athleticaId),
+          liveSessionOf('session-ghi', otherWorkoutId),
+        ]),
         DeleteWorkout: (payload) => {
           deletePayload = payload
           return Effect.succeed(undefined)
@@ -69,7 +70,7 @@ describe('deleting a workout that live sessions run', () => {
     let deleteCalls = 0
     const dialog = await openDelete(
       detailHandlers({
-        ListActiveSessions: () => Effect.succeed([liveSessionOf('session-abc', athleticaId)]),
+        WatchActiveSessions: staticLobby([liveSessionOf('session-abc', athleticaId)]),
         DeleteWorkout: () => {
           deleteCalls++
           return Effect.succeed(undefined)
@@ -92,10 +93,14 @@ describe('deleting a workout that live sessions run', () => {
   it('strengthens the wording when the lobby answers after the prompt is open', async () => {
     const dialog = await openDelete(
       detailHandlers({
-        ListActiveSessions: () =>
-          Effect.succeed([liveSessionOf('session-abc', athleticaId)]).pipe(
-            Effect.delay(Duration.millis(40)),
-          ),
+        // The feed says nothing for a moment, exactly as a fresh
+        // subscription does before its first snapshot arrives.
+        WatchActiveSessions: () =>
+          Stream.fromEffect(
+            Effect.succeed([liveSessionOf('session-abc', athleticaId)]).pipe(
+              Effect.delay(Duration.millis(40)),
+            ),
+          ).pipe(Stream.concat(Stream.never)),
         DeleteWorkout: () => Effect.succeed(undefined),
       }),
     )
@@ -111,7 +116,7 @@ describe('deleting a workout that live sessions run', () => {
   it('keeps the plain confirm — no live-session wording — when nothing runs it', async () => {
     const dialog = await openDelete(
       detailHandlers({
-        ListActiveSessions: () => Effect.succeed([liveSessionOf('session-ghi', otherWorkoutId)]),
+        WatchActiveSessions: staticLobby([liveSessionOf('session-ghi', otherWorkoutId)]),
         DeleteWorkout: () => Effect.succeed(undefined),
       }),
     )
@@ -126,11 +131,10 @@ describe('renaming a workout that live sessions run', () => {
     let renameCalls = 0
     renderApp(
       detailHandlers({
-        ListActiveSessions: () =>
-          Effect.succeed([
-            liveSessionOf('session-abc', athleticaId),
-            liveSessionOf('session-def', athleticaId),
-          ]),
+        WatchActiveSessions: staticLobby([
+          liveSessionOf('session-abc', athleticaId),
+          liveSessionOf('session-def', athleticaId),
+        ]),
         RenameWorkout: () => {
           renameCalls++
           return Effect.succeed(athletica)

@@ -40,6 +40,7 @@ import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { SessionHandlersLive } from '../../src/session/handlers.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
+import { lobbyNow } from './plan-flow-harness.js'
 
 /**
  * The record-at-endSession behaviour of `LiveSessions` and the reflow snapshot
@@ -237,14 +238,14 @@ describe('session-history recording', () => {
 
         // He re-watches: the roster re-adds him and his departed flag clears.
         yield* watchThenLeave(svc, id, bob)
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
 
         // Pause so only the abandonment clock runs; 60 idle seconds GC the
         // session, whose end writes one row per roster member — bob among them
         // again, giving him a second-stint row (two rows, one per stint).
         yield* svc.command(id, 'pause')
         yield* TestClock.adjust('60 seconds')
-        expect(yield* svc.list()).toHaveLength(0)
+        expect(yield* lobbyNow(svc)).toHaveLength(0)
         expect(yield* completionsRepo.listForUser(bob.userId)).toHaveLength(2)
       }).pipe(Effect.provide(LiveLive)),
   )
@@ -265,12 +266,12 @@ describe('session-history recording', () => {
 
       // 59s of abandonment: still live, nothing written yet.
       yield* TestClock.adjust('59 seconds')
-      expect(yield* svc.list()).toHaveLength(1)
+      expect(yield* lobbyNow(svc)).toHaveLength(1)
       expect(yield* completionsRepo.listForUser(alice.userId)).toHaveLength(0)
 
       // Crossing 60s GCs the session, which writes the completions on the way out.
       yield* TestClock.adjust('1 seconds')
-      expect(yield* svc.list()).toHaveLength(0)
+      expect(yield* lobbyNow(svc)).toHaveLength(0)
       expect(yield* completionsRepo.listForUser(alice.userId)).toHaveLength(1)
       expect(yield* completionsRepo.listForUser(bob.userId)).toHaveLength(1)
     }).pipe(Effect.provide(LiveLive)),
@@ -296,7 +297,7 @@ describe('session-history recording', () => {
       // The host leaving empties the roster and ends the session — again with a
       // doomed write — but the registry is still torn down.
       yield* svc.leaveSession(id, alice.userId)
-      expect(yield* svc.list()).toHaveLength(0)
+      expect(yield* lobbyNow(svc)).toHaveLength(0)
       expect(Exit.isFailure(yield* Effect.exit(svc.snapshot(id)))).toBe(true)
     }).pipe(Effect.provide(FailingLive)),
   )
