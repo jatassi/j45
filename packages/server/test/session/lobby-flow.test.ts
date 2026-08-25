@@ -401,6 +401,30 @@ describe('the WatchActiveSessions rpc', () => {
     }).pipe(Effect.provide(FlowLive)),
   )
 
+  it.scoped('moves the count on an existing row as a participant joins', () =>
+    Effect.gen(function* () {
+      const { headers, sessions } = yield* asOwner
+      yield* seedUser(bob.userId, 'Bob')
+      const svc = yield* LiveSessions
+      const started = yield* startFixture(svc, 'Filling')
+
+      const frames = yield* Stream.toQueueOfElements(
+        sessions.WatchActiveSessions(undefined, { headers }),
+      )
+      expect(rowFor(yield* nextFrame(frames), started.id)?.participantCount).toBe(0)
+
+      // A watch is a join: acquiring it puts the watcher in the room.
+      yield* Effect.fork(Stream.runDrain(svc.watch(started.id, bob)))
+
+      const joined = yield* frameWhere(
+        frames,
+        (rows) => rowFor(rows, started.id)?.participantCount === 1,
+      )
+      // The same session, so the row moved rather than being replaced.
+      expect(idsOf(joined)).toEqual([started.id])
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
   it.scoped('gives a subscriber that attaches mid-flight the current set, not the history', () =>
     Effect.gen(function* () {
       const { headers, sessions } = yield* asOwner

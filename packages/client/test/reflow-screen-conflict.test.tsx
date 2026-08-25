@@ -27,6 +27,7 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import type * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
@@ -43,7 +44,12 @@ afterEach(() => {
   cleanup()
 })
 
-type Handlers = Partial<Record<string, (payload: unknown) => unknown>>
+type Handlers = Partial<
+  Record<
+    string,
+    (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+  >
+>
 
 /** Fake rpc runtime — same idiom as `reflow-screen.test.tsx`. */
 function makeFakeRuntime(handlers: Handlers) {

@@ -20,8 +20,10 @@ import {
 } from '@tanstack/react-router'
 import { render } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
+import type * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import type * as Stream from 'effect/Stream'
 
 import { LibraryScreen } from '@/components/library-screen'
 import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
@@ -37,7 +39,12 @@ import { ServerRpcClient } from '@/lib/rpc-client'
  * growing a second copy of it.
  */
 
-export type Handlers = Partial<Record<string, (payload: unknown) => unknown>>
+export type Handlers = Partial<
+  Record<
+    string,
+    (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+  >
+>
 
 const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
 

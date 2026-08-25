@@ -29,6 +29,7 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import type * as Stream from 'effect/Stream'
 
 import { HomeScreen } from '@/components/home-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
@@ -44,7 +45,12 @@ import { emptyLobby } from './lobby-feed'
  */
 
 /** The rpc handler map a `HomeScreen` mount runs against. */
-export type Handlers = Partial<Record<string, (payload: unknown) => unknown>>
+export type Handlers = Partial<
+  Record<
+    string,
+    (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+  >
+>
 
 /**
  * Builds a `Runtime` that provides `ServerRpcClient` with `handlers` in

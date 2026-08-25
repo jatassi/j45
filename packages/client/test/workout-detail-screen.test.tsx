@@ -26,6 +26,7 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import type * as Stream from 'effect/Stream'
 import { toast } from 'sonner'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -52,7 +53,14 @@ afterEach(() => {
  * `ServerRpcClient.runtime` itself via `RegistryProvider`'s `initialValues`
  * below.
  */
-function makeFakeRuntime(handlers: Partial<Record<string, (payload: unknown) => unknown>>) {
+function makeFakeRuntime(
+  handlers: Partial<
+    Record<
+      string,
+      (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+    >
+  >,
+) {
   const client = (tag: string, payload: unknown) => {
     const handler = handlers[tag]
     if (handler === undefined) {
@@ -116,7 +124,12 @@ const ladderWorkout = new LibraryWorkout({
   updatedAt: seededAt,
 })
 
-type Handlers = Partial<Record<string, (payload: unknown) => unknown>>
+type Handlers = Partial<
+  Record<
+    string,
+    (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+  >
+>
 
 /** Stand-in destination for `/session/<id>` navigation — the real session screen is a parallel task. */
 function SessionDestination() {

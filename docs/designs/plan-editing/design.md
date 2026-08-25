@@ -68,7 +68,7 @@ sessions get the change; deleting such a workout stops at a stronger confirm,
 because that action stops other people's workouts and has no undo. A rename
 is ungated — it changes no work. With no live session neither path prompts,
 so the common case keeps its speed. The count comes from the lobby list the
-client already holds (`ListActiveSessions`, whose rows carry their
+client already holds (`WatchActiveSessions`, whose rows carry their
 `WorkoutId`), never from a new rpc.
 
 ## Client

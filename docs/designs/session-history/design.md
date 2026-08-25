@@ -163,7 +163,7 @@ with the standard `asDefect` SqlError posture.
   nothing; a progressed session GC'd after 60 idle seconds writes records; a
   reflowed start records the reflowed snapshot, not the stored plan.
 - **Integration:** `ListHistory` is caller-scoped and newest-first;
-  rebuilding the server layer preserves rows while `ListActiveSessions` is
+  rebuilding the server layer preserves rows while the lobby feed is
   empty; migration 0005 on a database migrated through 0004 yields an empty
   history for existing users.
 - **e2e (chromium + webkit):** two logged-in contexts run a short session

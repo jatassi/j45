@@ -290,7 +290,9 @@ test.describe('nav-shell (chromium + webkit)', () => {
 
     await page.goto(env.baseUrl)
     await expect(page.getByTestId('home-screen')).toBeVisible()
-    // The lobby feed pushes, so the hero arrives without a poll interval.
+    // The lobby feed pushes, so the hero needs no poll interval to wait
+    // out. The timeout is slack for a loaded parallel run, not a tick
+    // count — it ends in milliseconds on a quiet server.
     await expect(page.getByTestId('home-hero')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByTestId(`session-card-${sessionId}`)).toBeVisible({ timeout: 15_000 })
 

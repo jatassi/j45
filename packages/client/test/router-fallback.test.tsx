@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { RegistryProvider, Result } from '@effect-atom/atom-react'
 import { cleanup, render, screen } from '@testing-library/react'
+import type * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
+import type * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/app'
@@ -22,7 +24,14 @@ afterEach(() => {
  * `ServerRpcClient.runtime` itself via `RegistryProvider`'s `initialValues`
  * below.
  */
-function makeFakeRuntime(handlers: Partial<Record<string, (payload: unknown) => unknown>>) {
+function makeFakeRuntime(
+  handlers: Partial<
+    Record<
+      string,
+      (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+    >
+  >,
+) {
   const client = (tag: string, payload: unknown) => {
     const handler = handlers[tag]
     if (handler === undefined) {

@@ -1,17 +1,10 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import type { SessionSummary, WorkoutId } from '@j45/domain'
-import * as Duration from 'effect/Duration'
 import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
 
+import { reconnectDelay, type FeedClient } from '@/lib/reconnect'
 import { ServerRpcClient } from '@/lib/rpc-client'
-
-/** The flat rpc client `ServerRpcClient` resolves to. */
-type LobbyClient = Effect.Effect.Success<typeof ServerRpcClient>
-
-/** Exponential reconnect backoff, capped at 8s so a long outage keeps retrying. */
-const reconnectDelay = (attempt: number): Duration.Duration =>
-  Duration.millis(Math.min(500 * 2 ** attempt, 8000))
 
 /**
  * The retrying lobby stream. Every element is the whole set of live sessions
@@ -30,10 +23,7 @@ const reconnectDelay = (attempt: number): Duration.Duration =>
  * the per-session watch feed uses (`lib/session.ts`), on purpose — one
  * approach, not two.
  */
-export const lobbyFeed = (
-  client: LobbyClient,
-  attempt: number,
-): Stream.Stream<readonly SessionSummary[]> =>
+const lobbyFeed = (client: FeedClient, attempt: number): Stream.Stream<readonly SessionSummary[]> =>
   client('WatchActiveSessions', undefined).pipe(
     Stream.catchAll(() => Stream.empty),
     Stream.concat(
@@ -58,7 +48,7 @@ const documentIsVisible = (): boolean => globalThis.document.visibilityState ===
  * audio unlock and its wake lock — for the same reason: a phone in a pocket
  * must not be doing work.
  */
-export const documentVisibility: Stream.Stream<boolean> = Stream.asyncPush<boolean>((emit) =>
+const documentVisibility: Stream.Stream<boolean> = Stream.asyncPush<boolean>((emit) =>
   Effect.acquireRelease(
     Effect.sync(() => {
       const listener = (): void => {
@@ -85,11 +75,8 @@ export const documentVisibility: Stream.Stream<boolean> = Stream.asyncPush<boole
  * one on return, whose first element is the whole set — so what comes back is
  * current, not what the page held when it went away.
  */
-export const activeSessionsFeed = (
-  client: LobbyClient,
-  visibility: Stream.Stream<boolean>,
-): Stream.Stream<readonly SessionSummary[]> =>
-  visibility.pipe(
+const activeSessionsFeed = (client: FeedClient): Stream.Stream<readonly SessionSummary[]> =>
+  documentVisibility.pipe(
     Stream.flatMap((visible) => (visible ? lobbyFeed(client, 0) : Stream.never), { switch: true }),
   )
 
@@ -98,12 +85,12 @@ export const activeSessionsFeed = (
  * module scope like every other rpc atom in this codebase, so its identity is
  * stable across re-renders.
  *
- * It lives here, outside any component file, because several places read the
- * same set: home (its hero fold), the workout detail screen, the editor, and
- * the persistent tab bar. They share one atom identity and therefore one
- * subscription — a second subscription for the same data could disagree with
- * the first. No component file may export a non-component value either: this
- * project's `react/only-export-components` Fast Refresh guard disallows it.
+ * It lives here, outside any component file, because three places read the
+ * same set: home (its hero fold), the workout detail screen, and the editor.
+ * They share one atom identity and therefore one subscription — a second
+ * subscription for the same data could disagree with the first. No component
+ * file may export a non-component value either: this project's
+ * `react/only-export-components` Fast Refresh guard disallows it.
  *
  * Every lobby row carries the `WorkoutId` it runs, so the host's own client
  * already holds an exact count of the sessions a library write will reach.
@@ -111,9 +98,7 @@ export const activeSessionsFeed = (
  * it.
  */
 export const activeSessionsAtom = ServerRpcClient.runtime.atom(
-  Stream.unwrap(
-    Effect.map(ServerRpcClient, (client) => activeSessionsFeed(client, documentVisibility)),
-  ),
+  Stream.unwrap(Effect.map(ServerRpcClient, (client) => activeSessionsFeed(client))),
 )
 
 /**

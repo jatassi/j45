@@ -6,6 +6,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
+import type * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/app'
@@ -30,7 +31,14 @@ const TAB_CLEARANCE_CLASS = 'pb-[calc(6rem+env(safe-area-inset-bottom))]'
  * place of the real (websocket-backed) rpc client — the same fake-runtime
  * idiom `router-fallback.test.tsx` / `account-screen.test.tsx` use.
  */
-function makeFakeRuntime(handlers: Partial<Record<string, (payload: unknown) => unknown>>) {
+function makeFakeRuntime(
+  handlers: Partial<
+    Record<
+      string,
+      (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+    >
+  >,
+) {
   const client = (tag: string, payload: unknown) => {
     const handler = handlers[tag]
     if (handler === undefined) {
