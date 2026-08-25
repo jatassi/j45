@@ -27,9 +27,20 @@ afterEach(() => {
 describe('useElapsedMinutes', () => {
   it('reads the whole minutes elapsed on the first render, before any tick', () => {
     const startedAt = DateTime.unsafeMake('2026-03-01T09:47:20.000Z')
-    const { result } = renderHook(() => useElapsedMinutes(startedAt))
+    let renders = 0
+    let firstRender: number | undefined
+    const { result } = renderHook(() => {
+      renders += 1
+      const minutes = useElapsedMinutes(startedAt)
+      firstRender ??= minutes
+      return minutes
+    })
 
+    // The value the very first render returned, not the value after the
+    // effect ran: a hook that read 0 and corrected itself would fail here.
+    expect(firstRender).toBe(12)
     expect(result.current).toBe(12)
+    expect(renders).toBe(1)
   })
 
   it('turns over on the minute boundary with no new session data', async () => {
@@ -86,6 +97,24 @@ describe('useElapsedMinutes', () => {
 
     await advance(240_000)
     expect(result.current).toBe(0)
+  })
+
+  it('aligns on the start time once this clock reaches it', async () => {
+    // 30s ahead of this clock — a host whose clock runs ahead.
+    const startedAt = DateTime.unsafeMake('2026-03-01T10:00:30.000Z')
+    const { result } = renderHook(() => useElapsedMinutes(startedAt))
+
+    expect(result.current).toBe(0)
+
+    // The clock reaches the start time.
+    await advance(30_000)
+    expect(result.current).toBe(0)
+
+    // One minute after it, and not a tick later.
+    await advance(59_000)
+    expect(result.current).toBe(0)
+    await advance(1000)
+    expect(result.current).toBe(1)
   })
 
   it('leaves no timer behind when it unmounts', async () => {

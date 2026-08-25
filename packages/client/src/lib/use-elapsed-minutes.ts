@@ -4,32 +4,40 @@ import * as DateTime from 'effect/DateTime'
 
 const MINUTE_MS = 60_000
 
-/** Whole minutes between `startedAtMillis` and the wall clock, clamped at 0. */
+/** Milliseconds since `startedAtMillis` on this clock. Negative before it. */
+function elapsedMillisOf(startedAtMillis: number): number {
+  return Date.now() - startedAtMillis
+}
+
+/** Whole minutes since `startedAtMillis`, clamped at 0. */
 function elapsedMinutesOf(startedAtMillis: number): number {
-  return Math.floor(Math.max(0, Date.now() - startedAtMillis) / MINUTE_MS)
+  return Math.floor(Math.max(0, elapsedMillisOf(startedAtMillis)) / MINUTE_MS)
 }
 
 /**
- * Milliseconds until the whole-minute count next turns over. Measured from
- * the start time, not from the last tick, so the display flips on the
- * boundary itself instead of up to a minute after it.
+ * Milliseconds until the whole-minute count next turns over. The delay comes
+ * from the start time, not from the last tick, so the count turns over on the
+ * boundary. It does not turn over up to a minute after it.
+ *
+ * A start time that this clock has not reached gives the delay to the start
+ * time itself. The count is thus aligned from its first minute.
  */
-function millisUntilNextMinute(startedAtMillis: number): number {
-  const elapsed = Math.max(0, Date.now() - startedAtMillis)
-  return MINUTE_MS - (elapsed % MINUTE_MS)
+function millisUntilNextTurnover(startedAtMillis: number): number {
+  const elapsed = elapsedMillisOf(startedAtMillis)
+  return elapsed < 0 ? -elapsed : MINUTE_MS - (elapsed % MINUTE_MS)
 }
 
 /**
- * Whole minutes since `startedAt`, on a clock of its own: it advances while
- * no new session data arrives at all.
+ * Whole minutes since `startedAt`, on a clock of its own: the count advances
+ * when no new session data arrives.
  *
- * It is seeded from the wall clock on the first render, so it reads correctly
- * before the first tick, and each tick re-reads the wall clock rather than
- * adding one to the last value. A tab that was suspended and a timer that
- * fired late thus both heal on the next tick instead of accumulating drift.
+ * The first render reads the wall clock, so the count is correct before the
+ * first tick. Each tick reads the wall clock again. It does not add one to
+ * the last value. A tab that was suspended, or a timer that fired late, thus
+ * gives the correct count on the next tick instead of a count that drifts.
  *
- * A start time this clock has not reached yet — a host whose clock runs
- * ahead — reads as 0 rather than a negative count.
+ * A start time that this clock has not reached — a host whose clock runs
+ * ahead — reads as 0, not as a negative count.
  */
 export function useElapsedMinutes(startedAt: DateTime.Utc): number {
   const startedAtMillis = DateTime.toEpochMillis(startedAt)
@@ -43,7 +51,7 @@ export function useElapsedMinutes(startedAt: DateTime.Utc): number {
       handle = globalThis.setTimeout(() => {
         setMinutes(elapsedMinutesOf(startedAtMillis))
         scheduleNextTurnover()
-      }, millisUntilNextMinute(startedAtMillis))
+      }, millisUntilNextTurnover(startedAtMillis))
     }
     scheduleNextTurnover()
 

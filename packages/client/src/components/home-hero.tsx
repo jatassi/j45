@@ -106,8 +106,8 @@ type LiveHeroProps = {
 /**
  * Live-session hero: sport-tinted card, join CTA, optional compact extras.
  *
- * The meta line's `"N min in"` runs off `useElapsedMinutes`, not off the
- * render, so it counts on its own however rarely session data arrives.
+ * The meta line's `"N min in"` comes from `useElapsedMinutes`, not from the
+ * render. It thus counts on its own, however rarely session data arrives.
  */
 function LiveHero({ session, extras, workout }: LiveHeroProps) {
   const focus: Focus = workout?.workout.focus ?? 'hybrid'
