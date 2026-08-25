@@ -6,7 +6,7 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/app'
 import { AccountScreen } from '@/components/account-screen'
@@ -14,6 +14,7 @@ import { ServerRpcClient } from '@/lib/rpc-client'
 import { router } from '@/router'
 
 import { stubLoginScreenGlobals } from './login-screen-globals.js'
+import { flushPinFieldTimers } from './pin-field-timers.js'
 
 vi.mock('@simplewebauthn/browser', () => ({
   startRegistration: vi.fn(() => Promise.resolve({ id: 'webauthn-response' })),
@@ -29,6 +30,10 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
+
+// Keeps the jsdom environment open until the PIN field's uncleared timers
+// have fired. See `flushPinFieldTimers`.
+afterAll(flushPinFieldTimers)
 
 /**
  * `User.id`/`User.username` are branded (`UserId`/`Username`) — decoding

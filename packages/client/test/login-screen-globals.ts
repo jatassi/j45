@@ -13,7 +13,9 @@ import { vi } from 'vitest'
  *   leaking between tests.
  *
  * Call inside `beforeEach`; the usual `vi.unstubAllGlobals()` in
- * `afterEach` undoes both stubs.
+ * `afterEach` undoes both stubs. A suite that needs these globals mounts the
+ * PIN field, so it also needs `flushPinFieldTimers` from
+ * `./pin-field-timers.js` in `afterAll`.
  */
 export function stubLoginScreenGlobals(): void {
   vi.stubGlobal(

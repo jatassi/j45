@@ -2,13 +2,14 @@
 import { RegistryProvider } from '@effect-atom/atom-react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import * as Option from 'effect/Option'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthGate } from '@/components/auth-gate'
 import { reportAuthSessionExpired } from '@/lib/auth-session-expiry'
 import * as LastUser from '@/lib/last-user'
 
 import { stubLoginScreenGlobals } from './login-screen-globals.js'
+import { flushPinFieldTimers } from './pin-field-timers.js'
 
 beforeEach(() => {
   stubLoginScreenGlobals()
@@ -18,6 +19,10 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
+
+// Keeps the jsdom environment open until the PIN field's uncleared timers
+// have fired. See `flushPinFieldTimers`.
+afterAll(flushPinFieldTimers)
 
 const userJson = {
   id: 'u1',
