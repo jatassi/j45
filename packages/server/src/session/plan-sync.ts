@@ -5,6 +5,7 @@ import {
   enterSegmentPaused,
   remapPosition,
   TimerDone,
+  Workout,
   type SessionState,
   type TimerState,
 } from '@j45/domain'
@@ -68,8 +69,10 @@ const whileLive = (
  * protect, so a name never waits for a segment boundary. The caller holds
  * the semaphore.
  *
- * The name lives on the snapshot alone. The lobby summary and the completion
- * row both read it from there, so all three agree by construction.
+ * The snapshot holds the current name. The lobby summary and the completion
+ * row both read it from there, so all three agree by construction. The
+ * stored plan carries a name of its own, and it is written through here for
+ * the same reason.
  *
  * A new name raises no plan-changed notice, so the revision does not move.
  * The name is already on screen. A notice for it would make participants
@@ -88,6 +91,21 @@ const publishName = (
     yield* SubscriptionRef.set(
       handle.stateRef,
       withState(state, { serverNow: now, workoutName: name }),
+    )
+    // The stored plan carries a name of its own, and a completion row writes
+    // both. One row must not hold two names, so the rename reaches the plan
+    // as well. Only the name moves: the stations stay as they are, and they
+    // stay equal to the compiled plan that the ticker runs.
+    yield* Ref.update(
+      handle.workout,
+      (workout) =>
+        new Workout({
+          name,
+          focus: workout.focus,
+          note: workout.note,
+          pods: workout.pods,
+          flow: workout.flow,
+        }),
     )
   })
 
@@ -121,15 +139,15 @@ const applyRename = (handle: SessionHandle, name: string): Effect.Effect<void> =
  * running: the same snapshot the last segment of that plan would have
  * produced. Its participants are told nothing, and nothing else moves — the
  * plan, the name and the revision all stay as they are. To everyone
- * watching, and to the completion row the session later leaves, the session
- * finished normally.
+ * watching, the session finished normally.
  *
- * That row is a known and accepted cost. `done` records the furthest segment
- * of the plan in force, so a session cut short one station from the end
- * still records the whole plan as run. The alternative is a record that says
- * the participant stopped early, which is not what happened: they ran every
- * interval the plan gave them, and the host took the rest away. The
- * indistinguishable finish was chosen over the exact count.
+ * The completion row is the one thing that shows the difference, and it must
+ * show it. The row records the plan that the session ran, at the furthest
+ * segment that the session published in that plan. That segment is where the
+ * participant stopped. It is not the end of the plan. A session that a host
+ * trims at the second station of five would otherwise record five stations of
+ * five. The screen hides the difference to keep the finish clean. The record
+ * must still state it.
  */
 const putPlanInForce = (
   handle: SessionHandle,
@@ -152,6 +170,12 @@ const putPlanInForce = (
       return withState(state, { serverNow: now, timer: new TimerDone({}) })
     }
     yield* Ref.set(handle.workout, plan.workout)
+    // The furthest segment is counted in the plan in force, so it moves with
+    // the plan. A number carried across can name a segment that the new plan
+    // does not have, because a shorter plan reaches the same work at a lower
+    // index. The completion row would then claim more than its own plan
+    // holds.
+    yield* Ref.set(handle.reachedSegment, mapped.right)
     return withState(state, {
       serverNow: now,
       compiled: plan.compiled,
@@ -254,8 +278,18 @@ export const snapshotAfterMove = (
       // A move that ends the session's timer drops the held plan. A done
       // session's plan is frozen, and the completion row must record what
       // was in force while the timer was live.
+      //
+      // A timer that reaches done here ran out of segments, so the session
+      // entered the last segment of the plan in force. The move itself must
+      // say so: `advanceIfDue` catches up across every boundary that the
+      // clock crossed, so a late wake can reach done without a snapshot for
+      // each segment on the way. The plan that a shorter plan exhausts is the
+      // other case, and it is deliberately not this one: that session never
+      // reached the end, and `putPlanInForce` leaves the mark where the last
+      // published snapshot put it.
       if (moved._tag === 'done') {
         yield* Ref.set(handle.pending, Option.none())
+        yield* Ref.set(handle.reachedSegment, Math.max(0, state.compiled.segments.length - 1))
       }
       return withState(state, { serverNow: now, timer: moved })
     }

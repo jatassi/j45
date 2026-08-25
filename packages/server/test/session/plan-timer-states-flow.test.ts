@@ -166,7 +166,7 @@ describe('a plan change that no longer reaches the session position', () => {
     }).pipe(Effect.provide(FlowLive)),
   )
 
-  it.scoped('leaves a session no different from one that ran to its last segment', () =>
+  it.scoped('looks no different on screen from one that ran to its last segment', () =>
     Effect.gen(function* () {
       const { headers, history, library, sessions } = yield* asOwner
       const trimmed = yield* library.CreateWorkout(
@@ -190,7 +190,7 @@ describe('a plan change that no longer reaches the session position', () => {
       )
       yield* TestClock.adjust('13 seconds')
 
-      // Nothing a participant can read tells the two apart.
+      // Nothing on the session snapshot tells the two apart.
       const cutState = yield* snapshotOf(svc, cut.id)
       const ranState = yield* snapshotOf(svc, ran.id)
       expect(cutState.timer).toEqual(ranState.timer)
@@ -200,17 +200,19 @@ describe('a plan change that no longer reaches the session position', () => {
       expect(cutState.planChangedBy).toBe(ranState.planChangedBy)
       expect(cutState.ended).toBe(ranState.ended)
 
-      // Nor does the record each one leaves behind.
+      // The record is the one place that does tell them apart, and it must:
+      // both ran the same plan, but only one of them reached the end of it.
       yield* svc.leaveSession(cut.id, owner)
       yield* svc.leaveSession(ran.id, owner)
       const rows = yield* history.ListHistory(undefined, { headers })
       const rowFor = (id: SessionId) => rows.find((row) => row.sessionId === id)
       expect(rows).toHaveLength(2)
       expect(rowFor(cut.id)?.workout).toEqual(rowFor(ran.id)?.workout)
-      expect(rowFor(cut.id)?.progress).toEqual(rowFor(ran.id)?.progress)
-      // The whole of the plan it was running: five of six segments entered.
-      expect(rowFor(cut.id)?.progress?.segmentsCompleted).toBe(5)
       expect(rowFor(cut.id)?.progress?.totalSegments).toBe(6)
+      // The trimmed session stopped in the rest before the third work, so
+      // that is the segment it records — the third work never ran.
+      expect(rowFor(cut.id)?.progress?.segmentsCompleted).toBe(4)
+      expect(rowFor(ran.id)?.progress?.segmentsCompleted).toBe(5)
     }).pipe(Effect.provide(FlowLive)),
   )
 

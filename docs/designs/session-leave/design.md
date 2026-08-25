@@ -87,6 +87,16 @@ other mutation:
 `endSession` itself changes only in that rows it writes now carry `progress`
 (the timer position when it runs).
 
+> **Amended by `live-plan-sync`.** The published timer state is no longer the
+> source of `segmentsCompleted`. A running session now tracks its workout, and
+> two of the ways that it can stop leave no position on the timer to read. A
+> `done` timer holds no segment index. A plan that no longer reaches the
+> session's work ordinal finishes the session before the session reached the
+> end of the plan that the row records. The handle keeps `reachedSegment`
+> instead. Each published snapshot raises it, and each applied plan change
+> sets it to a segment of the new plan. For an ordinary leaver the number is
+> the same as before. See the `session-history` design for the full rule.
+
 The `command` special-case for `'quit'` is deleted along with the literal.
 Restart/GC behavior, the ticker, and `SessionNotFound` semantics are
 untouched.

@@ -48,11 +48,14 @@ contract).
 > re-derived from the segment now in force, so the resume counts down the
 > segment it is actually in. A done session is frozen: no later change reaches
 > it, and its completion row keeps the plan that was in force while the timer
-> ran. A new plan that no longer reaches the current work ordinal finishes the
-> session on the plan it was running; the alternative, a clamp backwards,
-> replays a station the participant completed. That finish raises no notice
-> and moves no revision, so a participant cannot tell it from the last segment
-> of the plan.
+> ran — the name and the progress with it. A new plan that no longer reaches
+> the current work ordinal finishes the session on the plan it was running;
+> the alternative, a clamp backwards, replays a station the participant
+> completed. That finish raises no notice and moves no revision, so on screen
+> a participant cannot tell it from the last segment of the plan. The
+> completion row does show the difference, and it must. The row records the
+> furthest segment that the session published. A session that a host trims two
+> stations from the end is therefore not recorded as having run them.
 >
 > Deleting the workout ends every session that tracks it — and only those. A
 > reflow-launched session keeps running: its compiled plan was never in the
@@ -82,6 +85,7 @@ export class SessionState extends Schema.Class<SessionState>('SessionState')({
   host: Participant,
   workoutName: Schema.NonEmptyTrimmedString,
   compiled: CompiledWorkout,          // sent in every snapshot; a few KB
+                                      // — an applied plan change replaces it
   timer: TimerState,                  // endsAtMillis is server-epoch absolute
   serverNow: Schema.Number,           // epoch millis at emit — client computes clock offset
   participants: Schema.Array(Participant),

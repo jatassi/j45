@@ -271,6 +271,7 @@ const start = (registry: Registry, params: StartParams): Effect.Effect<SessionSu
       subs: yield* Ref.make(HashMap.empty<number, Sub>()),
       nextSubId: yield* Ref.make(0),
       progressed: yield* Ref.make(false),
+      reachedSegment: yield* Ref.make(0),
       ending: yield* Ref.make(false),
       sem: yield* Effect.makeSemaphore(1),
       wakeup: yield* Queue.unbounded<undefined>(),

@@ -9,6 +9,9 @@ and ended, who hosted, and who participated. A `/history` screen lists the
 caller's records newest-first. **Deliberate scope cut from the brief** (owner
 decision at design): no progress tracking — the brief's "and how far they
 got" is dropped; a record proves participation in any capacity, nothing more.
+**Later reversed** by `session-leave`, which added the optional `progress`
+field and migration `0006`; `live-plan-sync` then fixed which plan that
+progress is counted in (see the amendment below).
 
 The snapshot is not decoration: it is what powers `workout-generation`'s
 no-repeat-recently constraint (which exercises ran lately) and keeps history
@@ -20,12 +23,36 @@ never have held that shape at all (a launch-time reflow).
 > now tracks its workout, so an edit that lands while the timer is live
 > becomes part of what the participant actually ran. One rule replaces the
 > promise: a completion records **the last plan applied while the timer was
-> still live**. An edit after the timer is done never reaches the record. The
-> known cost is that a session which ran across two plans is recorded against
-> the later one, not stitched across both. A session that a delete ends
-> follows the same rule, and it is the reason the rule is worded this way:
-> the record comes from the plan held in memory, which the row deletion
-> cannot touch. There is no foreign key from completions to workouts.
+> still live**.
+>
+> Progress is counted in that same plan and in no other plan.
+> `totalSegments` is the segment count of the recorded plan.
+> `segmentsCompleted` is the furthest segment that the session published while
+> it ran that plan. A clamp keeps the count inside the plan, so a row can
+> never name a segment that its own plan does not hold. Both numbers come from
+> one plan, so "segment N of M" has one meaning.
+>
+> Three consequences follow, and all three are intended:
+>
+> - **A change after the timer is done never reaches the record.** The plan
+>   freezes at done, and so do the name and the progress.
+> - **A session that a delete ends records the last plan the session held.**
+>   The rule is worded this way for exactly this case: the record comes from
+>   the plan held in memory, which the row deletion cannot touch. There is no
+>   foreign key from completions to workouts.
+> - **A session that a shorter plan exhausts records where it stopped**, in
+>   the plan that it was running. It does not record the end of that plan. On
+>   screen, the finish stays the same as a normal finish, on purpose. The
+>   record must still show that the third station of five never ran. This
+>   reverses an earlier reading, which recorded the whole plan as run to keep
+>   the record the same as a normal finish. The rule above is what makes
+>   "segment N of M" mean something, so the record now differs from the
+>   screen. The screen keeps the clean finish.
+>
+> The known cost is that a session that ran across two plans is recorded
+> against the later plan. The record does not stitch the two together. The
+> owner considered a true as-run history across plan versions, and set it
+> aside.
 
 ## How it fits
 
