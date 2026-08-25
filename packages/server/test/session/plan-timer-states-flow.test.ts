@@ -1,61 +1,30 @@
 import { describe, expect, it } from '@effect/vitest'
-import { Flow, Pod, Round, Station, Workout, type SessionId, type SessionState } from '@j45/domain'
+import type { SessionId } from '@j45/domain'
 import * as Effect from 'effect/Effect'
 import * as TestClock from 'effect/TestClock'
 
 import { LiveSessions } from '../../src/session/live-sessions.js'
-import { asOwner, FlowLive, owner } from './plan-flow-harness.js'
+import {
+  asOwner,
+  FlowLive,
+  makeWorkout,
+  owner,
+  paused,
+  running,
+  snapshotOf,
+  stationNames,
+} from './plan-flow-harness.js'
 
 /**
  * The three timer positions where "apply at the next segment boundary" has
  * no meaning: paused, done, and a position the new plan no longer reaches.
  * Observed only where a user can see it — the session snapshot each
  * participant holds, and the history rows the session leaves behind.
+ *
+ * `makeWorkout(['A', 'B', 'C'])` compiles to ready 5s | A 10s | rest 5s |
+ * B 10s | rest 5s | C 10s — six segments over 45s, with work ordinals 0, 1
+ * and 2.
  */
-
-/** How long one round works and rests, in seconds. Defaults: 10 and 5. */
-type Timing = { readonly workSeconds?: number; readonly restSeconds?: number }
-
-/**
- * One pod of the named stations, one round. `['A', 'B', 'C']` at the default
- * timing compiles to ready 5s | A 10s | rest 5s | B 10s | rest 5s | C 10s —
- * six segments over 45s, with work ordinals 0, 1 and 2.
- */
-const makeWorkout = (stations: readonly [string, ...string[]], timing: Timing = {}) =>
-  new Workout({
-    name: 'Plan',
-    focus: 'cardio',
-    pods: [
-      new Pod({
-        name: 'P',
-        stations: stations.map((station) => new Station({ name: station })) as [
-          Station,
-          ...Station[],
-        ],
-      }),
-    ],
-    flow: new Flow({
-      type: 'laps',
-      rounds: [
-        new Round({ workSeconds: timing.workSeconds ?? 10, restSeconds: timing.restSeconds ?? 5 }),
-      ],
-    }),
-  })
-
-/** The station names of a snapshot's work segments, in run order. */
-const stationNames = (state: SessionState): readonly string[] =>
-  state.compiled.segments.flatMap((segment) =>
-    segment._tag === 'work' ? [segment.work.station.name] : [],
-  )
-
-/** The paused timer of a snapshot, or `undefined` if it is not paused. */
-const paused = (state: SessionState) => (state.timer._tag === 'paused' ? state.timer : undefined)
-
-/** The running timer of a snapshot, or `undefined` if it is not running. */
-const running = (state: SessionState) => (state.timer._tag === 'running' ? state.timer : undefined)
-
-/** The snapshot of one session, by id. */
-const snapshotOf = (svc: LiveSessions, id: SessionId) => svc.snapshot(id)
 
 describe('a plan change while the session is paused', () => {
   it.scoped('applies at once, with the time left re-derived from the new segment', () =>
@@ -91,6 +60,41 @@ describe('a plan change while the session is paused', () => {
       expect(after.planChangedBy).toBe('Owner')
       // Still on the same work ordinal, still paused — and holding the whole
       // of the segment now in force, not the 8s left of the segment it left.
+      expect(paused(after)?.segmentIndex).toBe(1)
+      expect(paused(after)?.remainingMillis).toBe(20_000)
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
+  it.scoped('releases a plan that was already held when the host pauses', () =>
+    Effect.gen(function* () {
+      const { headers, library, sessions } = yield* asOwner
+      const created = yield* library.CreateWorkout(
+        { workout: makeWorkout(['A', 'B', 'C']) },
+        { headers },
+      )
+      const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
+      const svc = yield* LiveSessions
+
+      // The edit arrives while the first work is running, so it is held for
+      // the next boundary — which the pause then takes away.
+      yield* TestClock.adjust('7 seconds')
+      yield* library.UpdateWorkout(
+        {
+          id: created.id,
+          workout: makeWorkout(['A2', 'B2', 'C2'], { workSeconds: 20 }),
+          updatedAt: created.updatedAt,
+        },
+        { headers },
+      )
+      expect((yield* snapshotOf(svc, started.id)).planRevision).toBe(0)
+
+      yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
+
+      // Everybody is on the new plan while they wait, so the resume finds
+      // them there rather than one interval behind it.
+      const after = yield* snapshotOf(svc, started.id)
+      expect(stationNames(after)).toEqual(['A2', 'B2', 'C2'])
+      expect(after.planRevision).toBe(1)
       expect(paused(after)?.segmentIndex).toBe(1)
       expect(paused(after)?.remainingMillis).toBe(20_000)
     }).pipe(Effect.provide(FlowLive)),
@@ -162,7 +166,7 @@ describe('a plan change that no longer reaches the session position', () => {
     }).pipe(Effect.provide(FlowLive)),
   )
 
-  it.scoped('leaves a session no different from one that ran to its last rep', () =>
+  it.scoped('leaves a session no different from one that ran to its last segment', () =>
     Effect.gen(function* () {
       const { headers, history, library, sessions } = yield* asOwner
       const trimmed = yield* library.CreateWorkout(

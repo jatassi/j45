@@ -48,9 +48,9 @@ import {
   completionInputs,
   getHandle,
   initialState,
-  isProgressed,
   listSessions,
   participantsOf,
+  publishSnapshot,
   removePresence,
   sessionsOfWorkout,
   summaryOf,
@@ -98,10 +98,7 @@ const applyTimer = (
         return
       }
       const published = yield* snapshotAfterMove(handle, { state, moved: next, now })
-      yield* SubscriptionRef.set(handle.stateRef, published)
-      if (isProgressed(published.timer)) {
-        yield* Ref.set(handle.progressed, true)
-      }
+      yield* publishSnapshot(handle, published)
       yield* Queue.offer(handle.wakeup, undefined)
     }),
   )

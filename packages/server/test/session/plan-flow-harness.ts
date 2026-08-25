@@ -1,7 +1,20 @@
 import { NodeContext } from '@effect/platform-node'
 import { RpcTest } from '@effect/rpc'
 import { SqliteClient } from '@effect/sql-sqlite-node'
-import { HistoryRpcs, LibraryRpcs, SessionRpcs, UserId, type Username } from '@j45/domain'
+import {
+  Flow,
+  HistoryRpcs,
+  LibraryRpcs,
+  Pod,
+  Round,
+  SessionRpcs,
+  Station,
+  UserId,
+  Workout,
+  type SessionId,
+  type SessionState,
+  type Username,
+} from '@j45/domain'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
 import * as Schema from 'effect/Schema'
@@ -94,3 +107,55 @@ export const asOwner = Effect.gen(function* () {
   const history = yield* RpcTest.makeClient(HistoryRpcs)
   return { headers, history, library, sessions } as const
 })
+
+/** How long one round works and rests, in seconds. Defaults: 10 and 5. */
+export type Timing = { readonly workSeconds?: number; readonly restSeconds?: number }
+
+/**
+ * One pod of the named stations, one round, under the workout name `name`.
+ * `['A', 'B']` at the default timing compiles to ready 5s, work A 10s, rest
+ * 5s, work B 10s. A `restSeconds` of `0` emits no rest segments at all,
+ * which is how a test moves the segment indices without moving the work
+ * ordinals.
+ */
+export const makeWorkout = (
+  stations: readonly [string, ...string[]],
+  timing: Timing = {},
+  name = 'Plan',
+) =>
+  new Workout({
+    name,
+    focus: 'cardio',
+    pods: [
+      new Pod({
+        name: 'P',
+        stations: [
+          new Station({ name: stations[0] }),
+          ...stations.slice(1).map((station) => new Station({ name: station })),
+        ],
+      }),
+    ],
+    flow: new Flow({
+      type: 'laps',
+      rounds: [
+        new Round({ workSeconds: timing.workSeconds ?? 10, restSeconds: timing.restSeconds ?? 5 }),
+      ],
+    }),
+  })
+
+/** The station names of a snapshot's work segments, in run order. */
+export const stationNames = (state: SessionState): readonly string[] =>
+  state.compiled.segments.flatMap((segment) =>
+    segment._tag === 'work' ? [segment.work.station.name] : [],
+  )
+
+/** The running timer of a snapshot, or `undefined` if it is not running. */
+export const running = (state: SessionState) =>
+  state.timer._tag === 'running' ? state.timer : undefined
+
+/** The paused timer of a snapshot, or `undefined` if it is not paused. */
+export const paused = (state: SessionState) =>
+  state.timer._tag === 'paused' ? state.timer : undefined
+
+/** The snapshot of one session, by id. */
+export const snapshotOf = (svc: LiveSessions, id: SessionId) => svc.snapshot(id)

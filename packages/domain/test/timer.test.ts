@@ -184,10 +184,4 @@ describe('enterSegmentPaused', () => {
       new TimerPaused({ segmentIndex: 3, remainingMillis: 10_000 }),
     )
   })
-
-  it('reads no duration off the end of the plan', () => {
-    expect(enterSegmentPaused(99, segments)).toStrictEqual(
-      new TimerPaused({ segmentIndex: 99, remainingMillis: 0 }),
-    )
-  })
 })

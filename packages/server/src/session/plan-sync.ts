@@ -18,7 +18,7 @@ import * as SubscriptionRef from 'effect/SubscriptionRef'
 import type { PlanChange } from '../library/plan-changes.js'
 import {
   getHandle,
-  isProgressed,
+  publishSnapshot,
   segmentIndexOf,
   sessionsOfWorkout,
   withState,
@@ -97,9 +97,10 @@ const applyRename = (handle: SessionHandle, name: string): Effect.Effect<void> =
 
 /**
  * The snapshot that puts `plan` in force, re-entering it at the position the
- * timer `from` holds. Two paths reach here — a held plan at the segment
- * boundary it waited for, and an arriving plan on a paused session — and
- * both must land the participant in the same place, so both use this.
+ * timer `from` holds. Every path that applies a content edit ends here — a
+ * held plan at the moment it is released, and an edit that arrives on a
+ * paused session — so all of them land the participant in one place. The
+ * hold clears here too, for the same reason.
  *
  * Three things must be right:
  *
@@ -110,19 +111,27 @@ const applyRename = (handle: SessionHandle, name: string): Effect.Effect<void> =
  *   anchored on `now`, because chaining anchors on the previous deadline and
  *   the segment now in force has a duration the old chain knew nothing
  *   about. A paused timer keeps its frozen milliseconds, re-derived the same
- *   way: carrying the old count across would count down a duration that the
+ *   way: milliseconds carried across would count down a duration that the
  *   segment now in force never had.
- * - **The end of the plan.** A new plan with fewer works than the session
- *   has already run reaches this position no more. Clamping backwards would
+ * - **The end of the plan.** A new plan that no longer reaches this position
+ *   has fewer works than the session already ran. A clamp backwards would
  *   replay a finished station, so the session finishes instead.
  *
  * The finish is a plain `done` timer on the plan the session was already
- * running: the same snapshot the last rep of that plan would have produced.
- * Its participants are told nothing, and nothing else moves — the plan, the
- * name and the revision all stay as they are. To everyone watching, and to
- * the completion row the session later leaves, it finished normally.
+ * running: the same snapshot the last segment of that plan would have
+ * produced. Its participants are told nothing, and nothing else moves — the
+ * plan, the name and the revision all stay as they are. To everyone
+ * watching, and to the completion row the session later leaves, the session
+ * finished normally.
+ *
+ * That row is a known and accepted cost. `done` records the furthest segment
+ * of the plan in force, so a session cut short one station from the end
+ * still records the whole plan as run. The alternative is a record that says
+ * the participant stopped early, which is not what happened: they ran every
+ * interval the plan gave them, and the host took the rest away. The
+ * indistinguishable finish was chosen over the exact count.
  */
-const withPlanInForce = (
+const putPlanInForce = (
   handle: SessionHandle,
   args: {
     readonly state: SessionState
@@ -135,6 +144,7 @@ const withPlanInForce = (
     const { from, now, plan, state } = args
     const segments = plan.compiled.segments
     const mapped = remapPosition(state.compiled.segments, segmentIndexOf(from) ?? 0, segments)
+    yield* Ref.set(handle.pending, Option.none())
     if (Either.isLeft(mapped)) {
       yield* Effect.logInfo('plan change exhausted the session position').pipe(
         Effect.annotateLogs({ sessionId: handle.id, workIndex: mapped.left.workIndex }),
@@ -159,15 +169,13 @@ const withPlanInForce = (
  * holds the semaphore.
  *
  * A paused session runs no interval, so there is no interval to protect and
- * nothing to wait for: the next boundary arrives only when someone resumes,
- * and nobody may. The change lands now, and the resume that follows counts
+ * nothing to wait for: the next boundary comes only if somebody resumes, and
+ * nobody has to. The change lands now, and the resume that follows counts
  * down the segment it lands in.
  *
  * The published timer needs no wakeup. A paused timer has no deadline, and
  * neither has the `done` an exhausting plan produces, so the ticker has
- * nothing to re-arm on. It does need the `progressed` flag that any other
- * published move would set, or a session finished this way would leave no
- * history behind.
+ * nothing to re-arm on.
  */
 const applyWhilePaused = (
   handle: SessionHandle,
@@ -176,12 +184,8 @@ const applyWhilePaused = (
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis
-    const published = yield* withPlanInForce(handle, { state, plan, from: state.timer, now })
-    yield* Ref.set(handle.pending, Option.none())
-    yield* SubscriptionRef.set(handle.stateRef, published)
-    if (isProgressed(published.timer)) {
-      yield* Ref.set(handle.progressed, true)
-    }
+    const published = yield* putPlanInForce(handle, { state, plan, from: state.timer, now })
+    yield* publishSnapshot(handle, published)
   })
 
 /**
@@ -217,24 +221,27 @@ const applyEdit = (handle: SessionHandle, plan: PendingPlan): Effect.Effect<void
   })
 
 /**
- * Whether a timer move is a segment boundary — the instant a held plan may
- * take over. A pause, a resume, and a no-op advance all keep the segment, so
- * none of them is a boundary. Reaching `done` is not one either: the plan
- * freezes there.
+ * Whether a timer move releases a held plan.
+ *
+ * Two moves do. The first is the segment boundary the plan waited for: the
+ * interval it must not cut short is over. The second is a pause, because a
+ * paused session runs no interval at all, and the boundary the plan waits
+ * for comes only if somebody resumes — which nobody has to do.
+ *
+ * A resume and a no-op advance both keep the segment, so neither releases
+ * anything. Reaching `done` releases nothing either: the plan freezes there.
  */
-const crossesBoundary = (before: TimerState, after: TimerState): boolean =>
-  after._tag === 'running' && segmentIndexOf(after) !== segmentIndexOf(before)
+const releasesHeldPlan = (before: TimerState, after: TimerState): boolean =>
+  after._tag === 'paused' ||
+  (after._tag === 'running' && segmentIndexOf(after) !== segmentIndexOf(before))
 
 /**
  * The snapshot to publish for one timer move. Usually that is the move
- * alone. When the move changes segment, it is also the boundary a waiting
- * plan change asked for, so the new plan goes into the snapshot with it.
+ * alone. When the move releases a held plan, the new plan goes into the
+ * snapshot with it, entered at the position the move itself holds.
  *
  * The caller holds the session's semaphore, so this reads and clears
  * `pending` without racing the edit that filled it.
- *
- * The move itself is the position the new plan is entered from —
- * `withPlanInForce` does the rest.
  */
 export const snapshotAfterMove = (
   handle: SessionHandle,
@@ -243,18 +250,16 @@ export const snapshotAfterMove = (
   Effect.gen(function* () {
     const { moved, now, state } = move
     const pending = yield* Ref.get(handle.pending)
-    const plain = withState(state, { serverNow: now, timer: moved })
-    if (Option.isNone(pending) || !crossesBoundary(state.timer, moved)) {
+    if (Option.isNone(pending) || !releasesHeldPlan(state.timer, moved)) {
       // A move that ends the session's timer drops the held plan. A done
       // session's plan is frozen, and the completion row must record what
       // was in force while the timer was live.
       if (moved._tag === 'done') {
         yield* Ref.set(handle.pending, Option.none())
       }
-      return plain
+      return withState(state, { serverNow: now, timer: moved })
     }
-    yield* Ref.set(handle.pending, Option.none())
-    return yield* withPlanInForce(handle, { state, plan: pending.value, from: moved, now })
+    return yield* putPlanInForce(handle, { state, plan: pending.value, from: moved, now })
   })
 
 /**
