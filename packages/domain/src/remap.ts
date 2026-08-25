@@ -2,16 +2,7 @@ import * as Either from 'effect/Either'
 import * as Schema from 'effect/Schema'
 
 import type { Segment } from './segments.js'
-
-/**
- * `Schema.TaggedError` itself, referenced through a lowercase alias.
- * `eslint-plugin-unicorn`'s `throw-new-error` rule flags any call whose
- * callee name ends in "Error" as a missing `new` — a known false positive
- * for this exact two-step factory (it already special-cases `Data.TaggedError`
- * for the same reason: sindresorhus/eslint-plugin-unicorn#2654). The alias
- * changes nothing about the factory or the classes it produces below.
- */
-const taggedError = Schema.TaggedError
+import { taggedError } from './tagged-error.js'
 
 /**
  * The new plan does not reach the work ordinal the old position held: it has

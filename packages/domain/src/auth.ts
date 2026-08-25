@@ -2,6 +2,8 @@ import { RpcMiddleware } from '@effect/rpc'
 import * as Context from 'effect/Context'
 import * as Schema from 'effect/Schema'
 
+import { taggedError } from './tagged-error.js'
+
 /**
  * Branded identifiers and inputs shared by every auth rpc/route. Kept as
  * pure `Schema` — this module adds zero dependencies beyond `effect` and
@@ -66,16 +68,6 @@ export class PasskeySummary extends Schema.Class<PasskeySummary>('PasskeySummary
 
 /** The logged-in user, provided into context by `AuthMiddleware`. */
 export class CurrentUser extends Context.Tag('CurrentUser')<CurrentUser, User>() {}
-
-/**
- * `Schema.TaggedError` itself, referenced through a lowercase alias.
- * `eslint-plugin-unicorn`'s `throw-new-error` rule flags any call whose
- * callee name ends in "Error" as a missing `new` — a known false positive
- * for this exact two-step factory (it already special-cases `Data.TaggedError`
- * for the same reason: sindresorhus/eslint-plugin-unicorn#2654). The alias
- * changes nothing about the factory or the classes it produces below.
- */
-const taggedError = Schema.TaggedError
 
 /** No/invalid/expired session cookie — `AuthMiddleware`'s failure mode. */
 export class Unauthorized extends taggedError<Unauthorized>()('Unauthorized', {}) {}
