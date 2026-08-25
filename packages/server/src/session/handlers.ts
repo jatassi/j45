@@ -43,7 +43,7 @@ const asDefect = (error: SqlError): Effect.Effect<never> => Effect.die(error)
  */
 export const SessionHandlersLive: Layer.Layer<
   | Rpc.Handler<'StartSession'>
-  | Rpc.Handler<'ListActiveSessions'>
+  | Rpc.Handler<'WatchActiveSessions'>
   | Rpc.Handler<'WatchSession'>
   | Rpc.Handler<'SendSessionCommand'>
   | Rpc.Handler<'LeaveSession'>,
@@ -95,7 +95,7 @@ export const SessionHandlersLive: Layer.Layer<
           })
         }).pipe(Effect.catchTag('SqlError', asDefect)),
 
-      ListActiveSessions: () => liveSessions.list(),
+      WatchActiveSessions: () => liveSessions.lobby(),
 
       WatchSession: ({ id }) =>
         Stream.unwrap(

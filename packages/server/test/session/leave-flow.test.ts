@@ -31,6 +31,7 @@ import { PlanChanges } from '../../src/library/plan-changes.js'
 import { CompletionsRepo } from '../../src/session/completions-repo.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
+import { lobbyNow } from './plan-flow-harness.js'
 
 /**
  * Leave-flow integration tests: drive `LiveSessions` under TestClock and assert
@@ -158,7 +159,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
 
         // Leaver removed from published participants; session still live.
         expect(participantIds(yield* svc.snapshot(id))).toEqual([alice.userId])
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
         // Bob’s stream was detached.
         expect(Exit.isFailure(yield* Effect.exit(bobW.pull))).toBe(true)
 
@@ -220,18 +221,18 @@ describe('leave flows via LiveSessions (TestClock)', () => {
 
         // Progress past ready.
         yield* TestClock.adjust('5 seconds')
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
 
         // Both explicitly leave — every roster member departs.
         yield* svc.leaveSession(id, bob.userId)
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
         // Bob’s watch stream completes rather than hanging (join returns).
         yield* Fiber.join(bobCollect)
 
         yield* svc.leaveSession(id, alice.userId)
 
         // On the last leave: session gone immediately (no GC wait).
-        expect(yield* svc.list()).toHaveLength(0)
+        expect(yield* lobbyNow(svc)).toHaveLength(0)
         expect(Exit.isFailure(yield* Effect.exit(svc.snapshot(id)))).toBe(true)
 
         // Alice’s in-flight watch completes rather than hanging (join returns).
@@ -280,17 +281,17 @@ describe('leave flows via LiveSessions (TestClock)', () => {
         // remains on the roster (not departed), so the session does not end yet.
         yield* Scope.close(aliceW.scope, Exit.void)
         yield* Scope.close(bobW.scope, Exit.void)
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
         expect(participantIds(yield* svc.snapshot(id))).toEqual([])
 
         // 59s idle: still live, still no row for the non-departed participant.
         yield* TestClock.adjust('59 seconds')
-        expect(yield* svc.list()).toHaveLength(1)
+        expect(yield* lobbyNow(svc)).toHaveLength(1)
         expect(yield* completionsRepo.listForUser(alice.userId)).toHaveLength(0)
 
         // Crossing 60s GCs; endSession writes alice’s single row at GC time.
         yield* TestClock.adjust('1 seconds')
-        expect(yield* svc.list()).toHaveLength(0)
+        expect(yield* lobbyNow(svc)).toHaveLength(0)
 
         const aliceRows = yield* completionsRepo.listForUser(alice.userId)
         expect(aliceRows).toHaveLength(1)
@@ -332,7 +333,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
           expect(yield* completionsRepo.listForUser(bob.userId)).toHaveLength(0)
           // Host leaves to clear the registry before the next scenario.
           yield* svc.leaveSession(id, alice.userId)
-          expect(yield* svc.list()).toHaveLength(0)
+          expect(yield* lobbyNow(svc)).toHaveLength(0)
           expect(yield* completionsRepo.listForUser(alice.userId)).toHaveLength(0)
         }
 
@@ -368,7 +369,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
           yield* Scope.close(rejoin.scope, Exit.void)
           yield* svc.command(id, 'pause')
           yield* TestClock.adjust('60 seconds')
-          expect(yield* svc.list()).toHaveLength(0)
+          expect(yield* lobbyNow(svc)).toHaveLength(0)
 
           const bobRows = yield* completionsRepo.listForUser(bob.userId)
           expect(bobRows).toHaveLength(2)

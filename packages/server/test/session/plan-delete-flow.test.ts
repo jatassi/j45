@@ -18,7 +18,15 @@ import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
 import { LiveSessions } from '../../src/session/live-sessions.js'
-import { asOwner, bobId, FlowLive, headersFor, latestWith, seedUser } from './plan-flow-harness.js'
+import {
+  asOwner,
+  bobId,
+  FlowLive,
+  headersFor,
+  latestWith,
+  lobbyNow,
+  seedUser,
+} from './plan-flow-harness.js'
 
 /**
  * Deleting a library workout that live sessions run, observed only where a
@@ -47,7 +55,7 @@ const stationsOf = (workout: Workout): readonly string[] =>
 
 /** Whether the lobby still lists a session. */
 const isLive = (svc: LiveSessions, id: SessionId) =>
-  Effect.map(svc.list(), (rows) => rows.some((row) => row.id === id))
+  Effect.map(lobbyNow(svc), (rows) => rows.some((row) => row.id === id))
 
 describe('deleting a workout that live sessions run', () => {
   it.scoped('ends every session that tracks the deleted workout, and no other', () =>
@@ -240,7 +248,7 @@ describe('deleting a workout that live sessions run', () => {
 
       const gone = yield* Effect.exit(library.GetWorkout({ id: created.id }, { headers }))
       expect(Exit.isFailure(gone)).toBe(true)
-      expect(yield* (yield* LiveSessions).list()).toEqual([])
+      expect(yield* lobbyNow(yield* LiveSessions)).toEqual([])
     }).pipe(Effect.provide(FlowLive)),
   )
 })

@@ -40,6 +40,7 @@ import { SessionHandlersLive } from '../../src/session/handlers.js'
 import { HistoryHandlersLive } from '../../src/session/history-handlers.js'
 import { LiveSessions } from '../../src/session/live-sessions.js'
 import { MigratorLive } from '../../src/sql.js'
+import { lobbyNow } from './plan-flow-harness.js'
 
 /**
  * End-to-end history flows: drive real sessions through LiveSessions /
@@ -215,12 +216,12 @@ describe('history flows via ListHistory (TestClock)', () => {
 
           // 59s of abandonment: still live, nothing on the read path yet.
           yield* TestClock.adjust('59 seconds')
-          expect(yield* svc.list()).toHaveLength(1)
+          expect(yield* lobbyNow(svc)).toHaveLength(1)
           expect(yield* listHistoryFor(alice.userId)).toHaveLength(0)
 
           // Crossing 60s GCs the session; ListHistory then holds the records.
           yield* TestClock.adjust('1 seconds')
-          expect(yield* svc.list()).toHaveLength(0)
+          expect(yield* lobbyNow(svc)).toHaveLength(0)
 
           const aliceHistory = yield* listHistoryFor(alice.userId)
           const bobHistory = yield* listHistoryFor(bob.userId)

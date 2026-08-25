@@ -17,7 +17,7 @@ import * as Stream from 'effect/Stream'
 import * as TestClock from 'effect/TestClock'
 
 import { LiveSessions } from '../../src/session/live-sessions.js'
-import { asOwner, bobId, FlowLive, seedUser } from './plan-flow-harness.js'
+import { asOwner, bobId, FlowLive, lobbyNow, seedUser } from './plan-flow-harness.js'
 
 /**
  * Renaming a library workout, observed only where a user can see it: the
@@ -41,7 +41,7 @@ const bob = new Participant({ userId: bobId, displayName: 'Bob' })
 
 /** The lobby row for one session, by id. */
 const lobbyRow = (svc: LiveSessions, id: SessionId) =>
-  Effect.map(svc.list(), (rows) => rows.find((row) => row.id === id))
+  Effect.map(lobbyNow(svc), (rows) => rows.find((row) => row.id === id))
 
 describe('renaming a workout and its live sessions', () => {
   it.scoped('every session on the renamed workout shows the new name, in snapshot and lobby', () =>
@@ -150,7 +150,7 @@ describe('renaming a workout and its live sessions', () => {
 
       expect(result.workout.name).toBe('New')
       expect((yield* library.GetWorkout({ id: created.id }, { headers })).workout.name).toBe('New')
-      expect(yield* (yield* LiveSessions).list()).toEqual([])
+      expect(yield* lobbyNow(yield* LiveSessions)).toEqual([])
     }).pipe(Effect.provide(FlowLive)),
   )
 })

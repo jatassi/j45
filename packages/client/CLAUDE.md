@@ -76,12 +76,12 @@ content changes what other people see right now: today only a save into, or
 a delete of, a workout that live sessions run. The confirm must state how
 many sessions it reaches, and a delete must say that those sessions stop and
 that there is no undo. Take the count from data the client already holds —
-the lobby rows of `ListActiveSessions` carry their `WorkoutId`. A write that
+the lobby rows of `WatchActiveSessions` carry their `WorkoutId`. A write that
 reaches nobody must not prompt, and a cosmetic write (a rename) must not
 prompt at all.
 
 This count is the one query failure the table above does not apply to. A
-read that has not answered, or one that failed, counts as nobody: the prompt
+feed that has not answered, or one that failed, counts as nobody: the prompt
 exists to stop a surprise, and it must never become the reason the owner
 cannot write to their own content. Read the count live while the prompt is
 open, so a late answer strengthens the wording rather than leaving a stale

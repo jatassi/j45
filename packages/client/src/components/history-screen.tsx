@@ -19,7 +19,7 @@ import { ServerRpcClient } from '@/lib/rpc-client'
 /**
  * The caller's session completion history (`ListHistory`), hoisted to module
  * scope for a stable atom identity — same pattern as `listWorkoutsAtom` and
- * `listActiveSessionsAtom`. Not exported: this file only exports components
+ * `activeSessionsAtom`. Not exported: this file only exports components
  * (`react/only-export-components`).
  */
 const listHistoryAtom = ServerRpcClient.query('ListHistory', undefined)

@@ -29,20 +29,27 @@ import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
+import type * as Stream from 'effect/Stream'
 
 import { HomeScreen } from '@/components/home-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
+
+import { emptyLobby } from './lobby-feed'
 
 /**
  * The shared mount and fixtures for the `HomeScreen` suites — the same
  * harness-module idiom as `session-harness.tsx`. `home-screen.test.tsx` covers
  * the screen's composition; `home-identity.test.tsx` covers how it resolves
- * completion records to library workouts.
+ * completion records to library workouts. Lobby feeds come from
+ * `lobby-feed.ts`, so every suite drives the subscription the same way.
  */
 
 /** The rpc handler map a `HomeScreen` mount runs against. */
 export type Handlers = Partial<
-  Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>
+  Record<
+    string,
+    (payload: unknown) => Effect.Effect<unknown, unknown> | Stream.Stream<unknown, unknown>
+  >
 >
 
 /**
@@ -212,7 +219,7 @@ export const startedSummary = new SessionSummary({
 /** Default successful handlers for the three home queries. */
 export function defaultHandlers(overrides: Handlers = {}): Handlers {
   return {
-    ListActiveSessions: () => Effect.succeed([]),
+    WatchActiveSessions: emptyLobby,
     ListHistory: () => Effect.succeed([makeCompletion('c-1', 'Iron Circuit', ironCircuit.id)]),
     ListWorkouts: () => Effect.succeed([ironCircuit, athletica]),
     ...overrides,

@@ -154,7 +154,21 @@ export class SessionRpcs extends RpcGroup.make(
     success: SessionSummary,
     error: Schema.Union(WorkoutNotFound, ReflowInvalid),
   }),
-  Rpc.make('ListActiveSessions', { success: Schema.Array(SessionSummary) }),
+  /**
+   * The lobby feed: the whole set of live sessions as it stands, then the
+   * whole set again on every change to it — a session starting or ending, a
+   * participant joining or leaving, and a new workout name.
+   *
+   * A snapshot rather than a diff, because it is the shape a subscriber needs
+   * on its first element anyway. One shape therefore serves both the opening
+   * and every change, and a subscriber that reconnects heals from its next
+   * element with nothing to replay. There is deliberately no unary listing
+   * beside it: two paths to the same data can disagree.
+   */
+  Rpc.make('WatchActiveSessions', {
+    success: Schema.Array(SessionSummary),
+    stream: true,
+  }),
   Rpc.make('WatchSession', {
     payload: { id: SessionId },
     success: SessionState,

@@ -290,12 +290,14 @@ test.describe('nav-shell (chromium + webkit)', () => {
 
     await page.goto(env.baseUrl)
     await expect(page.getByTestId('home-screen')).toBeVisible()
-    // ListActiveSessions poll is 5s — allow a couple of ticks.
+    // The lobby feed pushes, so the hero needs no poll interval to wait
+    // out. The timeout is slack for a loaded parallel run, not a tick
+    // count — it ends in milliseconds on a quiet server.
     await expect(page.getByTestId('home-hero')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByTestId(`session-card-${sessionId}`)).toBeVisible({ timeout: 15_000 })
 
     // Re-enter and leave so we do not leave a server-wide live session for
-    // sibling specs (ListActiveSessions is not scoped; idle GC is 60s).
+    // sibling specs (the lobby feed is not scoped; idle GC is 60s).
     await page.getByTestId(`session-card-${sessionId}`).click()
     await expect(page.getByTestId('session-screen')).toBeVisible()
     await page.getByTestId('session-leave').evaluate((node: HTMLElement) => {

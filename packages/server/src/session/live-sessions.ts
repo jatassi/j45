@@ -49,7 +49,6 @@ import {
   completionInputs,
   getHandle,
   initialState,
-  listSessions,
   publishSnapshot,
   rememberEnded,
   sessionsOfWorkout,
@@ -399,7 +398,6 @@ export class LiveSessions extends Effect.Service<LiveSessions>()('LiveSessions',
 
     return {
       start: (params: StartParams) => start(registry, params),
-      list: () => listSessions(registry),
       lobby: () => lobbyFeed(registry),
       sessionsOfWorkout: (workoutId: WorkoutId) => sessionsOfWorkout(registry, workoutId),
       snapshot: (id: SessionId) => snapshot(registry, id),

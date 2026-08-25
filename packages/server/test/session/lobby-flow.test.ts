@@ -16,6 +16,7 @@ import {
   bobId,
   caraId,
   FlowLive,
+  lobbyNow,
   makeWorkout,
   owner,
   seedUser,
@@ -52,7 +53,7 @@ const startFixture = (svc: LiveSessions, name = 'Fixture', workoutId = fixtureWo
 }
 
 /** What one lobby subscription hands back, element by element. */
-type Frames = Queue.Dequeue<Exit.Exit<readonly SessionSummary[], Option.Option<never>>>
+type Frames = Queue.Dequeue<Exit.Exit<readonly SessionSummary[], Option.Option<unknown>>>
 
 /** A lobby subscription, held for the scope of the test. */
 const openLobby = (svc: LiveSessions): Effect.Effect<Frames, never, Scope.Scope> =>
@@ -189,7 +190,7 @@ describe('the lobby feed of LiveSessions', () => {
       yield* svc.leaveSession(started.id, host.userId)
 
       expect(yield* frameWhere(frames, (rows) => rows.length === 0)).toEqual([])
-      expect(yield* svc.list()).toHaveLength(0)
+      expect(yield* lobbyNow(svc)).toHaveLength(0)
     }).pipe(Effect.provide(FlowLive)),
   )
 
@@ -334,7 +335,7 @@ describe('the lobby feed of LiveSessions', () => {
         staying,
         (rows) => rowFor(rows, started.id)?.participantCount === 1,
       )
-      expect(idsOf(joined)).toEqual(idsOf(yield* svc.list()))
+      expect(idsOf(joined)).toEqual(idsOf(yield* lobbyNow(svc)))
     }).pipe(Effect.provide(FlowLive)),
   )
 
@@ -353,6 +354,94 @@ describe('the lobby feed of LiveSessions', () => {
       // Closing the scope ends the draining fiber rather than leaking it.
       // A leaked fiber would never be awaited to completion here.
       expect(Exit.isInterrupted(yield* Fiber.await(running))).toBe(true)
+    }).pipe(Effect.provide(FlowLive)),
+  )
+})
+
+/**
+ * The same feed, read through the rpc contract — the shape a client sees.
+ *
+ * Every test here starts and ends sessions on the service, never through the
+ * client it streams on. A stream consumed through the rpc test client while
+ * that same client makes unary calls deadlocks.
+ */
+describe('the WatchActiveSessions rpc', () => {
+  it.scoped('opens on the set of live sessions as it stands', () =>
+    Effect.gen(function* () {
+      const { headers, sessions } = yield* asOwner
+      const svc = yield* LiveSessions
+      const started = yield* startFixture(svc, 'Opening')
+
+      const frames = yield* Stream.toQueueOfElements(
+        sessions.WatchActiveSessions(undefined, { headers }),
+      )
+      const opening = yield* nextFrame(frames)
+
+      expect(idsOf(opening)).toEqual([started.id])
+      expect(rowFor(opening, started.id)?.workoutName).toBe('Opening')
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
+  it.scoped('publishes a session that starts, and drops it when it ends', () =>
+    Effect.gen(function* () {
+      const { headers, sessions } = yield* asOwner
+      const svc = yield* LiveSessions
+
+      const frames = yield* Stream.toQueueOfElements(
+        sessions.WatchActiveSessions(undefined, { headers }),
+      )
+      expect(yield* nextFrame(frames)).toEqual([])
+
+      const started = yield* startFixture(svc, 'Later')
+      expect(idsOf(yield* frameWhere(frames, (rows) => rows.length === 1))).toEqual([started.id])
+
+      // The host is the whole roster, so their leave ends the session at once.
+      yield* svc.leaveSession(started.id, host.userId)
+      expect(yield* frameWhere(frames, (rows) => rows.length === 0)).toEqual([])
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
+  it.scoped('moves the count on an existing row as a participant joins', () =>
+    Effect.gen(function* () {
+      const { headers, sessions } = yield* asOwner
+      yield* seedUser(bob.userId, 'Bob')
+      const svc = yield* LiveSessions
+      const started = yield* startFixture(svc, 'Filling')
+
+      const frames = yield* Stream.toQueueOfElements(
+        sessions.WatchActiveSessions(undefined, { headers }),
+      )
+      expect(rowFor(yield* nextFrame(frames), started.id)?.participantCount).toBe(0)
+
+      // A watch is a join: acquiring it puts the watcher in the room.
+      yield* Effect.fork(Stream.runDrain(svc.watch(started.id, bob)))
+
+      const joined = yield* frameWhere(
+        frames,
+        (rows) => rowFor(rows, started.id)?.participantCount === 1,
+      )
+      // The same session, so the row moved rather than being replaced.
+      expect(idsOf(joined)).toEqual([started.id])
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
+  it.scoped('gives a subscriber that attaches mid-flight the current set, not the history', () =>
+    Effect.gen(function* () {
+      const { headers, sessions } = yield* asOwner
+      yield* seedUser(bob.userId, 'Bob')
+      const svc = yield* LiveSessions
+
+      // Two sessions come and one goes before anybody subscribes.
+      const gone = yield* startFixture(svc, 'Gone')
+      const staying = yield* startFixture(svc, 'Staying')
+      yield* svc.leaveSession(gone.id, host.userId)
+
+      const frames = yield* Stream.toQueueOfElements(
+        sessions.WatchActiveSessions(undefined, { headers }),
+      )
+      const opening = yield* nextFrame(frames)
+
+      expect(idsOf(opening)).toEqual([staying.id])
     }).pipe(Effect.provide(FlowLive)),
   )
 })

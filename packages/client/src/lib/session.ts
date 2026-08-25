@@ -1,12 +1,12 @@
 import { Atom } from '@effect-atom/atom-react'
 import { SessionNotFound } from '@j45/domain'
 import type { Segment, SessionEnd, SessionId, SessionState, WorkContext } from '@j45/domain'
-import * as Duration from 'effect/Duration'
 import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
 
 import type { PlayerPhase } from '@/components/player/phase'
 import type { HomeNotice } from '@/lib/home-notice'
+import { reconnectDelay, type FeedClient } from '@/lib/reconnect'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 /**
@@ -48,13 +48,6 @@ const endedBy = (end: SessionEnd | null): SessionFeed => ({
 const toFeed = (state: SessionState): SessionFeed =>
   state.ended === null ? { _tag: 'live', state } : endedBy(state.ended)
 
-/** The flat rpc client `ServerRpcClient` resolves to. */
-type WatchClient = Effect.Effect.Success<typeof ServerRpcClient>
-
-/** Exponential reconnect backoff, capped at 8s so a long outage keeps retrying. */
-const reconnectDelay = (attempt: number): Duration.Duration =>
-  Duration.millis(Math.min(500 * 2 ** attempt, 8000))
-
 /**
  * The retrying watch stream. Each server snapshot becomes a `live` feed,
  * except the last one a session publishes, which becomes `ended` and carries
@@ -74,7 +67,7 @@ const reconnectDelay = (attempt: number): Duration.Duration =>
  * disconnect caused.
  */
 const watchFeed = (
-  client: WatchClient,
+  client: FeedClient,
   id: SessionId,
   attempt: number,
 ): Stream.Stream<SessionFeed> =>

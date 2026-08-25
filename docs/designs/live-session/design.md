@@ -144,7 +144,8 @@ export class SessionNotFound extends taggedError<SessionNotFound>()('SessionNotF
 export class SessionRpcs extends RpcGroup.make(
   Rpc.make('StartSession', { payload: { workoutId: WorkoutId },
     success: SessionSummary, error: WorkoutNotFound }),
-  Rpc.make('ListActiveSessions', { success: Schema.Array(SessionSummary) }),
+  Rpc.make('WatchActiveSessions', { success: Schema.Array(SessionSummary),
+    stream: true }),
   Rpc.make('WatchSession', { payload: { id: SessionId },
     success: SessionState, error: SessionNotFound, stream: true }),
   Rpc.make('SendSessionCommand', { payload: { id: SessionId, command: SessionCommand },
@@ -172,7 +173,7 @@ Semantics:
   brief's "pause/skip/prev from either phone affects both". Commands apply
   the domain `timer.ts` transitions (`pause`/`resume`/`skip`/`prev`) at
   server `Clock` time. `quit` ends the session for everyone.
-- **ListActiveSessions** returns every live session on the server — at
+- **WatchActiveSessions** streams every live session on the server — at
   friends/family scale, seeing each other's sessions is the point (it is
   session *content* that stays private until you join; the summary leaks
   only host display name, workout name, and the source `WorkoutId` — which
@@ -205,10 +206,10 @@ Semantics:
 ## Client
 
 - **Home (LibraryScreen):** an "Active sessions" strip above the library
-  when `ListActiveSessions` is non-empty — one card per session ("Jackson ·
+  when the lobby feed is non-empty — one card per session ("Jackson ·
   Docklands · 2 joined", from `participantCount`), one tap navigates to the
-  player. The atom refetches
-  every 5 seconds while the screen is mounted; the join itself is the tap.
+  player. The feed pushes every change while the screen is mounted; the join
+  itself is the tap.
   That is the brief's one-tap join. A session's URL
   (`/session/<id>`) is shareable out-of-band (nothing extra to build —
   deep-linking through the login gate already works, per plan-library).
@@ -251,7 +252,7 @@ Semantics:
   delivers snapshot-then-changes; a late subscriber gets the current state
   first; quit completes every subscriber stream and removes the session;
   zero-subscriber sessions end after 60s and vanish from
-  `ListActiveSessions`; presence adds on subscribe / removes on unsubscribe;
+  the lobby feed; presence adds on subscribe / removes on unsubscribe;
   `StartSession` on a foreign workout id fails `WorkoutNotFound`; session
   rpcs without a session cookie fail `Unauthorized`.
 - **e2e (chromium, two logged-in contexts; suite also runs webkit
