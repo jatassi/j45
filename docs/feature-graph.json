@@ -416,17 +416,17 @@
     {
       "id": "live-plan-sync",
       "title": "Live plan sync — a running session tracks its plan: edits apply at the next segment boundary, renames immediately, deletes end the session",
-      "status": "proposed"
+      "status": "shipped"
     },
     {
       "id": "history-identity",
       "title": "History resolves to the library by workout identity, not by name — completions carry a WorkoutId and Home stops name-matching",
-      "status": "proposed"
+      "status": "shipped"
     },
     {
       "id": "lobby-liveness",
       "title": "Live-session lobby streams — WatchActiveSessions replaces the unary poll, with a live session count on the tab bar",
-      "status": "proposed"
+      "status": "shipped"
     }
   ]
 }
