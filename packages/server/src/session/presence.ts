@@ -29,23 +29,25 @@ import {
  * snapshot its watchers hold, and the lobby row that carries the count.
  */
 
-// Recompute the participant list from presence and publish it (with a fresh
-// `serverNow`), serialized against timer writes so a command and a join never
-// clobber each other. The lobby row of this session carries the same count,
-// so it is republished under the very same permit.
+// Rebuild the participant list from presence and publish it, with a fresh
+// `serverNow`. The lobby row of this session carries the size of that same
+// list, so it goes out here too. The caller holds the session's semaphore.
+const publishParticipants = (registry: Registry, handle: SessionHandle): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis
+    const presence = yield* Ref.get(handle.presence)
+    const state = yield* SubscriptionRef.get(handle.stateRef)
+    yield* SubscriptionRef.set(
+      handle.stateRef,
+      withState(state, { serverNow: now, participants: participantsOf(presence) }),
+    )
+    yield* publishLobby(registry)
+  })
+
+// The same publication, for a caller that does not hold the semaphore yet.
+// It takes the permit, so a command and a join never clobber each other.
 const republishParticipants = (registry: Registry, handle: SessionHandle): Effect.Effect<void> =>
-  handle.sem.withPermits(1)(
-    Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis
-      const presence = yield* Ref.get(handle.presence)
-      const state = yield* SubscriptionRef.get(handle.stateRef)
-      yield* SubscriptionRef.set(
-        handle.stateRef,
-        withState(state, { serverNow: now, participants: participantsOf(presence) }),
-      )
-      yield* publishLobby(registry)
-    }),
-  )
+  handle.sem.withPermits(1)(publishParticipants(registry, handle))
 
 // Acquiring a `watch`: register a fresh `Sub`, count its subscription, add the
 // user to presence, (re-)add them to the roster, and clear any departed flag —
@@ -107,13 +109,7 @@ export const detachUser = (
         yield* Ref.update(handle.presence, removePresence(userId))
       }
     }
-    // Republish the shrunken participant list (inline: the sem is held).
-    const now = yield* Clock.currentTimeMillis
-    const state = yield* SubscriptionRef.get(handle.stateRef)
-    const presence = yield* Ref.get(handle.presence)
-    yield* SubscriptionRef.set(
-      handle.stateRef,
-      withState(state, { serverNow: now, participants: participantsOf(presence) }),
-    )
-    yield* publishLobby(registry)
+    // Publish the shrunken list. `leaveSession` already holds the permit, so
+    // this is the semaphore-free half.
+    yield* publishParticipants(registry, handle)
   })

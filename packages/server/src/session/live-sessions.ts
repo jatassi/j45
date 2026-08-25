@@ -149,6 +149,11 @@ const endSession = (
     // finds nothing to watch, and reads the reason from there.
     yield* Ref.update(registry.sessions, HashMap.remove(handle.id))
     yield* rememberEnded(registry, handle.id, reason)
+    // The session has left the registry, so the rebuilt lobby snapshot no
+    // longer holds it. Two of the three paths here already hold the session's
+    // semaphore; the garbage collector does not, exactly as the last snapshot
+    // write below does not. That is safe because the publish rebuilds the
+    // whole set from the registry and sends nothing when it did not move.
     yield* publishLobby(registry)
     const now = yield* Clock.currentTimeMillis
     // Built on whatever the snapshot holds now, not on `state` above: a

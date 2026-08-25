@@ -13,14 +13,15 @@ import { listSessions, type Registry } from './session-state.js'
  * The lobby feed: what the whole set of live sessions looks like, and every
  * change to it.
  *
- * The registry itself cannot answer this. It is a map of handles, so wrapping
- * it in a subscription reference would announce a session appearing and a
- * session disappearing and nothing else — a lobby row would freeze at the
- * participant count and the workout name it opened with. The feed therefore
- * carries the whole snapshot, and every mutation that a summary can see
- * republishes it: a start, an end, a join, a leave, and a new workout name —
- * whether the name arrives with a rename or with a held edit that comes into
- * force at a segment boundary.
+ * The registry itself cannot answer this. It is a map of handles. A
+ * subscription reference around that map would announce a session appearing
+ * and a session disappearing, and nothing else. A lobby row would then freeze
+ * at the participant count and the workout name that it opened with.
+ *
+ * The feed therefore carries the whole snapshot. Every mutation that a
+ * summary can see republishes it: a start, an end, a join, a leave, and a new
+ * workout name. A name arrives with a rename, or with a held edit that comes
+ * into force at a segment boundary.
  *
  * A whole snapshot rather than a diff is deliberate. It is the shape a
  * subscriber needs on its first value anyway, so one shape serves both the

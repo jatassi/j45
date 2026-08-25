@@ -59,6 +59,11 @@ import {
  * move it. The row is therefore republished here, under the same permit, so
  * it can never interleave with a ticker advance. A change that moved no name
  * publishes nothing: `publishLobby` compares before it sends.
+ *
+ * The done gate holds for the lobby row too, and that is deliberate. A done
+ * session keeps the name it finished under, so a rename that the session
+ * refuses must not reach the lobby either. One name is on the player, in the
+ * lobby row, and in the completion row, or the three disagree.
  */
 const whileLive = (
   registry: Registry,

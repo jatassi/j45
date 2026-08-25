@@ -112,8 +112,8 @@ unrecorded wherever they fit.
 - **Lobby feed** — the live view of which Sessions are running, and of what
   each one looks like from outside: the host, the Workout name, and how many
   Participants are in it. A subscriber receives the whole set as its first
-  value, and the whole set again on every change, so a subscriber that
-  reconnects needs no history to heal. The feed carries a change inside a
+  value, and the whole set again on every change. A subscriber that
+  reconnects thus needs no history. The feed carries a change inside a
   Session as well as a Session starting or ending: a Participant who joins or
   leaves, and a new Workout name. It does not carry the timer. Nothing the
   timer does changes a lobby row, so the feed stays quiet while a Session

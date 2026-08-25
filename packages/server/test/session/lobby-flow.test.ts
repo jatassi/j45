@@ -154,6 +154,29 @@ describe('the lobby feed of LiveSessions', () => {
     }).pipe(Effect.provide(FlowLive)),
   )
 
+  it.scoped('publishes the smaller count when one of two participants leaves', () =>
+    Effect.gen(function* () {
+      yield* seedUser(owner, 'Owner')
+      yield* seedUser(bob.userId, 'Bob')
+      yield* seedUser(cara.userId, 'Cara')
+      const svc = yield* LiveSessions
+      const started = yield* startFixture(svc)
+      yield* Effect.fork(Stream.runDrain(svc.watch(started.id, bob)))
+      yield* Effect.fork(Stream.runDrain(svc.watch(started.id, cara)))
+      const frames = yield* openLobby(svc)
+      yield* frameWhere(frames, (rows) => rowFor(rows, started.id)?.participantCount === 2)
+
+      // Bob departs and Cara stays, so the session lives on with one fewer.
+      yield* svc.leaveSession(started.id, bob.userId)
+
+      const afterLeave = yield* frameWhere(
+        frames,
+        (rows) => rowFor(rows, started.id)?.participantCount === 1,
+      )
+      expect(idsOf(afterLeave)).toEqual([started.id])
+    }).pipe(Effect.provide(FlowLive)),
+  )
+
   it.scoped('drops a session that the last participant left', () =>
     Effect.gen(function* () {
       yield* seedUser(owner, 'Owner')
