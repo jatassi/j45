@@ -65,12 +65,17 @@ unrecorded wherever they fit.
   already reached, because it holds fewer works than the Session ran. The
   Session finishes: it goes to done on the plan it was running, because a
   clamp backwards would replay a Station the Participant completed. Nothing
-  else moves — the plan, the name and the Plan revision all stand — so the
-  finish is the same one the last Segment of that plan would have produced,
-  on screen and in the completion record. The record is the accepted cost: it
-  counts the whole plan as run, even though the trimmed Stations at the end
-  never ran. An exact count would say the Participant stopped early, which is
-  not what happened — they ran every interval the plan gave them.
+  else moves — the plan, the name and the Plan revision all stand — so on
+  screen the finish is the same one the last Segment of that plan would have
+  produced. The completion record is the one place that shows what happened.
+  It counts the Session to the furthest Segment that the Session published,
+  not to the end of the plan, because the trimmed Stations never ran.
+- **Completion progress** — how far a Session got, carried on every
+  completion record that it writes. Both numbers are counted in the one plan
+  that the record holds, which is the last plan applied while the timer was
+  live. The total is the Segment count of that plan. The count reached is the
+  furthest Segment that the Session published while it ran that plan. A record
+  can never name a Segment that its own plan does not hold.
 - **Session end** — why a live Session stopped, carried on the one last
   snapshot it publishes: `closed` for the ordinary end (everybody left, or
   nobody was left watching), or `plan-deleted` when the host removed the

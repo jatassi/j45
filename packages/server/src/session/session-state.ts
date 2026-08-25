@@ -80,9 +80,10 @@ export type SessionHandle = {
   // A `Ref`, not a value, because a session is a live view of its workout —
   // an applied edit replaces it. The compiled form of the same plan lives on
   // `stateRef` alone, so the snapshot participants hold and the plan the
-  // ticker runs are one value and can never disagree. The workout *name* is
-  // likewise absent here: `stateRef` holds the one current name that the
-  // snapshot, the lobby summary, and any completion row all read.
+  // ticker runs are one value and can never disagree. `stateRef` holds the
+  // one current name that the snapshot, the lobby summary, and a completion
+  // row all read; a rename writes it through to the name on this plan too,
+  // because a completion row carries both and must not hold two names.
   readonly workout: Ref.Ref<Workout>
   // A content edit that waits for the next segment boundary. No interval is
   // cut short: an edit stays here until the next timer move that changes
@@ -108,6 +109,18 @@ export type SessionHandle = {
   // Flips true the first time a published timer crosses into segment 1 (past
   // the ready segment) or reaches done; gates whether ending writes any rows.
   readonly progressed: Ref.Ref<boolean>
+  // The furthest segment that a published snapshot entered, counted in the
+  // plan now in force. A completion row records it as progress.
+  //
+  // The final timer does not give this number. A `done` timer holds no
+  // segment index. A plan that exhausts the session sets `done` before the
+  // participant reached the end of the plan that the row records. Only a
+  // published position counts here. An intermediate move that a plan change
+  // replaced was never on a screen.
+  //
+  // An applied plan change sets this to the segment that the remap gives, so
+  // the number always names a segment of the plan that it is counted in.
+  readonly reachedSegment: Ref.Ref<number>
   // The single claim token for ending: whoever flips it from `false` to
   // `true` first owns the end, and every later caller returns at once. The
   // garbage collector, the last leaver, and a deleted workout can all reach
@@ -258,6 +271,11 @@ export const sessionsOfWorkout = (
  * The plan comes off the handle and the snapshot, never off the library. A
  * workout that was deleted while the session ran therefore takes nothing away
  * from the rows the session leaves behind.
+ *
+ * Progress is counted in that same plan. The total is the segment count of
+ * the plan, and the position is the furthest segment that the session
+ * published while it ran that plan. Both numbers come from one plan, so
+ * "segment N of M" has one meaning.
  */
 export const completionInputs = (handle: SessionHandle, state: SessionState) =>
   Effect.gen(function* () {
@@ -269,7 +287,11 @@ export const completionInputs = (handle: SessionHandle, state: SessionState) =>
       participants: [...HashMap.values(yield* Ref.get(handle.roster))],
       startedAt: handle.startedAt,
       endedAt: yield* DateTime.now,
-      progress: progressOf(state.timer, state.compiled.segments.length),
+      progress: yield* progressOf(
+        handle.id,
+        yield* Ref.get(handle.reachedSegment),
+        state.compiled.segments.length,
+      ),
     } as const
   })
 
@@ -373,9 +395,10 @@ export const isProgressed = (timer: TimerState): boolean =>
 
 /**
  * Publishes one snapshot to the watchers, with the bookkeeping that every
- * published timer move needs: a timer that has left the ready segment, or
+ * published timer move needs. A timer that left the ready segment, or that
  * finished, sets `progressed`, and that flag alone decides whether the
- * session leaves any history behind.
+ * session leaves any history behind. A timer that holds a segment index
+ * raises `reachedSegment`, which is the progress that history records.
  *
  * The caller holds the session's semaphore. It also owns the ticker wakeup:
  * only a move that changes the deadline needs one.
@@ -386,29 +409,36 @@ export const publishSnapshot = (handle: SessionHandle, state: SessionState): Eff
     if (isProgressed(state.timer)) {
       yield* Ref.set(handle.progressed, true)
     }
+    const segmentIndex = segmentIndexOf(state.timer)
+    if (segmentIndex !== undefined) {
+      yield* Ref.update(handle.reachedSegment, (furthest) => Math.max(furthest, segmentIndex))
+    }
   })
 
 /**
- * The index of the furthest segment entered for a timer position (the ready
- * segment is `0`). A done workout entered its last segment, so it reports
- * `totalSegments - 1`; `idle` never occurs for a live session but maps to the
- * ready segment for totality.
+ * The progress that a completion row records: how far the session got,
+ * counted in the plan that the row carries. `reachedSegment` is the furthest
+ * segment that the session published (the ready segment is `0`).
+ * `totalSegments` is the segment count of that same plan.
+ *
+ * The clamp guards an invariant, and it must never do work. Every plan that
+ * comes into force sets `reachedSegment` to a segment of itself, so the two
+ * numbers always agree. If they do not, the state is a defect: the row would
+ * name a segment that its own plan does not hold. The defect is logged as an
+ * error, and the row is still written with a clamped count — a participant
+ * must not lose the record of a session because a count was wrong.
  */
-const furthestSegment = (timer: TimerState, totalSegments: number): number => {
-  const segmentIndex = segmentIndexOf(timer)
-  if (segmentIndex !== undefined) {
-    return segmentIndex
-  }
-  return timer._tag === 'done' ? Math.max(0, totalSegments - 1) : 0
-}
-
-/**
- * The furthest-segment progress a completion row records for a given timer
- * position — `segmentsCompleted` as the furthest segment entered against the
- * as-run workout's `totalSegments` segment count.
- */
-export const progressOf = (timer: TimerState, totalSegments: number): CompletionProgress =>
-  new CompletionProgress({
-    segmentsCompleted: furthestSegment(timer, totalSegments),
-    totalSegments,
+const progressOf = (
+  sessionId: SessionId,
+  reachedSegment: number,
+  totalSegments: number,
+): Effect.Effect<CompletionProgress> =>
+  Effect.gen(function* () {
+    const segmentsCompleted = Math.max(0, Math.min(reachedSegment, totalSegments - 1))
+    if (segmentsCompleted !== reachedSegment) {
+      yield* Effect.logError('completion progress fell outside the plan it is counted in').pipe(
+        Effect.annotateLogs({ sessionId, reachedSegment, totalSegments }),
+      )
+    }
+    return new CompletionProgress({ segmentsCompleted, totalSegments })
   })
