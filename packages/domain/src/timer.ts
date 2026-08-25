@@ -34,6 +34,21 @@ export const enterSegment = (
 ): TimerState =>
   new TimerRunning({ segmentIndex, endsAtMillis: nowMillis + durationAt(segments, segmentIndex) })
 
+/**
+ * Enter `segmentIndex` paused, with the whole of that segment still to run.
+ *
+ * The paused twin of `enterSegment`, and it exists for the same reason. A
+ * paused session that takes a plan change enters the mapped segment of the
+ * new plan, and the time it has left must come from that segment. Frozen
+ * milliseconds carried across from the old plan would count down a duration
+ * that the segment now in force never had.
+ */
+export const enterSegmentPaused = (
+  segmentIndex: number,
+  segments: readonly Segment[],
+): TimerState =>
+  new TimerPaused({ segmentIndex, remainingMillis: durationAt(segments, segmentIndex) })
+
 /** Begin a compiled workout at its first (`ready`) segment. */
 export const start = (segments: readonly Segment[], nowMillis: number): TimerState =>
   enterSegment(0, segments, nowMillis)

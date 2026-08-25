@@ -54,8 +54,17 @@ unrecorded wherever they fit.
   live Sessions exist. A rename is applied at once and raises no notice to
   Participants, because the new name is already on screen. A content edit
   waits for the next Segment boundary, so no interval is cut short, and then
-  re-enters the plan at the same work ordinal. A delete ends every Session
-  that tracks the Workout.
+  re-enters the plan at the same work ordinal. A paused Session has no next
+  boundary until somebody resumes, so a content edit applies to it at once,
+  with the time left re-derived from the Segment now in force. Once the timer
+  is done the plan is frozen, and a later change never reaches the Session. A
+  delete ends every Session that tracks the Workout.
+- **Plan exhaustion** — a new plan has fewer works than the work ordinal the
+  Session already reached. The Session finishes: it goes to done on the plan
+  it was running, because a clamp backwards would replay a Station the
+  Participant completed. Nothing else moves — the plan, the name and the Plan
+  revision all stand — so the finish is the same one the last rep of that plan
+  would have produced, on screen and in the completion record.
 - **Session end** — why a live Session stopped, carried on the one last
   snapshot it publishes: `closed` for the ordinary end (everybody left, or
   nobody was left watching), or `plan-deleted` when the host removed the

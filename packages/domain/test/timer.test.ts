@@ -9,6 +9,7 @@ import type { Segment } from '../src/segments.js'
 import { ReadySegment, RestSegment, WorkContext, WorkSegment } from '../src/segments.js'
 import {
   advanceIfDue,
+  enterSegmentPaused,
   pause,
   prev,
   resume,
@@ -172,4 +173,21 @@ describe('skip and prev', () => {
       )
     }),
   )
+})
+
+describe('enterSegmentPaused', () => {
+  it('takes the full duration of the segment it enters', () => {
+    expect(enterSegmentPaused(2, segments)).toStrictEqual(
+      new TimerPaused({ segmentIndex: 2, remainingMillis: 5000 }),
+    )
+    expect(enterSegmentPaused(3, segments)).toStrictEqual(
+      new TimerPaused({ segmentIndex: 3, remainingMillis: 10_000 }),
+    )
+  })
+
+  it('reads no duration off the end of the plan', () => {
+    expect(enterSegmentPaused(99, segments)).toStrictEqual(
+      new TimerPaused({ segmentIndex: 99, remainingMillis: 0 }),
+    )
+  })
 })
