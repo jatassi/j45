@@ -241,8 +241,8 @@ function stubLayout(): { center: readonly [number, number] } {
   return { center: [140 - 40 + 100, 260 - 100 + 45] }
 }
 
-describe('ProgressArc — centered children + dirty-region proxy', () => {
-  it('centers arbitrary children and registers a dirty-region proxy for the digits', () => {
+describe('ProgressArc — children on the chord + dirty-region proxy', () => {
+  it('renders arbitrary children and registers a dirty-region proxy for the digits', () => {
     const register = vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     render(

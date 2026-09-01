@@ -46,22 +46,26 @@ const URGENCY_DIGIT_COLOR: Record<TimerUrgency | 'none', string> = {
   critical: '[--digit-color:var(--timer-critical)]',
 }
 
+/** What the live session's arc takes when the centre column has the height for it. */
+const ARC_WIDTH = 'min(92vw, 420px)'
+
 /**
- * The live session's arc width — see {@link ArcBox}. The ceiling is higher
- * than the manual timer's, which keeps the live session the more prominent of
- * the two.
+ * The countdown's type scale. It is unchanged, and it is the one term left in
+ * the player that still reads the viewport height: the arc no longer does.
+ * Both are replaced together when the countdown is sized from the character
+ * count as a share of the arc, which is separate work.
+ *
+ * {@link ArcBox} reserves half of this below the arc, because the countdown's
+ * centre is on the arc's chord.
  */
-const ARC_WIDTH = '[--arc-width:min(92vw,420px)]'
+const COUNT_SIZE = 'min(21.3vw, 9.6svh, 89px)'
 
 /**
  * The immersive centrepiece: the phase-tinted Progress arc with the huge
- * tabular-nums countdown and its phase eyebrow straddling the arc's chord, and
+ * tabular-nums countdown on the arc's chord and its phase eyebrow above, and
  * the exercise name (plus its optional `detail`, e.g. "10 cal") beneath. The
  * arc depletes from the same interpolated `remainingMillis` the digits show,
  * so a pause freezes both.
- *
- * The countdown keeps the type scale it already had. Sizing it from the
- * character count, as a share of the arc, is separate work.
  *
  * Pod, round and station are not written here. The Progress strip below
  * carries them as marks, which a participant reads more quickly than words.
@@ -82,7 +86,7 @@ export function CenterStack({
   const urgency = timerUrgency(phase, count)
   return (
     <div className="flex min-h-0 w-full max-w-sm flex-col items-center gap-2">
-      <ArcBox className={ARC_WIDTH}>
+      <ArcBox width={ARC_WIDTH} countSize={COUNT_SIZE}>
         <ProgressArc fraction={fraction} phase={phase} dirtyValue={digits}>
           <span
             data-testid="session-phase"
@@ -101,7 +105,7 @@ export function CenterStack({
             data-arc-digits=""
             data-urgency={urgency}
             className={cn(
-              'player-digits mt-1 inline-flex text-[min(21.3vw,9.6svh,89px)] leading-none font-semibold tabular-nums',
+              'player-digits mt-1 inline-flex text-[length:var(--count-size)] leading-none font-semibold tabular-nums',
               URGENCY_DIGIT_COLOR[urgency ?? 'none'],
             )}
           >

@@ -8,28 +8,35 @@ import type { PlayerPhase } from './phase'
 import { PHASE_HUE } from './phase'
 
 /**
- * Arc geometry — a half circle on a wide, half-height 300×150 viewBox.
+ * The viewBox the arc is drawn on: wide, and half as tall.
  *
- * The centre sits on the middle of the box's bottom edge, so the arc's chord
- * *is* that edge. The radius and the stroke are chosen so the stroke's outer
- * edge (radius + half the stroke) lands on 150: exactly the box's left, top
- * and right edges, with no dead margin on any of the three.
- *
- * The half-height viewBox is what makes the half circle a vertical saving
- * rather than a vertical cost. A square box would carry an empty bottom half
- * that still consumed layout, and would push the Progress strip and the
- * Participants off the bottom of the screen.
+ * The half-height box is what makes the half circle a vertical saving rather
+ * than a vertical cost. A square box carries an empty bottom half. That half
+ * still takes layout, and it pushes the Progress strip and the Participants
+ * off the bottom of the screen.
  */
-export const ARC_RADIUS = 142.5
-const ARC_CENTER_X = 150
-const ARC_CENTER_Y = 150
+const ARC_BOX_WIDTH = 300
+const ARC_BOX_HEIGHT = 150
+const ARC_VIEW_BOX = `0 0 ${ARC_BOX_WIDTH} ${ARC_BOX_HEIGHT}`
 
 /**
- * The stroke, in viewBox units, so it scales with the arc: on a 390px-wide
- * screen it lands at about 18px. A fixed pixel stroke was rejected — it reads
- * heavy on a small phone and thin on a large one, relative to its own arc.
+ * The stroke, in viewBox units, so that it scales with the arc. On a 390px
+ * screen it measures about 18px. A stroke in pixels was rejected: it reads
+ * heavy on a small phone and thin on a large one, against its own arc.
  */
 const ARC_STROKE = 15
+
+/**
+ * The circle the arc is cut from. Its centre is the middle of the box's bottom
+ * edge, so the arc's chord *is* that edge.
+ *
+ * The radius is the box height less half the stroke. Half the stroke lies
+ * outside the radius, so the stroke's outer edge falls on the box's left, top
+ * and right edges exactly, and no side keeps a dead margin.
+ */
+export const ARC_RADIUS = ARC_BOX_HEIGHT - ARC_STROKE / 2
+const ARC_CENTER_X = ARC_BOX_WIDTH / 2
+const ARC_CENTER_Y = ARC_BOX_HEIGHT
 
 /**
  * The gap the arc leaves: 180°, centred on the bottom. Nothing is drawn there.
@@ -91,56 +98,68 @@ export type ProgressArcProps = {
    */
   dirtyValue?: string | number
   /**
-   * The centred content. Pass **two** elements: the phase label, then the
-   * countdown digits. Both player screens pass this same shape. Anything else
-   * a screen must say goes below the arc, not inside it.
+   * The content on the arc's chord. Pass **two** elements: the phase label,
+   * then the countdown digits. Both player screens pass this same shape.
+   * Anything else a screen must say goes below the arc, not inside it.
    *
-   * Mark the element that carries the countdown with `data-arc-digits`. The
-   * glass proxy then repaints it at the size and place it actually renders at.
+   * Mark the element that carries the countdown with `data-arc-digits`. That
+   * mark does two things: the countdown is the element centred on the chord,
+   * and the glass proxy repaints it at the size and place it renders at.
    */
   children?: ReactNode
-}
-
-const EMPTY_RECT: DocRect = { left: 0, top: 0, width: 0, height: 0 }
-
-/** Element geometry in document space (CSS px): viewport rect + scroll. */
-function readDocRect(el: HTMLElement): DocRect {
-  const rect = el.getBoundingClientRect()
-  return {
-    left: rect.left + window.scrollX,
-    top: rect.top + window.scrollY,
-    width: rect.width,
-    height: rect.height,
-  }
 }
 
 /** How the countdown is drawn, in the proxy rect's own coordinates. */
 type RenderedDigits = { font: string; centerX: number; centerY: number }
 
+/** The region the glass repaints, and how the countdown is drawn in it. */
+type DigitsRegion = { rect: DocRect; digits: RenderedDigits }
+
 /** Only held before the first measurement, which happens before the register. */
-const UNMEASURED: RenderedDigits = { font: 'bold 16px sans-serif', centerX: 0, centerY: 0 }
+const UNMEASURED: DigitsRegion = {
+  rect: { left: 0, top: 0, width: 0, height: 0 },
+  digits: { font: 'bold 16px sans-serif', centerX: 0, centerY: 0 },
+}
 
 /**
- * Measure the countdown the arc draws. The caller marks that element with
+ * Measure the countdown the arc draws, and the region it occupies in document
+ * space (CSS px: viewport rect + scroll). The caller marks the countdown with
  * `data-arc-digits`. Without the mark, the whole box is measured, as before.
  *
- * The refraction repaints these digits, so it must use the size they render
- * at. A fixed share of the box's height cannot give that size. The box and the
- * digits take their clamps from different viewport terms, so a share drifts
- * with the screen, and drifts again each time the type scale changes.
+ * The region is the container's box together with the countdown's own box. The
+ * countdown is pushed down to straddle the arc's chord, and a transform on a
+ * child never grows its parent's box. The container alone would therefore leave
+ * the lower half of the countdown outside the region the glass repaints. The
+ * countdown only moves down, so the union keeps the container's own origin, and
+ * the coordinates below stay in the region's frame.
+ *
+ * The refraction repaints these digits, so it must use the size they render at.
+ * A fixed share of the box's height cannot give that size. The box and the
+ * digits take their clamps from different terms, so a share drifts with the
+ * screen, and drifts again each time the type scale changes.
  */
-function readRenderedDigits(container: HTMLElement): RenderedDigits {
+function readDigitsRegion(container: HTMLElement): DigitsRegion {
   const el = container.querySelector<HTMLElement>('[data-arc-digits]') ?? container
   const box = el.getBoundingClientRect()
   const host = container.getBoundingClientRect()
+  const left = Math.min(host.left, box.left)
+  const top = Math.min(host.top, box.top)
   const style = getComputedStyle(el)
   const size = style.fontSize === '' ? '16px' : style.fontSize
   const family = style.fontFamily === '' ? 'sans-serif' : style.fontFamily
   const weight = style.fontWeight === '' ? 'normal' : style.fontWeight
   return {
-    font: `${weight} ${size} ${family}`,
-    centerX: box.left - host.left + box.width / 2,
-    centerY: box.top - host.top + box.height / 2,
+    rect: {
+      left: left + window.scrollX,
+      top: top + window.scrollY,
+      width: Math.max(host.right, box.right) - left,
+      height: Math.max(host.bottom, box.bottom) - top,
+    },
+    digits: {
+      font: `${weight} ${size} ${family}`,
+      centerX: box.left - left + box.width / 2,
+      centerY: box.top - top + box.height / 2,
+    },
   }
 }
 
@@ -165,7 +184,7 @@ function paintDigits(ctx: CanvasRenderingContext2D, live: LiveDigits): void {
  */
 function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void {
   const handleRef = useRef<SceneProxyHandle | null>(null)
-  const liveRef = useRef<LiveDigits>({ rect: EMPTY_RECT, value, digits: UNMEASURED })
+  const liveRef = useRef<LiveDigits>({ ...UNMEASURED, value })
   liveRef.current.value = value
 
   useEffect(() => {
@@ -174,8 +193,9 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
       return undefined
     }
     const live = liveRef.current
-    live.rect = readDocRect(el)
-    live.digits = readRenderedDigits(el)
+    const region = readDigitsRegion(el)
+    live.rect = region.rect
+    live.digits = region.digits
     const handle = sceneRegistry.register({
       rect: live.rect,
       z: 4,
@@ -210,16 +230,14 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
  * sweeps 180° and leaves the whole bottom half open, so the digits overflow
  * below the chord into space nothing encloses.
  *
- * The children stack is anchored to the chord and then pushed down by half its
- * own height, so it straddles the chord instead of sitting inside the arc: the
- * label stays clear of the stroke above, and the digits run past the chord into
- * the open.
+ * The children sit in a column whose bottom edge is the chord, so the label
+ * stays inside the arc and clear of the stroke. The countdown is then pushed
+ * down by half its own height, which puts its centre on the chord: half of it
+ * is inside the arc and half is below, in the open.
  *
- * The transform is on the stack, not on the digits alone, for two reasons. The
- * scene proxy's rect is this element's own bounding box, and a bounding box
- * takes in its element's transform, never a child's. And the stack keeps its
- * height either way, so the label rides with the digits as they grow rather
- * than being pushed off the top of the arc by them.
+ * The countdown is the element that moves, not the whole column. A column
+ * pushed down by half its own height would carry the label's height into the
+ * offset, and the countdown would land below the chord by half of that.
  *
  * The digits region registers a dirty-region scene proxy keyed on
  * {@link ProgressArcProps.dirtyValue}.
@@ -236,7 +254,7 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
         flattening it, and gets 447.740 where the geometry gives 447.677.
         Declaring the length makes the dash values exact instead of near.
       */}
-      <svg viewBox="0 0 300 150" className="size-full" aria-hidden="true">
+      <svg viewBox={ARC_VIEW_BOX} className="size-full" aria-hidden="true">
         <path
           d={ARC_SWEEP_PATH}
           fill="none"
@@ -260,7 +278,7 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
       <div
         ref={digitsRef}
         data-testid="player-progress-arc-digits"
-        className="absolute inset-x-0 bottom-0 flex translate-y-1/2 flex-col items-center"
+        className="absolute inset-x-0 bottom-0 flex flex-col items-center [&>[data-arc-digits]]:translate-y-1/2"
       >
         {children}
       </div>
