@@ -152,6 +152,83 @@ describe('FacetGroup', () => {
     expect(next).toContain('rower')
   })
 
+  it('marks a selected chip with a check mark and leaves an unselected chip unmarked', () => {
+    render(
+      <FacetGroup
+        values={VALUES}
+        selected={['barbell']}
+        labels={equipmentLabel}
+        testIdPrefix="facet"
+        onChange={noop}
+      />,
+    )
+
+    const on = screen.getByTestId('facet-barbell')
+    const off = screen.getByTestId('facet-rower')
+
+    // A user who cannot see the difference in colour reads the state from the
+    // mark, so the mark is present only on the selected chip.
+    const check = screen.getByTestId('facet-barbell-check')
+    expect(on.contains(check)).toBe(true)
+    expect(screen.queryByTestId('facet-rower-check')).toBeNull()
+
+    // `aria-pressed` stays the state contract, so the mark is decoration and it
+    // stays out of the accessibility tree. It must not change the chip label.
+    expect(on.getAttribute('aria-pressed')).toBe('true')
+    expect(off.getAttribute('aria-pressed')).toBe('false')
+    expect(check.getAttribute('aria-hidden')).toBe('true')
+    expect(on.textContent).toBe(equipmentLabel.barbell)
+    expect(off.textContent).toBe(equipmentLabel.rower)
+  })
+
+  it('keeps the two states the same width, so a press does not move the other chips', () => {
+    render(
+      <FacetGroup
+        values={VALUES}
+        selected={['barbell']}
+        labels={equipmentLabel}
+        testIdPrefix="facet"
+        onChange={noop}
+      />,
+    )
+
+    // The equipment row holds 16 chips and it wraps. If the mark added width,
+    // one press would move the other chips. The unselected chip thus keeps an
+    // empty box in the place of the mark. Both boxes take the same slot, so the
+    // kit gives both chips the same padding.
+    const on = screen.getByTestId('facet-barbell')
+    const off = screen.getByTestId('facet-rower')
+    expect(on.querySelectorAll('[data-icon="inline-start"]')).toHaveLength(1)
+    expect(off.querySelectorAll('[data-icon="inline-start"]')).toHaveLength(1)
+
+    // The box on the unselected chip is empty and it is not a mark.
+    const spacer = off.querySelector('[data-icon="inline-start"]')
+    expect(spacer?.tagName.toLowerCase()).toBe('span')
+    expect(spacer?.textContent).toBe('')
+    expect(spacer?.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('gives the two states different treatments', () => {
+    render(
+      <FacetGroup
+        values={VALUES}
+        selected={['barbell']}
+        labels={equipmentLabel}
+        testIdPrefix="facet"
+        onChange={noop}
+      />,
+    )
+
+    // The control owns its own visual contract. This test does not assert a
+    // colour token or a class name: the parent spec names both as a bad test,
+    // and either would break on a change of tint that a user cannot see. The
+    // contract here is narrower, and it is what the report asked for. The two
+    // states must not look the same.
+    const on = screen.getByTestId('facet-barbell').className
+    const off = screen.getByTestId('facet-rower').className
+    expect(on).not.toBe(off)
+  })
+
   it('renders nothing for an empty vocabulary, whatever the slots hold', () => {
     const { container } = render(
       <FacetGroup

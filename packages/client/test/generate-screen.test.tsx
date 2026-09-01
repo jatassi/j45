@@ -362,6 +362,26 @@ describe('GenerateScreen', () => {
     expect(fieldValue('generate-no-repeat')).toBe('0')
   })
 
+  it('shows every equipment chip as plainly selected on arrival, and clears the mark when one goes off', async () => {
+    renderApp({}, '/generate')
+    await screen.findByTestId('generate-screen')
+
+    // The report says that the all-on default reads as all-off. Every chip
+    // thus carries its own mark when the form opens.
+    for (const eq of Equipment.literals) {
+      expect(pressed(`generate-equipment-${eq}`)).toBe('true')
+      expect(screen.queryByTestId(`generate-equipment-${eq}-check`)).not.toBeNull()
+    }
+
+    // Off is now the state that the screen marks. The mark goes from the chip
+    // that the user pressed, and from no other chip.
+    fireEvent.click(screen.getByTestId('generate-equipment-barbell'))
+    expect(pressed('generate-equipment-barbell')).toBe('false')
+    expect(screen.queryByTestId('generate-equipment-barbell-check')).toBeNull()
+    expect(pressed('generate-equipment-rower')).toBe('true')
+    expect(screen.queryByTestId('generate-equipment-rower-check')).not.toBeNull()
+  })
+
   it('focus, emphasis, and equipment options render domain labels (not raw vocabulary literals)', async () => {
     renderApp({}, '/generate')
     await screen.findByTestId('generate-screen')

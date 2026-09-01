@@ -1,5 +1,7 @@
 import * as React from 'react'
 
+import { CheckIcon } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { FieldDescription } from '@/components/ui/field'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -15,6 +17,47 @@ export type FacetBulkAction = {
   readonly onSelect: () => void
 }
 
+/**
+ * The style of a selected chip. The chip fills with a tint of the primary
+ * colour. Its border takes the same colour.
+ *
+ * The fill keeps the `aria-pressed:` prefix. The kit sets `aria-pressed:bg-muted`
+ * on the same element. A class without the prefix has lower specificity, and it
+ * does not replace the kit class. With the prefix, tailwind-merge removes the
+ * kit class. The hover fill keeps the prefix for the same reason.
+ *
+ * The style changes no property that has an effect on width. A bolder label
+ * would make the chip wider, and a press would then move the other chips.
+ */
+const CHIP_SELECTED = 'border-primary aria-pressed:bg-primary/20 hover:bg-primary/30'
+
+/**
+ * The style of an unselected chip. The chip becomes dim.
+ *
+ * The tint alone is not sufficient. A row of tinted chips can still read as
+ * empty. The dim state is what marks a chip as off.
+ *
+ * The opacity has no prefix. The kit sets `disabled:opacity-50`, which has
+ * higher specificity. A disabled chip thus keeps the disabled opacity.
+ */
+const CHIP_UNSELECTED = 'opacity-70 hover:opacity-100'
+
+/**
+ * The chips. A selected chip shows the tint and a check mark. An unselected chip
+ * is dim and shows no check mark.
+ *
+ * A user who cannot see the difference in colour reads the state from the check
+ * mark. The mark thus renders only for a selected chip.
+ *
+ * `aria-pressed` stays the state contract for the tests and for assistive
+ * technology. The mark is decoration, and it stays out of the accessibility
+ * tree.
+ *
+ * An unselected chip keeps an empty box in the place of the mark. The two states
+ * thus have the same width. A press on one chip does not move the others. The
+ * equipment row holds 16 chips and it wraps, so a change of width there can move
+ * a chip away from the finger of the user.
+ */
 function FacetChips<A extends string>(props: {
   readonly values: readonly A[]
   readonly selected: readonly A[]
@@ -22,6 +65,7 @@ function FacetChips<A extends string>(props: {
   readonly testIdPrefix: string
   readonly onChange: (next: A[]) => void
 }) {
+  const selectedValues = new Set<A>(props.selected)
   return (
     <ToggleGroup
       multiple
@@ -31,11 +75,28 @@ function FacetChips<A extends string>(props: {
       value={props.selected}
       onValueChange={(next) => props.onChange(next as A[])}
     >
-      {props.values.map((value) => (
-        <ToggleGroupItem key={value} value={value} data-testid={`${props.testIdPrefix}-${value}`}>
-          {props.labels[value]}
-        </ToggleGroupItem>
-      ))}
+      {props.values.map((value) => {
+        const isSelected = selectedValues.has(value)
+        const testId = `${props.testIdPrefix}-${value}`
+        return (
+          <ToggleGroupItem
+            key={value}
+            value={value}
+            data-testid={testId}
+            className={isSelected ? CHIP_SELECTED : CHIP_UNSELECTED}
+          >
+            {/* The kit reduces the chip padding when a child carries
+                `data-icon=inline-start`. Both states carry it, so both states
+                get the same padding. The kit also sets the size of the icon. */}
+            {isSelected ? (
+              <CheckIcon aria-hidden data-icon="inline-start" data-testid={`${testId}-check`} />
+            ) : (
+              <span aria-hidden className="size-4" data-icon="inline-start" />
+            )}
+            {props.labels[value]}
+          </ToggleGroupItem>
+        )
+      })}
     </ToggleGroup>
   )
 }
@@ -61,6 +122,10 @@ function FacetBulkRow({ actions }: { readonly actions: readonly FacetBulkAction[
 
 /**
  * Multi-select toggle-group used by filter chips and form tag fields.
+ *
+ * Every chip group in the app renders through this one control. The chip states
+ * above thus reach all six of them: the generate equipment field, the three
+ * exercise-library filter groups, and the two exercise-form tag fields.
  *
  * The chips are the full control until a caller asks for more. `bulkActions`
  * puts a row of whole-facet actions above the chips. `summary` puts a line

@@ -185,6 +185,31 @@ describe('ExerciseLibraryScreen', () => {
     expect(fullBodyChip.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('filter chips show the shared selected and unselected states', async () => {
+    renderScreen({ ListExercises: () => Effect.succeed([rower, frontSquat]) })
+
+    await screen.findByTestId('filter-bar')
+
+    // The filter groups take their chip states from the same shared control as
+    // the generate equipment field. No filter starts on, so a chip has no mark
+    // until the user presses it.
+    const quadsChip = screen.getByTestId('filter-muscle-quads')
+    expect(quadsChip.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.queryByTestId('filter-muscle-quads-check')).toBeNull()
+
+    fireEvent.click(quadsChip)
+    expect(quadsChip.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.queryByTestId('filter-muscle-quads-check')).not.toBeNull()
+
+    // The other chips in the same group keep no mark.
+    expect(screen.queryByTestId('filter-muscle-full-body-check')).toBeNull()
+
+    // A second press returns the chip to the state with no mark.
+    fireEvent.click(quadsChip)
+    expect(quadsChip.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.queryByTestId('filter-muscle-quads-check')).toBeNull()
+  })
+
   it('empty equipment renders the Bodyweight pseudo-tag label on the row', async () => {
     const pushup = new LibraryExercise({
       id: Schema.decodeSync(ExerciseId)('ex-pushup'),
@@ -303,8 +328,25 @@ describe('ExerciseLibraryScreen', () => {
     fireEvent.click(screen.getByTestId(`edit-exercise-${frontSquat.id}`))
     await screen.findByTestId('exercise-drawer')
 
+    // The tag fields are the other two call sites, and they take the same
+    // states. The drawer opens with the groups of the front squat, so `quads`
+    // has a mark and `chest` has none.
+    expect(screen.getByTestId('exercise-form-muscle-quads').getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(screen.queryByTestId('exercise-form-muscle-quads-check')).not.toBeNull()
+    expect(screen.getByTestId('exercise-form-muscle-chest').getAttribute('aria-pressed')).toBe(
+      'false',
+    )
+    expect(screen.queryByTestId('exercise-form-muscle-chest-check')).toBeNull()
+
     fireEvent.click(screen.getByTestId('exercise-form-muscle-chest'))
     fireEvent.click(screen.getByTestId('exercise-form-muscle-quads'))
+
+    // Each mark follows its own press.
+    expect(screen.queryByTestId('exercise-form-muscle-chest-check')).not.toBeNull()
+    expect(screen.queryByTestId('exercise-form-muscle-quads-check')).toBeNull()
+
     fireEvent.click(screen.getByTestId('exercise-form-submit'))
 
     const row = await screen.findByTestId(`exercise-row-${frontSquat.id}`)
