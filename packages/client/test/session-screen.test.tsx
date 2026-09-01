@@ -2,12 +2,14 @@
 import { SessionId, SessionNotFound, TimerDone, TimerPaused, TimerRunning } from '@j45/domain'
 import type { SessionState, TimerState } from '@j45/domain'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import * as Duration from 'effect/Duration'
 import * as Effect from 'effect/Effect'
 import * as Queue from 'effect/Queue'
 import * as Schema from 'effect/Schema'
 import * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { RECONNECT_GRACE } from '@/lib/reconnect'
 import * as audio from '@/player/audio'
 
 import {
@@ -51,13 +53,29 @@ describe('SessionScreen — stream retry discrimination', () => {
     expect(router.state.location.pathname).toBe('/')
   })
 
-  it('a transport failure shows the reconnecting indicator and retries with backoff', async () => {
+  it('a transport failure before any snapshot keeps retrying behind Connecting…', async () => {
     const id = 'sess-transport'
+    let subscriptions = 0
     renderSession(id, {
-      WatchSession: () => Stream.fail(new Error('socket dropped')),
+      WatchSession: () => {
+        subscriptions += 1
+        return Stream.fail(new Error('socket dropped'))
+      },
     })
 
-    await screen.findByTestId('session-reconnecting')
+    // The third subscription is past the reconnect grace on the harness's
+    // real clock, so the feed has had every chance to say what a break says.
+    await waitFor(
+      () => {
+        expect(subscriptions).toBeGreaterThanOrEqual(3)
+      },
+      { timeout: Duration.toMillis(RECONNECT_GRACE) + 2000 },
+    )
+
+    // There is no session on screen to protect, so nothing is interrupted:
+    // the plain message stands, and no empty player is put up in its place.
+    expect(screen.queryByTestId('session-connecting')).not.toBeNull()
+    expect(screen.queryByTestId('session-screen')).toBeNull()
     expect(screen.queryByTestId('home-screen')).toBeNull()
   })
 })

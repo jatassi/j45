@@ -12,6 +12,7 @@ import { ProgressStrip } from '@/components/player/progress-strip'
 import {
   CenterStack,
   Participants,
+  ReconnectingChip,
   SessionDock,
   TopStrip,
   type Dispatch,
@@ -124,13 +125,18 @@ function useServerCountdown(state: SessionState): number {
 
 /**
  * The timer-driving and exit actions bound to this session id. Any participant
- * may send commands (`SendSessionCommand`); `LeaveSession` is the only exit,
- * whose failures surface via the atoms' own `Result`.
+ * may send commands (`SendSessionCommand`); `LeaveSession` is the only exit.
+ *
+ * Leaving goes home whether the rpc succeeds or not. A participant must be
+ * able to leave a session they cannot reach, and an exit that waits on the
+ * network is an exit that is advertised and does nothing. The server observes
+ * the departure when the watch stream drops, which this navigation causes.
  */
 function useSessionActions(id: SessionId): {
   readonly dispatch: Dispatch
   readonly onLeave: Leave
 } {
+  const navigate = useNavigate()
   const [, send] = useAtom(sendSessionCommandAtom, { mode: 'promise' })
   const [, leaveSession] = useAtom(leaveSessionAtom, { mode: 'promise' })
   const dispatch: Dispatch = (command) => {
@@ -140,14 +146,26 @@ function useSessionActions(id: SessionId): {
   }
   const onLeave: Leave = () => {
     void leaveSession({ payload: { id } }).catch(() => {
-      // Surfaced via leaveSessionAtom's own Result; nothing to do here.
+      // The participant is leaving either way; the navigate below is the exit.
     })
+    void navigate({ to: '/', search: {} })
   }
   return { dispatch, onLeave }
 }
 
-/** The live session render: server state only, plus the player-kit wiring. */
-function SessionView({ state }: { readonly state: SessionState }) {
+/**
+ * The session render: one snapshot — live, or the **Stale snapshot** a break
+ * left behind — plus the player-kit wiring. `offline` says which, and it
+ * changes nothing about the workout on screen: the clock counts to the
+ * segment's absolute end either way, and the cues it passes are true.
+ */
+function SessionView({
+  state,
+  offline,
+}: {
+  readonly state: SessionState
+  readonly offline: boolean
+}) {
   const count = useServerCountdown(state)
   const { dispatch, onLeave } = useSessionActions(state.id)
   useSegmentCues(state)
@@ -178,15 +196,17 @@ function SessionView({ state }: { readonly state: SessionState }) {
       <PhaseBackdrop phase={phase} paused={state.timer._tag === 'paused'} />
       <TopStrip
         workoutName={state.workoutName}
+        offline={offline}
         showLeave={state.timer._tag !== 'done'}
         onLeave={onLeave}
       />
+      {offline && <ReconnectingChip />}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
         <CenterStack state={state} phase={phase} ctx={ctx} count={count} />
         <ProgressStrip strip={strip} />
         <Participants participants={state.participants} />
       </div>
-      <SessionDock state={state} dispatch={dispatch} onLeave={onLeave} />
+      <SessionDock state={state} offline={offline} dispatch={dispatch} onLeave={onLeave} />
     </div>
   )
 }
@@ -194,9 +214,16 @@ function SessionView({ state }: { readonly state: SessionState }) {
 /**
  * Renders one feed value and, when the session has ended, navigates home with
  * the notice that says why. Home is the destination for every ending; only
- * the notice differs, and a deleted plan gets its own. A transport failure
- * shows the reconnecting indicator while the atom retries with backoff
- * underneath.
+ * the notice differs, and a deleted plan gets its own.
+ *
+ * A break in the connection never takes the workout off screen. The stale
+ * snapshot renders the same player element in the same place a live one does,
+ * and that identity is the point: a different element, or a different
+ * position, would remount the player and reset the wake lock, the countdown
+ * and the cue refs — the original bug, minus the panel.
+ *
+ * A break before the first snapshot has no workout to protect, so it joins
+ * the feed's initial and failure states on the plain connecting message.
  */
 function SessionFeedView({ feed }: { readonly feed: SessionFeed }) {
   const navigate = useNavigate()
@@ -207,9 +234,10 @@ function SessionFeedView({ feed }: { readonly feed: SessionFeed }) {
     }
   }, [notice, navigate])
 
-  if (feed._tag === 'live') return <SessionView state={feed.state} />
+  const state = feed._tag === 'ended' ? null : feed.state
+  if (state !== null) return <SessionView state={state} offline={feed._tag === 'reconnecting'} />
   if (feed._tag === 'reconnecting')
-    return <StatusScreen testId="session-reconnecting" message="Reconnecting…" />
+    return <StatusScreen testId="session-connecting" message="Connecting…" />
   return <StatusScreen testId="session-ended" message="Session ended." />
 }
 
