@@ -8,35 +8,26 @@ import * as Schema from 'effect/Schema'
 import { seedExercises } from '../../src/library/seed-exercises.js'
 import { preMigrationSeed, type PreMigrationExercise } from './fixtures/seed-exercises-pre-0008.js'
 
-/**
- * Muscle groups that have left the catalog, but that the vocabulary still
- * accepts. `full-body` left the seed with migration `0008` (ADR-0003, issue
- * #27). It leaves the literal in issue #30. Between those two commits the
- * value is an orphan by design, so the coverage rule below must exempt it.
- *
- * The type is `MuscleGroup` on purpose. When the member leaves the literal,
- * this line stops compiling and `bun run check` forces it out. The coverage
- * rule then returns to its full strength, and no exemption stays behind.
- */
-const pendingRemoval: readonly MuscleGroup[] = ['full-body']
-
 /** `Arr.sort`, because `Array#toSorted` needs `lib: es2023`. */
 const sorted = (names: Iterable<string>) => Arr.sort([...names], Order.string)
 
 /**
- * For each muscle group, the names of the strength exercises that carry it.
- * Groups in `pendingRemoval` are skipped, because they are the difference the
- * two catalogs are expected to have.
+ * For each muscle group, the names of the strength exercises that have it.
+ *
+ * The function skips a group that is not in the vocabulary. That group is the
+ * one permitted difference between the two catalogs. The function reads the
+ * current literal, and not a list of removed values. Thus it does not name a
+ * value that has left the vocabulary.
  */
 const strengthNamesByGroup = (catalog: readonly PreMigrationExercise[]) => {
-  const removed = new Set<string>(pendingRemoval)
+  const vocabulary = new Set<string>(MuscleGroup.literals)
   const byGroup = new Map<string, ReadonlySet<string>>()
   for (const seed of catalog) {
     if (seed.modality !== 'strength') {
       continue
     }
     for (const group of seed.muscleGroups) {
-      if (removed.has(group)) {
+      if (!vocabulary.has(group)) {
         continue
       }
       byGroup.set(group, new Set([...(byGroup.get(group) ?? []), seed.name]))
@@ -75,19 +66,7 @@ describe('seed exercises', () => {
   it('every MuscleGroup literal is used by at least one entry', () => {
     const used = new Set(seedExercises.flatMap((seed) => seed.muscleGroups))
     for (const group of MuscleGroup.literals) {
-      if (pendingRemoval.includes(group)) {
-        continue
-      }
       expect(used, `MuscleGroup '${group}' is unused`).toContain(group)
-    }
-  })
-
-  // The exemption above permits a member to be absent. This test makes the
-  // absence a requirement.
-  it('no entry carries a muscle group that has left the catalog', () => {
-    const used = new Set<string>(seedExercises.flatMap((seed) => seed.muscleGroups))
-    for (const group of pendingRemoval) {
-      expect(used, `MuscleGroup '${group}' should have left the catalog`).not.toContain(group)
     }
   })
 

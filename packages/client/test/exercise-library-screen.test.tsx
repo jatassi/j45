@@ -52,7 +52,7 @@ const rower = new LibraryExercise({
   exercise: new Exercise({
     name: 'Rower',
     modality: 'cardio',
-    muscleGroups: ['full-body'],
+    muscleGroups: ['core'],
     equipment: ['rower'],
     intensity: 'high',
   }),
@@ -126,10 +126,9 @@ describe('ExerciseLibraryScreen', () => {
     )
     // Tag badges use domain label maps, not raw vocabulary literals.
     expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Rower')
-    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Full body')
+    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Core')
     expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Cardio')
     expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('High')
-    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).not.toContain('full-body')
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Strength')
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Moderate')
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Quads')
@@ -169,9 +168,8 @@ describe('ExerciseLibraryScreen', () => {
     await screen.findByTestId('filter-bar')
 
     // Testids stay on raw vocabulary values for stable selectors.
-    const fullBodyChip = screen.getByTestId('filter-muscle-full-body')
-    expect(fullBodyChip.textContent).toBe('Full body')
-    expect(fullBodyChip.textContent).not.toBe('full-body')
+    const coreChip = screen.getByTestId('filter-muscle-core')
+    expect(coreChip.textContent).toBe('Core')
 
     expect(screen.getByTestId('filter-modality-cardio').textContent).toBe('Cardio')
     expect(screen.getByTestId('filter-modality-strength').textContent).toBe('Strength')
@@ -180,9 +178,9 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.getByTestId('filter-equipment-barbell').textContent).toBe('Barbell')
 
     // Multi-select: toggle groups expose aria-pressed on items.
-    expect(fullBodyChip.getAttribute('aria-pressed')).toBe('false')
-    fireEvent.click(fullBodyChip)
-    expect(fullBodyChip.getAttribute('aria-pressed')).toBe('true')
+    expect(coreChip.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(coreChip)
+    expect(coreChip.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('empty equipment renders the Bodyweight pseudo-tag label on the row', async () => {

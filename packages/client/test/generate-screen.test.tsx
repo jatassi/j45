@@ -377,9 +377,7 @@ describe('GenerateScreen', () => {
 
     // Emphasis select: open the popup and assert option labels.
     fireEvent.click(screen.getByTestId('generate-emphasis'))
-    const fullBody = await screen.findByRole('option', { name: 'Full body' })
-    expect(fullBody).toBeTruthy()
-    expect(screen.queryByRole('option', { name: 'full-body' })).toBeNull()
+    expect(await screen.findByRole('option', { name: 'Core' })).toBeTruthy()
     // Trigger shows the selected "None" domain label, not a raw empty value.
     expect(within(screen.getByTestId('generate-emphasis')).getByText('None')).toBeTruthy()
 
