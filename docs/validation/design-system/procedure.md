@@ -23,13 +23,15 @@ Replays the design-system acceptance against the running system. Inherits the
    - `packages/domain/test/exercise.test.ts` / `workout.test.ts`: iterate the real
      schema unions (`Modality.literals`, … `FlowType.literals`) asserting every
      literal yields a non-empty label, plus exact hyphenated mappings
-     (`full-body → "Full body"`, `jump-rope → "Jump rope"`, `med-ball → "Med ball"`,
-     `pull-up-bar → "Pull-up bar"`, `slam-ball → "Slam ball"`).
+     (`jump-rope → "Jump rope"`, `med-ball → "Med ball"`, `pull-up-bar → "Pull-up bar"`,
+     `slam-ball → "Slam ball"`). ADR-0003 left no hyphenated muscle group, so
+     `equipmentLabel` alone carries this assertion.
    - `index-css-tokens.test.ts` + the unchanged `index-css-dark-only.test.ts`:
      `--background` equals `backdrop.ts` `BACKDROP_BASE` (`#08090b`); no `.dark` block.
    - `exercise-library-screen.test.tsx` / `generate-screen.test.tsx`: rows render
-     domain labels (`Rower`, `Full body`, `Quads`, `Barbell`) and assert raw literals
-     absent (`not.toContain('full-body')`).
+     domain labels (`Rower`, `Core`, `Quads`, `Barbell`) and assert raw literals
+     absent (`not.toContain('bodyweight')` on a row; `not.toMatch(/\bcore\b/)` on
+     the Emphasis field).
    - `query-boundary.test.tsx`: the QueryBoundary feedback-state helper.
 
 3. `bun run test:e2e` — Playwright chromium + webkit. Expected: exit 0, 51 passed,
@@ -40,9 +42,8 @@ Replays the design-system acceptance against the running system. Inherits the
      `data-glass-tier="refract"`; with the WebGL2-disabled init script it reaches
      `data-glass-tier="css"` and mounts no glass canvas; console/pageerror arrays empty
      in both.
-   - `e2e/exercises.spec.ts`: catalog filter chips + tag badges render `Full body`,
-     `Med ball`, `Jump rope`; rendered text matches none of `\bfull-body\b`,
-     `\bmed-ball\b`, `\bjump-rope\b`.
+   - `e2e/exercises.spec.ts`: catalog filter chips + tag badges render `Med ball`
+     and `Jump rope`; rendered text matches none of `\bmed-ball\b`, `\bjump-rope\b`.
    - `e2e/generate.spec.ts`: generate focus/emphasis/equipment options render the same
      domain labels; raw literals absent from rendered text.
    - `e2e/glass.spec.ts`: existing glass suite unchanged and green.
