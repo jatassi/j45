@@ -137,6 +137,23 @@ unrecorded wherever they fit.
   on the rise. Clients must not compare compiled plans to find a change: the
   snapshot is republished on every join and leave, so a comparison would
   report changes that never happened.
+- **Stale snapshot** — the last Session snapshot a Participant received, kept on
+  screen after the connection to the server goes away. The live view never
+  clears itself: the workout, the clock and the controls stay as they were, and
+  the Participant is told that the snapshot is stale. A break short enough to
+  heal itself is never announced, because a notice on every blip costs more
+  than the blip. The clock counts on, and it stays true, because the
+  **Segment** it counts to carries an absolute end from the server. It then
+  stops at zero and waits. The client never advances to the next Segment on its
+  own, although it holds the whole compiled plan: the server owns the timer,
+  and a second timer would disagree with the first. A Participant cannot drive
+  a timer they cannot reach, so the timer commands stand down. Leaving does
+  not: a Participant who leaves with no connection goes home, and the server
+  learns it when their watch stream drops. Their completion record is then
+  written when the Session ends, and it carries the Session's **Completion
+  progress**, not the point where they stopped. Before the first snapshot
+  arrives there is no stale snapshot to keep, and the screen says only that it
+  is connecting.
 - **Progress strip** — how far a live Session has got, shown as one bar per
   group and one dot per **Round**. The group is the **Pod** when the **Flow**
   is `laps`, and the **Station** when it is `sets`, because a `sets` workout is
