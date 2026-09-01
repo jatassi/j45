@@ -241,7 +241,7 @@ export const phaseLabel = (state: SessionState): string => {
 
 /**
  * The immersive player's phase for `data-phase`, the backdrop tint, and the
- * ring hue: `ready | work | rest | done`, read from the current segment (both
+ * arc hue: `ready | work | rest | done`, read from the current segment (both
  * running and paused expose `segmentIndex`) so a pause keeps the segment's
  * identity while `phaseLabel` reads `Paused`.
  */
@@ -256,19 +256,19 @@ export const sessionPhase = (state: SessionState): PlayerPhase => {
 }
 
 /**
- * Full duration of the segment the timer sits in, for the progress ring's
- * depletion fraction. `0` when idle/done (no segment in focus), which the ring
- * reads as an empty arc.
+ * Full duration of the segment the timer sits in, for the Progress arc's
+ * depletion fraction. `0` when idle/done (no segment in focus), which the arc
+ * draws as empty.
  */
 export const currentSegmentDurationMillis = (state: SessionState): number =>
   currentSegment(state)?.durationMillis ?? 0
 
 /**
- * The remaining fraction (0..1) of the current segment for the progress ring's
+ * The remaining fraction (0..1) of the current segment for the Progress arc's
  * depletion — `remainingMillis` over the segment's full duration, clamped. `0`
  * when there is no segment in focus (idle/done), an empty arc.
  */
-export const ringFraction = (state: SessionState, remainingMillis: number): number => {
+export const arcFraction = (state: SessionState, remainingMillis: number): number => {
   const durationMillis = currentSegmentDurationMillis(state)
   if (durationMillis <= 0) return 0
   return Math.max(0, Math.min(1, remainingMillis / durationMillis))

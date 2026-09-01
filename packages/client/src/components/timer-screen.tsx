@@ -6,7 +6,7 @@ import * as Option from 'effect/Option'
 import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PhaseBackdrop } from '@/components/player/phase-backdrop'
-import { ProgressRing } from '@/components/player/progress-ring'
+import { ProgressArc } from '@/components/player/progress-arc'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -68,8 +68,8 @@ function displayMillis(state: TimerState, liveRemaining: number | null): number 
   return Domain.READY_SECONDS * 1000
 }
 
-/** Same remaining millis as the digits so pause freezes count and ring together. */
-function ringFraction(
+/** Same remaining millis as the digits so pause freezes count and arc together. */
+function arcFraction(
   state: TimerState,
   segments: readonly Segment[],
   liveRemaining: number | null,
@@ -85,7 +85,7 @@ function viewModel(timer: ReturnType<typeof useManualTimer>, settings: Settings)
   return {
     ...phaseInfo(timer.state, timer.segments, settings),
     count: formatDuration(millis),
-    fraction: ringFraction(timer.state, timer.segments, timer.liveRemaining),
+    fraction: arcFraction(timer.state, timer.segments, timer.liveRemaining),
   }
 }
 
@@ -200,21 +200,21 @@ function Header({ audio, onRetry, className }: AudioProps & { className: string 
   )
 }
 
-/** Where the countdown is drawn: above the idle form, or inside the ring. */
-type DigitsPlace = 'form' | 'ring'
+/** Where the countdown is drawn: above the idle form, or inside the arc. */
+type DigitsPlace = 'form' | 'arc'
 
 /**
- * The countdown's type scale. Inside the ring it is 28% of the ring box, the
+ * The countdown's type scale. Inside the arc it is 28% of the arc box, the
  * share the live session's countdown also holds — see `CenterStack` in
- * `session-player-parts.tsx`. The idle preview has no ring around it and no
+ * `session-player-parts.tsx`. The idle preview has no arc around it and no
  * gap to grow into, so it keeps its own size.
  *
- * `data-ring-digits` goes with the ring size. It tells the ring's glass proxy
- * which element to repaint, so only the count inside the ring carries it.
+ * `data-arc-digits` goes with the arc size. It tells the arc's glass proxy
+ * which element to repaint, so only the count inside the arc carries it.
  */
 const COUNT_TYPE: Record<DigitsPlace, string> = {
   form: 'text-6xl',
-  ring: 'text-[min(22.4vw,81px)] leading-none',
+  arc: 'text-[min(22.4vw,81px)] leading-none',
 }
 
 // prettier-ignore
@@ -222,7 +222,7 @@ function Digits({ phase, count, context, place }: DigitsProps & { place: DigitsP
   return (
     <>
       <p className="text-sm font-medium" data-testid="timer-phase">{phase}</p>
-      <p className={`${COUNT_TYPE[place]} font-semibold tabular-nums`} data-testid="timer-count" data-ring-digits={place === 'ring' ? '' : undefined}>{count}</p>
+      <p className={`${COUNT_TYPE[place]} font-semibold tabular-nums`} data-testid="timer-count" data-arc-digits={place === 'arc' ? '' : undefined}>{count}</p>
       <p className="text-sm text-muted-foreground" data-testid="timer-context">{context}</p>
     </>
   )
@@ -318,9 +318,9 @@ function RunningView(
       {/* pointer-events-none so the absolute ControlDock below receives taps */}
       <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center px-5 pb-40">
         <div className="size-[min(290px,80vw)]">
-          <ProgressRing fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
-            <Digits phase={p.phase} count={p.count} context={p.context} place="ring" />
-          </ProgressRing>
+          <ProgressArc fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
+            <Digits phase={p.phase} count={p.count} context={p.context} place="arc" />
+          </ProgressArc>
         </div>
       </div>
       <div className="relative z-20">
@@ -330,7 +330,7 @@ function RunningView(
   )
 }
 
-/** `/timer` — Field-kit idle form; immersive backdrop + ring + dock while running. */
+/** `/timer` — Field-kit idle form; immersive backdrop + arc + dock while running. */
 export function TimerScreen() {
   const inputs = useTimerInputs()
   const timer = useManualTimer()

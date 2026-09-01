@@ -6,7 +6,7 @@ import { LogOut, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lu
 import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PHASE_HUE } from '@/components/player/phase'
-import { ProgressRing } from '@/components/player/progress-ring'
+import { ProgressArc } from '@/components/player/progress-arc'
 import { RollingDigits } from '@/components/player/rolling-digits'
 import {
   AlertDialog,
@@ -20,9 +20,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
+  arcFraction,
   nextWorkStationName,
   phaseLabel,
-  ringFraction,
   timerUrgency,
   type TimerUrgency,
 } from '@/lib/session'
@@ -46,16 +46,16 @@ const URGENCY_DIGIT_COLOR: Record<TimerUrgency | 'none', string> = {
 }
 
 /**
- * The immersive centrepiece: the phase-tinted progress ring wrapping the huge
+ * The immersive centrepiece: the phase-tinted Progress arc wrapping the huge
  * tabular-nums countdown and its phase eyebrow, with the exercise name (plus
- * its optional `detail`, e.g. "10 cal") beneath. The ring depletes from the
+ * its optional `detail`, e.g. "10 cal") beneath. The arc depletes from the
  * same interpolated `remainingMillis` the digits show, so a pause freezes
- * both. The ring diameter is clamped by both viewport axes so the whole stack
+ * both. The arc's diameter is clamped by both viewport axes so the whole stack
  * fits on-screen without scrolling.
  *
- * The digits take about 28% of the ring box. Each of their three clamp terms
+ * The digits take about 28% of the arc box. Each of their three clamp terms
  * is 28% of the box's matching term, so the digits stay clamped by both
- * viewport axes, as before. 28% is what the ring allows: the widest count the
+ * viewport axes, as before. 28% is what the arc allows: the widest count the
  * formatter can make (`12:00`) still clears the arc, and 30% touches it. No
  * term falls below the old one, so no screen gets smaller digits. What rises
  * most is the ceiling, which held the digits at 20% of a large box.
@@ -75,12 +75,12 @@ export function CenterStack({
   readonly count: number
 }) {
   const digits = formatDuration(count)
-  const fraction = ringFraction(state, count)
+  const fraction = arcFraction(state, count)
   const urgency = timerUrgency(phase, count)
   return (
     <div className="flex w-full max-w-sm flex-col items-center gap-2">
       <div className="size-[min(76vw,34svh,320px)] [&>*]:size-full">
-        <ProgressRing fraction={fraction} phase={phase} dirtyValue={digits}>
+        <ProgressArc fraction={fraction} phase={phase} dirtyValue={digits}>
           <span
             data-testid="session-phase"
             className="inline-flex items-center gap-2 text-xs font-medium tracking-wide uppercase"
@@ -95,7 +95,7 @@ export function CenterStack({
           </span>
           <span
             data-testid="session-count"
-            data-ring-digits=""
+            data-arc-digits=""
             data-urgency={urgency}
             className={cn(
               'player-digits mt-1 inline-flex text-[min(21.3vw,9.6svh,89px)] leading-none font-semibold tabular-nums',
@@ -104,7 +104,7 @@ export function CenterStack({
           >
             <RollingDigits value={digits} />
           </span>
-        </ProgressRing>
+        </ProgressArc>
       </div>
       <WorkMeta ctx={ctx} />
     </div>

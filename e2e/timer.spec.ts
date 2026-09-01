@@ -143,7 +143,7 @@ function instrumentWakeLock(): void {
  * Exercises the `/timer` screen (`timer-screen.tsx`) against the real built
  * client + server `global-setup.ts` boots: nav reachability from Home via
  * `home-timer-link`, idle composition from the ui/ field kit, a full short run
- * to Done with pause/resume/reset on the immersive ring + dock, and Web Audio
+ * to Done with pause/resume/reset on the immersive arc + dock, and Web Audio
  * + `navigator.wakeLock` instrumentation via init scripts. Each test registers
  * its own per-project account from `timer.spec.ts`'s own pre-minted invite pair
  * (`readE2eEnv().timerInvitesByProject`) so `fullyParallel` chromium+webkit
@@ -188,7 +188,7 @@ test.describe('timer (chromium + webkit)', () => {
       await expect(page.getByTestId('timer-phase')).toHaveText('Get ready')
       // Immersive kit mounts on start.
       await expect(page.getByTestId('player-phase-backdrop')).toBeVisible()
-      await expect(page.getByTestId('player-progress-ring')).toBeVisible()
+      await expect(page.getByTestId('player-progress-arc')).toBeVisible()
       await expect(page.getByTestId('player-control-dock')).toBeVisible()
 
       await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 8000 })

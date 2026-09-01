@@ -65,7 +65,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         // Ready is only 5s — assert it on A before B's join race burns the window.
         await expect(page.getByTestId('session-screen')).toHaveAttribute('data-phase', 'ready')
         await expect(
-          page.getByTestId('player-progress-ring').getByTestId('session-count'),
+          page.getByTestId('player-progress-arc').getByTestId('session-count'),
         ).toBeVisible()
         await expect(page.getByTestId('session-next-up')).toContainText(APEX_STATION_1)
 
@@ -88,7 +88,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         // Both players now share the stable work segment.
         await assertBMatchesAPhase(page, pageB)
         await expect(
-          pageB.getByTestId('player-progress-ring').getByTestId('session-count'),
+          pageB.getByTestId('player-progress-arc').getByTestId('session-count'),
         ).toBeVisible()
 
         await assertBothPhase([page, pageB], { data: 'work', label: 'Work' })
