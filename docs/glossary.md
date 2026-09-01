@@ -23,6 +23,18 @@ unrecorded wherever they fit.
   muscle groups, equipment, intensity). Distinct from a **Station**, which
   stays free text inside a workout: the catalog is a vocabulary the
   generator draws from, never a foreign-key target for stations.
+- **Emphasis** — a set of muscle groups that narrows the generator's strength
+  picks. A strength exercise qualifies when it carries at least one of them,
+  so every group added widens the pool, and an added group can never make
+  generation fail. It does nothing to cardio picks, which always pass, so the
+  field is disabled when the **Focus** is `cardio`. It is not a Focus: a Focus
+  is `cardio | strength | hybrid`, it is stored on the Workout, and it says
+  what the workout is. An Emphasis lives only at generation time, and no
+  Workout ever holds one. There is no empty Emphasis — the value is a nonempty
+  list of groups, or nothing at all, and nothing at all means no emphasis.
+  This is the opposite of an empty equipment list, which means bodyweight
+  only. The two are shaped differently because an absent Emphasis is an
+  absence, and an empty kit is a choice.
 - **Reflow** — a structural transform on a workout that never authors content:
   regrouping its existing stations into different pods (reorder and drop
   allowed, never new or duplicated stations), switching flow type (sets↔laps),
@@ -124,6 +136,18 @@ unrecorded wherever they fit.
   on the rise. Clients must not compare compiled plans to find a change: the
   snapshot is republished on every join and leave, so a comparison would
   report changes that never happened.
+- **Progress strip** — how far a live Session has got, shown as one bar per
+  group and one dot per **Round**. The group is the **Pod** when the **Flow**
+  is `laps`, and the **Station** when it is `sets`, because a `sets` workout is
+  often one Pod, where a Pod bar says nothing. A bar carries one cell per
+  Station in its group: a Pod bar therefore shows which Station is running, and
+  a Station bar holds one cell and stays plain. A bar is never called a
+  **Segment**. A Segment is one timed unit; a bar is a group of them. Every
+  bar, cell and dot holds one of three states — done, now, ahead — and nothing
+  fills part-way, so the strip never reports a position it did not reach. The
+  dots wrap and the bars do not, so the strip keeps one height for one workout.
+  A pod authored with more stations than a bar can divide gives up its cells
+  and renders plain: the strip then says less, and it still says nothing false.
 - **Glass chrome** — persistent UI furniture rendered in the liquid-glass
   material: the bottom tab bar, sticky headers, overlays, and control docks.
   Content cards stay opaque — chrome is one half of glass's decided role.
