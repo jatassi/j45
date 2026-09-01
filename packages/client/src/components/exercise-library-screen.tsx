@@ -16,7 +16,8 @@ import {
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
 
-import { DeleteAlert, ExerciseDrawer, FacetGroup } from '@/components/exercise-catalog-overlays'
+import { DeleteAlert, ExerciseDrawer } from '@/components/exercise-catalog-overlays'
+import { FacetGroup } from '@/components/facet-group'
 import { LibrarySegments } from '@/components/library-segments'
 import { QueryBoundary } from '@/components/query-boundary'
 import { Badge } from '@/components/ui/badge'

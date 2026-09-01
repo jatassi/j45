@@ -8,7 +8,7 @@ import * as Either from 'effect/Either'
 import * as Schema from 'effect/Schema'
 import { expect } from 'vitest'
 
-import { Equipment, Exercise } from '../src/exercise.js'
+import { Equipment, Exercise, MuscleGroup } from '../src/exercise.js'
 import { generate, GenerationConstraints, GenerationInfeasible } from '../src/generation.js'
 import { compile } from '../src/segments.js'
 import { Workout, type Focus } from '../src/workout.js'
@@ -27,7 +27,7 @@ const baseConstraints = (
     focus: Focus
     targetMinutes: number
     equipment: readonly (typeof ALL_EQUIPMENT)[number][]
-    emphasis: 'core' | 'glutes' | 'chest' | undefined
+    emphasis: readonly [MuscleGroup, ...MuscleGroup[]] | undefined
     noRepeatSessions: number
     seed: number
   }> = {},
@@ -53,6 +53,44 @@ const flattenStations = (workout: Workout) => workout.pods.flatMap((pod) => pod.
 
 const byName = (catalog: readonly Exercise[], name: string): Exercise | undefined =>
   catalog.find((exercise) => exercise.name.toLowerCase() === name.toLowerCase())
+
+/**
+ * The catalog exercise behind every station of a workout. A station is free
+ * text and holds no muscle groups of its own, so an emphasis assertion has to
+ * resolve the name back to the exercise it came from.
+ */
+const sourcesOf = (workout: Workout, catalog: readonly Exercise[]): Exercise[] =>
+  flattenStations(workout).map((station) => {
+    const source = byName(catalog, station.name)
+    if (source === undefined) {
+      throw new Error(`missing catalog entry for ${station.name}`)
+    }
+    return source
+  })
+
+const carriesAny = (exercise: Exercise, groups: ReadonlySet<MuscleGroup>): boolean =>
+  exercise.muscleGroups.some((group) => groups.has(group))
+
+/** A bodyweight strength exercise for the hand-made catalogs below. */
+const strengthExercise = (name: string, group: MuscleGroup): Exercise =>
+  new Exercise({
+    name,
+    modality: 'strength',
+    muscleGroups: [group],
+    equipment: [],
+    intensity: 'moderate',
+  })
+
+/** The seed-catalog strength generation that the emphasis cases repeat. */
+const generateEmphasized = (
+  emphasis: readonly [MuscleGroup, ...MuscleGroup[]],
+  seed: number,
+): Either.Either<Workout, GenerationInfeasible> =>
+  generate(
+    fullCatalog,
+    [],
+    baseConstraints({ focus: 'strength', targetMinutes: 30, emphasis, seed }),
+  )
 
 describe('generate — determinism', () => {
   it('same inputs yield deeply-equal workouts; different seed differs', () => {
@@ -132,24 +170,109 @@ describe('generate — station validity', () => {
     }
   })
 
-  it('emphasis filters strength-modality picks to the named muscle group', () => {
-    const emphasized = expectRight(
+  it('a strength pick qualifies when it carries at least one emphasis group', () => {
+    const emphasized = expectRight(generateEmphasized(['core', 'chest'], 33))
+    const selected = new Set<MuscleGroup>(['core', 'chest'])
+    for (const source of sourcesOf(emphasized, fullCatalog)) {
+      expect(source.modality).toBe('strength')
+      // The rule is a union, and not an intersection: one group is enough.
+      expect(carriesAny(source, selected)).toBe(true)
+    }
+  })
+
+  it('a non-strength pick bypasses the emphasis filter and may carry no selected group', () => {
+    const selected = new Set<MuscleGroup>(['calves'])
+    const mixed = expectRight(
       generate(
         fullCatalog,
         [],
         baseConstraints({
-          focus: 'strength',
+          focus: 'hybrid',
           targetMinutes: 20,
-          emphasis: 'core',
-          seed: 33,
+          emphasis: ['calves'],
+          seed: 44,
         }),
       ),
     )
-    for (const station of flattenStations(emphasized)) {
-      const source = byName(fullCatalog, station.name)
-      expect(source?.modality).toBe('strength')
-      expect(source?.muscleGroups).toContain('core')
+    const sources = sourcesOf(mixed, fullCatalog)
+    for (const source of sources) {
+      if (source.modality === 'strength') {
+        expect(carriesAny(source, selected)).toBe(true)
+      }
     }
+    // The bypass is real, and not merely permitted: the seed catalog holds one
+    // calves-tagged strength exercise, so the rest of this workout is cardio
+    // that carries no selected group at all.
+    expect(
+      sources.some((source) => source.modality !== 'strength' && !carriesAny(source, selected)),
+    ).toBe(true)
+  })
+})
+
+describe('generate — emphasis widens, and never balances', () => {
+  it('adding a group never turns a feasible generation infeasible', () => {
+    // `calves` carries a single strength exercise in the seed catalog, so a
+    // one-group emphasis can still starve the pool. Adding `glutes` widens it.
+    expect(Either.isLeft(generateEmphasized(['calves'], 66))).toBe(true)
+    expectRight(generateEmphasized(['calves', 'glutes'], 66))
+
+    // The guarantee is about every group, and not only about that pair: a
+    // feasible one-group emphasis stays feasible when a second group joins it.
+    let widenings = 0
+    for (const group of MuscleGroup.literals) {
+      // Never the same group twice: `[quads, quads]` widens nothing.
+      const added: MuscleGroup = group === 'quads' ? 'chest' : 'quads'
+      for (const seed of [1, 2, 3]) {
+        if (Either.isRight(generateEmphasized([group], seed))) {
+          widenings++
+          expect(
+            Either.isRight(generateEmphasized([group, added], seed)),
+            `${group} + ${added} at seed ${seed}`,
+          ).toBe(true)
+        }
+      }
+    }
+    // The loop must not pass by never reaching its assertion.
+    expect(widenings).toBeGreaterThan(20)
+  })
+
+  it('an empty emphasis cannot be built', () => {
+    // Absent means no emphasis, and there is no second way to say it.
+    const attempt = Schema.decodeUnknownEither(GenerationConstraints)({
+      focus: 'strength',
+      targetMinutes: 30,
+      equipment: [],
+      emphasis: [],
+      noRepeatSessions: 0,
+      seed: 1,
+    })
+    expect(Either.isLeft(attempt)).toBe(true)
+  })
+
+  it('a two-group emphasis may return a workout drawn wholly from one group', () => {
+    // Twelve core exercises and one chest exercise. A generator that balanced
+    // across the two groups would have to place the chest exercise. This one
+    // filters and then samples, so a workout of core alone is a valid result.
+    const catalog = [
+      ...Array.from({ length: 12 }, (_, i) => strengthExercise(`Core Move ${i + 1}`, 'core')),
+      strengthExercise('Chest Press', 'chest'),
+    ]
+    const workout = expectRight(
+      generate(
+        catalog,
+        [],
+        baseConstraints({
+          focus: 'strength',
+          targetMinutes: 15,
+          equipment: [],
+          emphasis: ['core', 'chest'],
+          seed: 77,
+        }),
+      ),
+    )
+    const groups = sourcesOf(workout, catalog).flatMap((source) => source.muscleGroups)
+    expect(groups).not.toContain('chest')
+    expect(new Set(groups)).toEqual(new Set(['core']))
   })
 })
 
@@ -232,16 +355,8 @@ describe('generate — infeasibility, never a throw', () => {
   it('returns Left when recent names starve the pool below station count', () => {
     // 15-min templates need 4–6 stations. Catalog of 8 is enough pre-recent;
     // exclude 5 → 3 left, below every eligible template's station count.
-    const smallCatalog = Array.from(
-      { length: 8 },
-      (_, i) =>
-        new Exercise({
-          name: `Move ${i + 1}`,
-          modality: 'strength',
-          muscleGroups: ['core'],
-          equipment: [],
-          intensity: 'moderate',
-        }),
+    const smallCatalog = Array.from({ length: 8 }, (_, i) =>
+      strengthExercise(`Move ${i + 1}`, 'core'),
     )
     const recent = ['Move 1', 'Move 2', 'Move 3', 'Move 4', 'Move 5']
     const result = generate(

@@ -12,6 +12,7 @@ import {
   muscleGroupLabel,
 } from '@j45/domain'
 
+import { FacetGroup } from '@/components/facet-group'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +42,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 const MODALITIES = Modality.literals
 const INTENSITIES = Intensity.literals
@@ -95,35 +95,6 @@ function draftToExercise(draft: Draft): Exercise | undefined {
     muscleGroups: [first, ...rest],
     equipment: [...draft.equipment],
   })
-}
-
-/** Multi-select toggle-group used by filter chips and form tag fields. */
-export function FacetGroup<A extends string>(props: {
-  readonly values: readonly A[]
-  readonly selected: readonly A[]
-  readonly labels: Record<A, string>
-  readonly testIdPrefix: string
-  readonly onChange: (next: A[]) => void
-}) {
-  if (props.values.length === 0) {
-    return null
-  }
-  return (
-    <ToggleGroup
-      multiple
-      variant="outline"
-      size="sm"
-      className="w-full max-w-full flex-wrap"
-      value={props.selected}
-      onValueChange={(next) => props.onChange(next as A[])}
-    >
-      {props.values.map((value) => (
-        <ToggleGroupItem key={value} value={value} data-testid={`${props.testIdPrefix}-${value}`}>
-          {props.labels[value]}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  )
 }
 
 function FormSelect<A extends string>(props: {

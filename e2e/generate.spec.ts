@@ -80,10 +80,30 @@ function workoutCards(page: Page) {
 /** Compile chip shape: `N works · MM:SS` (or `M:SS` for short totals). */
 const SUMMARY_SHAPE = /^\d+ works · \d{1,2}:\d{2}$/
 
-/** Opens a base-ui Select by its trigger testid and picks the option with the given label. */
-async function pickSelectOption(page: Page, testId: string, optionLabel: string): Promise<void> {
-  await page.getByTestId(testId).click()
-  await page.getByRole('option', { name: optionLabel }).click()
+/** What the Emphasis summary line reads when no chip is on. */
+const NO_EMPHASIS = 'No emphasis — every strength exercise qualifies'
+
+/** What the same line reads while a cardio Focus disables the field. */
+const EMPHASIS_DISABLED = 'Not used — Emphasis applies to strength picks'
+
+/** What the same line reads with one group on. */
+const ONE_GROUP = '1 group narrows the strength picks'
+
+/**
+ * The height of the Emphasis field, and the drop from its top to the top of
+ * the Generate button below it. Both are read from the live layout, and both
+ * are free of the scroll position, so two readings compare directly.
+ */
+async function emphasisLayout(page: Page) {
+  return page.evaluate(() => {
+    const field = document.querySelector('[data-testid="generate-emphasis"]')
+    const below = document.querySelector('[data-testid="generate-button"]')
+    if (field === null || below === null) {
+      throw new Error('generate form is missing the Emphasis field or the Generate button')
+    }
+    const f = field.getBoundingClientRect()
+    return { height: f.height, dropToButton: below.getBoundingClientRect().top - f.top }
+  })
 }
 
 /**
@@ -103,7 +123,9 @@ async function generatePreview(page: Page): Promise<void> {
   await page.getByTestId('generate-target-minutes-dec').click()
   await page.getByTestId('generate-target-minutes-inc').click()
   await expect(page.getByTestId('generate-target-minutes')).toHaveValue('30')
-  await pickSelectOption(page, 'generate-emphasis', 'None')
+  // No emphasis: the journey taps no chip, and the summary line says what that
+  // empty selection means.
+  await expect(page.getByTestId('generate-emphasis-summary')).toHaveText(NO_EMPHASIS)
 
   await page.getByTestId('generate-button').click()
   await expect(page.getByTestId('generate-preview')).toBeVisible({ timeout: 30_000 })
@@ -111,13 +133,89 @@ async function generatePreview(page: Page): Promise<void> {
 }
 
 /**
+ * Asserts the equipment summary line through the two bulk controls.
+ *
+ * The form arrives with the full kit, and the line says so. None clears the
+ * kit, and the line then names the bodyweight-only meaning that an empty kit
+ * carries. All restores the kit, so the journey keeps permissive constraints.
+ */
+async function assertEquipmentSummary(page: Page): Promise<void> {
+  const summary = page.getByTestId('generate-equipment-summary')
+  await expect(summary).toHaveText('All kit')
+  await page.getByTestId('generate-equipment-none').click()
+  await expect(summary).toHaveText('Bodyweight only')
+  await page.getByTestId('generate-equipment-all').click()
+  await expect(summary).toHaveText('All kit')
+}
+
+/**
+ * Flips the Focus to cardio and back, and asserts that the Emphasis field goes
+ * off in place: the chips are disabled, the line carries the note, the
+ * selection stays, and the layout does not move.
+ *
+ * The no-reflow claim is a claim about pixels, so this reads the live layout
+ * and does not read the markup. `live` is the line the field shows for the
+ * selection it holds, and the caller runs the check once per selection state:
+ * the three summary cases are three different lengths, and a line that wrapped
+ * in one state but not in the other would move the form.
+ */
+async function assertCardioDisablesEmphasis(page: Page, live: string): Promise<void> {
+  const groups = ['glutes', 'core', 'calves']
+  const summary = page.getByTestId('generate-emphasis-summary')
+  const glutes = page.getByTestId('generate-emphasis-glutes')
+
+  await expect(summary).toHaveText(live)
+  const wasPressed = (await glutes.getAttribute('aria-pressed')) ?? 'false'
+  const before = await emphasisLayout(page)
+
+  await page.getByTestId('generate-focus-cardio').click()
+  await expect(summary).toHaveText(EMPHASIS_DISABLED)
+  for (const group of groups) {
+    await expect(page.getByTestId(`generate-emphasis-${group}`)).toBeDisabled()
+  }
+
+  // The field is disabled, and it is not hidden. It keeps its own height, and
+  // it keeps the Generate button below it where it was.
+  await expect(page.getByTestId('generate-emphasis')).toBeVisible()
+  expect(await emphasisLayout(page)).toEqual(before)
+  await expect(glutes).toHaveAttribute('aria-pressed', wasPressed)
+
+  // The Focus goes back, and the field comes back live with what it held.
+  await page.getByTestId('generate-focus-hybrid').click()
+  for (const group of groups) {
+    await expect(page.getByTestId(`generate-emphasis-${group}`)).toBeEnabled()
+  }
+  await expect(glutes).toHaveAttribute('aria-pressed', wasPressed)
+  await expect(summary).toHaveText(live)
+  expect(await emphasisLayout(page)).toEqual(before)
+}
+
+/**
+ * Runs the cardio rule over both selection states of the field.
+ *
+ * The helper leaves the form with no emphasis and a hybrid Focus, which is the
+ * permissive state that the rest of the journey wants.
+ */
+async function assertEmphasisCardioRule(page: Page): Promise<void> {
+  const chip = page.getByTestId('generate-emphasis-glutes')
+
+  // The empty state carries the longest of the three lines.
+  await assertCardioDisablesEmphasis(page, NO_EMPHASIS)
+
+  await chip.click()
+  await assertCardioDisablesEmphasis(page, ONE_GROUP)
+
+  await chip.click()
+  await expect(page.getByTestId('generate-emphasis-summary')).toHaveText(NO_EMPHASIS)
+}
+
+/**
  * Asserts that the generate form shows the domain labels. The raw vocabulary
  * strings `med-ball` and `jump-rope`, and the focus literals, must not appear
  * as visible text.
  *
- * After ADR-0003 no muscle group has a hyphen. The Emphasis popup therefore
- * shows only that the field uses labels. Equipment tests the raw-literal
- * rule.
+ * After ADR-0003 no muscle group has a hyphen. The Emphasis chips therefore
+ * show only that the field uses labels. Equipment tests the raw-literal rule.
  */
 async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
   await expect(page.getByTestId('generate-screen')).toBeVisible()
@@ -127,11 +225,13 @@ async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
   await expect(page.getByTestId('generate-equipment-med-ball')).toHaveText('Med ball')
   await expect(page.getByTestId('generate-equipment-jump-rope')).toHaveText('Jump rope')
 
-  // Emphasis options live in the base-ui Select popup — open, assert, dismiss.
-  await page.getByTestId('generate-emphasis').click()
-  await expect(page.getByRole('option', { name: 'Core' })).toBeVisible()
-  // Pick None so the popup closes without changing the default.
-  await page.getByRole('option', { name: 'None' }).click()
+  // Emphasis is a row of chips. The test id keeps the raw literal, and the
+  // chip shows the label. Nothing has to open.
+  await expect(page.getByTestId('generate-emphasis-core')).toHaveText('Core')
+  await expect(page.getByTestId('generate-emphasis-hamstrings')).toHaveText('Hamstrings')
+  const emphasisText = await page.getByTestId('generate-emphasis').textContent()
+  expect(emphasisText).not.toMatch(/\bcore\b/)
+  expect(emphasisText).not.toMatch(/\bhamstrings\b/)
 
   const generateText = await page.getByTestId('generate-screen').textContent()
   expect(generateText).toContain('Cardio')
@@ -202,11 +302,13 @@ test.describe('generate (chromium + webkit)', () => {
       await page.getByTestId('tab-generate').click()
       await expect(page).toHaveURL(/\/generate/)
       await assertDomainLabelsOnGenerateScreen(page)
+      await assertEquipmentSummary(page)
+      await assertEmphasisCardioRule(page)
 
       // Resume the generate flow after the label assertion (same knobs as generatePreview).
       await page.getByTestId('generate-focus-hybrid').click()
       await expect(page.getByTestId('generate-target-minutes')).toHaveValue('30')
-      await pickSelectOption(page, 'generate-emphasis', 'None')
+      await expect(page.getByTestId('generate-emphasis-summary')).toHaveText(NO_EMPHASIS)
       await page.getByTestId('generate-button').click()
       await expect(page.getByTestId('generate-preview')).toBeVisible({ timeout: 30_000 })
       await expect(page.getByTestId('generate-error')).toHaveCount(0)
@@ -293,7 +395,11 @@ test.describe('generate (chromium + webkit)', () => {
       // Strength + Calves starves the seed catalog (one calves-tagged strength
       // exercise) while keeping the form knobs on the real kit controls.
       await page.getByTestId('generate-focus-strength').click()
-      await pickSelectOption(page, 'generate-emphasis', 'Calves')
+      await page.getByTestId('generate-emphasis-calves').click()
+      await expect(page.getByTestId('generate-emphasis-calves')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
       await page.getByTestId('generate-button').click()
 
       const error = page.getByTestId('generate-error')
@@ -313,7 +419,7 @@ test.describe('generate (chromium + webkit)', () => {
         'true',
       )
       await expect(page.getByTestId('generate-target-minutes')).toBeEnabled()
-      await expect(page.getByTestId('generate-emphasis')).toBeEnabled()
+      await expect(page.getByTestId('generate-emphasis-calves')).toBeEnabled()
     },
   )
 })

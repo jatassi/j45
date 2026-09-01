@@ -1,38 +1,26 @@
 // @vitest-environment jsdom
-import { RegistryProvider, Result } from '@effect-atom/atom-react'
 import {
   Equipment,
-  Flow,
   GenerationInfeasible,
-  LibraryWorkout,
-  Pod,
-  Round,
-  Station,
+  MuscleGroup,
   Workout,
-  WorkoutId,
   type GenerationConstraints,
 } from '@j45/domain'
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import * as DateTime from 'effect/DateTime'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import * as Effect from 'effect/Effect'
-import * as Runtime from 'effect/Runtime'
-import * as Schema from 'effect/Schema'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { GenerateScreen } from '@/components/generate-screen'
-import { LibraryScreen } from '@/components/library-screen'
-import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
-import { NewWorkoutScreen } from '@/components/workout-editor-screen'
 import { takeInitialDraft } from '@/lib/editor-draft'
-import { ServerRpcClient } from '@/lib/rpc-client'
+
+import {
+  athleticaWorkout,
+  fieldValue,
+  isDisabled,
+  libraryWorkoutOf,
+  pressed,
+  renderApp,
+  renderCapturingPayloads,
+} from './generate-harness'
 
 afterEach(() => {
   cleanup()
@@ -40,118 +28,6 @@ afterEach(() => {
   // Drain any leftover one-shot handoff so tests stay isolated.
   takeInitialDraft()
 })
-
-type Handlers = Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>
-
-/** Fake rpc runtime — the same idiom `workout-editor-screen.test.tsx` uses. */
-function makeFakeRuntime(handlers: Handlers) {
-  const client = (tag: string, payload: unknown) => {
-    const handler = handlers[tag]
-    if (handler === undefined) {
-      throw new Error(`unexpected rpc call: ${tag}`)
-    }
-    return handler(payload)
-  }
-  return Runtime.defaultRuntime.pipe(Runtime.provideService(ServerRpcClient, client as never))
-}
-
-const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
-
-/** Athletica: 3 pods × 3 stations, uniform laps 40″/20″ × 3 — domain golden 27 works · 26:45. */
-const athleticaWorkout = new Workout({
-  name: 'Iron Falcon',
-  focus: 'hybrid',
-  pods: [
-    new Pod({
-      name: 'Pod 1',
-      stations: [
-        new Station({ name: 'Rower' }),
-        new Station({ name: 'Squat press' }),
-        new Station({ name: 'Burpee' }),
-      ],
-    }),
-    new Pod({
-      name: 'Pod 2',
-      stations: [
-        new Station({ name: 'Bike' }),
-        new Station({ name: 'Swing' }),
-        new Station({ name: 'Climbers' }),
-      ],
-    }),
-    new Pod({
-      name: 'Pod 3',
-      stations: [
-        new Station({ name: 'Snatch' }),
-        new Station({ name: 'Step-ups' }),
-        new Station({ name: 'Slam ball' }),
-      ],
-    }),
-  ],
-  flow: new Flow({
-    type: 'laps',
-    rounds: [
-      new Round({ workSeconds: 40, restSeconds: 20 }),
-      new Round({ workSeconds: 40, restSeconds: 20 }),
-      new Round({ workSeconds: 40, restSeconds: 20 }),
-    ],
-  }),
-})
-
-const libraryWorkoutOf = (id: string, workout: Workout) =>
-  new LibraryWorkout({
-    id: Schema.decodeSync(WorkoutId)(id),
-    workout,
-    createdAt: seededAt,
-    updatedAt: seededAt,
-  })
-
-/** Full route tree covering library home, generate, new editor, and detail. */
-function renderApp(handlers: Handlers, initialPath: string) {
-  const fakeRuntime = makeFakeRuntime(handlers)
-  const rootRoute = createRootRoute({ component: Outlet })
-  const indexRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: LibraryScreen,
-  })
-  const generateRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/generate',
-    component: GenerateScreen,
-  })
-  const newRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workouts/new',
-    component: NewWorkoutScreen,
-  })
-  const detailRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workouts/$workoutId',
-    component: WorkoutDetailScreen,
-  })
-  const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, generateRoute, newRoute, detailRoute]),
-    history: createMemoryHistory({ initialEntries: [initialPath] }),
-  })
-  render(
-    <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
-      <RouterProvider router={testRouter} />
-    </RegistryProvider>,
-  )
-}
-
-const pressed = (testId: string): string | null =>
-  screen.getByTestId(testId).getAttribute('aria-pressed')
-
-const fieldValue = (testId: string): string => {
-  const el = screen.getByTestId(testId)
-  return el instanceof HTMLInputElement ? el.value : ''
-}
-
-const isDisabled = (testId: string): boolean => {
-  const el = screen.getByTestId(testId)
-  return el instanceof HTMLButtonElement && el.disabled
-}
 
 describe('GenerateScreen', () => {
   it('renders at /generate with library-nav-link pointing to /library', async () => {
@@ -362,6 +238,78 @@ describe('GenerateScreen', () => {
     expect(fieldValue('generate-no-repeat')).toBe('0')
   })
 
+  it('shows every equipment chip as plainly selected on arrival, and clears the mark when one goes off', async () => {
+    renderApp({}, '/generate')
+    await screen.findByTestId('generate-screen')
+
+    // The report says that the all-on default reads as all-off. Every chip
+    // thus carries its own mark when the form opens.
+    for (const eq of Equipment.literals) {
+      expect(pressed(`generate-equipment-${eq}`)).toBe('true')
+      expect(screen.queryByTestId(`generate-equipment-${eq}-check`)).not.toBeNull()
+    }
+
+    // Off is now the state that the screen marks. The mark goes from the chip
+    // that the user pressed, and from no other chip.
+    fireEvent.click(screen.getByTestId('generate-equipment-barbell'))
+    expect(pressed('generate-equipment-barbell')).toBe('false')
+    expect(screen.queryByTestId('generate-equipment-barbell-check')).toBeNull()
+    expect(pressed('generate-equipment-rower')).toBe('true')
+    expect(screen.queryByTestId('generate-equipment-rower-check')).not.toBeNull()
+  })
+
+  it('equipment All and None set the whole kit, and the summary line states each of the three states', async () => {
+    renderApp({}, '/generate')
+    await screen.findByTestId('generate-screen')
+
+    const summary = () => screen.getByTestId('generate-equipment-summary').textContent
+    const total = Equipment.literals.length
+    const allPressed = (state: string) =>
+      Equipment.literals.every((eq) => pressed(`generate-equipment-${eq}`) === state)
+
+    // Arrival: every chip on, and the line says so in words.
+    expect(allPressed('true')).toBe(true)
+    expect(summary()).toBe('All kit')
+
+    // None clears the kit. The empty kit is a choice, so the line names it.
+    fireEvent.click(screen.getByTestId('generate-equipment-none'))
+    expect(allPressed('false')).toBe(true)
+    expect(summary()).toBe('Bodyweight only')
+
+    // "I own dumbbells only" is now two taps, and the line counts them.
+    fireEvent.click(screen.getByTestId('generate-equipment-dumbbell'))
+    expect(pressed('generate-equipment-dumbbell')).toBe('true')
+    expect(pressed('generate-equipment-barbell')).toBe('false')
+    expect(summary()).toBe(`1 of ${total} selected`)
+
+    // All restores the full kit.
+    fireEvent.click(screen.getByTestId('generate-equipment-all'))
+    expect(allPressed('true')).toBe(true)
+    expect(summary()).toBe('All kit')
+
+    // One chip off is a partial kit, and not the full kit.
+    fireEvent.click(screen.getByTestId('generate-equipment-rower'))
+    expect(summary()).toBe(`${total - 1} of ${total} selected`)
+  })
+
+  it('sends the empty equipment list after None, and the full list after All', async () => {
+    const sent = renderCapturingPayloads()
+    await screen.findByTestId('generate-screen')
+
+    // None means bodyweight only, and it travels as the empty allowed set.
+    fireEvent.click(screen.getByTestId('generate-equipment-none'))
+    fireEvent.click(screen.getByTestId('generate-button'))
+    await screen.findByTestId('generate-preview')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.equipment).toEqual([])
+
+    // All sends every value. The wire shape stays the same list of literals.
+    fireEvent.click(screen.getByTestId('generate-equipment-all'))
+    fireEvent.click(screen.getByTestId('generate-regenerate'))
+    await waitFor(() => expect(sent).toHaveLength(2))
+    expect([...(sent[1]?.equipment ?? [])].toSorted()).toEqual(Equipment.literals.toSorted())
+  })
+
   it('focus, emphasis, and equipment options render domain labels (not raw vocabulary literals)', async () => {
     renderApp({}, '/generate')
     await screen.findByTestId('generate-screen')
@@ -375,11 +323,15 @@ describe('GenerateScreen', () => {
     expect(focusRoot.textContent).not.toMatch(/\bcardio\b/)
     expect(focusRoot.textContent).not.toMatch(/\bstrength\b/)
 
-    // Emphasis select: open the popup and assert option labels.
-    fireEvent.click(screen.getByTestId('generate-emphasis'))
-    expect(await screen.findByRole('option', { name: 'Core' })).toBeTruthy()
-    // Trigger shows the selected "None" domain label, not a raw empty value.
-    expect(within(screen.getByTestId('generate-emphasis')).getByText('None')).toBeTruthy()
+    // Emphasis chips: one per muscle group, testids raw, chip text the label.
+    for (const group of MuscleGroup.literals) {
+      expect(screen.getByTestId(`generate-emphasis-${group}`)).toBeTruthy()
+    }
+    expect(screen.getByTestId('generate-emphasis-core').textContent).toBe('Core')
+    expect(screen.getByTestId('generate-emphasis-hamstrings').textContent).toBe('Hamstrings')
+    const emphasisField = screen.getByTestId('generate-emphasis')
+    expect(emphasisField.textContent).not.toMatch(/\bcore\b/)
+    expect(emphasisField.textContent).not.toMatch(/\bhamstrings\b/)
 
     // Equipment chips: testids stay raw; chip text is the domain label.
     expect(screen.getByTestId('generate-equipment-med-ball').textContent).toBe('Med ball')
@@ -387,5 +339,116 @@ describe('GenerateScreen', () => {
     expect(screen.getByTestId('generate-equipment-dumbbell').textContent).toBe('Dumbbells')
     expect(screen.getByTestId('generate-equipment-med-ball').textContent).not.toBe('med-ball')
     expect(screen.getByTestId('generate-equipment-jump-rope').textContent).not.toBe('jump-rope')
+  })
+
+  it('Emphasis chips start off; taps add and remove groups, and the payload carries the list', async () => {
+    const sent = renderCapturingPayloads()
+    await screen.findByTestId('generate-screen')
+
+    // No selected chip is now how the form says "no emphasis".
+    for (const group of MuscleGroup.literals) {
+      expect(pressed(`generate-emphasis-${group}`)).toBe('false')
+      expect(screen.queryByTestId(`generate-emphasis-${group}-check`)).toBeNull()
+    }
+
+    // An empty selection is an absence, and it travels as one. The schema
+    // cannot hold an empty list, so the key itself goes.
+    fireEvent.click(screen.getByTestId('generate-button'))
+    await screen.findByTestId('generate-preview')
+    expect(sent).toHaveLength(1)
+    expect(Object.hasOwn(sent[0] ?? {}, 'emphasis')).toBe(false)
+
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    fireEvent.click(screen.getByTestId('generate-emphasis-hamstrings'))
+    expect(pressed('generate-emphasis-glutes')).toBe('true')
+    expect(screen.queryByTestId('generate-emphasis-glutes-check')).not.toBeNull()
+    expect(pressed('generate-emphasis-quads')).toBe('false')
+
+    fireEvent.click(screen.getByTestId('generate-regenerate'))
+    await waitFor(() => expect(sent).toHaveLength(2))
+    expect([...(sent[1]?.emphasis ?? [])].toSorted()).toEqual(['glutes', 'hamstrings'])
+
+    // A second tap on a selected chip removes that group.
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    expect(pressed('generate-emphasis-glutes')).toBe('false')
+    fireEvent.click(screen.getByTestId('generate-regenerate'))
+    await waitFor(() => expect(sent).toHaveLength(3))
+    expect(sent[2]?.emphasis).toEqual(['hamstrings'])
+  })
+
+  it('a cardio Focus disables the Emphasis chips in place, states why, keeps the selection, and sends no emphasis', async () => {
+    const sent = renderCapturingPayloads()
+    await screen.findByTestId('generate-screen')
+
+    const summary = () => screen.getByTestId('generate-emphasis-summary').textContent
+    const groups = MuscleGroup.literals
+    const disabledChips = () => groups.filter((g) => isDisabled(`generate-emphasis-${g}`)).length
+
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    fireEvent.click(screen.getByTestId('generate-emphasis-hamstrings'))
+    expect(summary()).toBe('2 groups narrow the strength picks')
+    const field = screen.getByTestId('generate-emphasis')
+    const shapeBefore = field.querySelectorAll('*').length
+
+    fireEvent.click(screen.getByTestId('generate-focus-cardio'))
+
+    // Emphasis narrows the strength picks, and a cardio workout has none. The
+    // field stops taking input instead of looking live and doing nothing.
+    expect(disabledChips()).toBe(groups.length)
+    expect(summary()).toBe('Not used — Emphasis applies to strength picks')
+
+    // The note reuses the summary line rather than adding a second element, so
+    // the field holds exactly the elements it held before. That is the
+    // structural half of "the form does not reflow"; the pixel half is measured
+    // against the live layout in `e2e/generate.spec.ts`, which jsdom cannot do.
+    expect(screen.getByTestId('generate-emphasis')).toBe(field)
+    expect(field.querySelectorAll('*').length).toBe(shapeBefore)
+
+    // The work of the user survives, no press can change it, and the check
+    // marks keep it visible while the line speaks about the focus instead.
+    expect(pressed('generate-emphasis-glutes')).toBe('true')
+    expect(screen.queryByTestId('generate-emphasis-glutes-check')).not.toBeNull()
+    fireEvent.click(screen.getByTestId('generate-emphasis-quads'))
+    expect(pressed('generate-emphasis-quads')).toBe('false')
+
+    // A field that does nothing must put nothing on the wire.
+    fireEvent.click(screen.getByTestId('generate-button'))
+    await screen.findByTestId('generate-preview')
+    expect(sent).toHaveLength(1)
+    expect(Object.hasOwn(sent[0] ?? {}, 'emphasis')).toBe(false)
+
+    // Back to a focus that draws strength: live again, selection intact.
+    fireEvent.click(screen.getByTestId('generate-focus-hybrid'))
+    expect(disabledChips()).toBe(0)
+    expect(pressed('generate-emphasis-glutes')).toBe('true')
+    expect(pressed('generate-emphasis-hamstrings')).toBe('true')
+    expect(summary()).toBe('2 groups narrow the strength picks')
+
+    fireEvent.click(screen.getByTestId('generate-regenerate'))
+    await waitFor(() => expect(sent).toHaveLength(2))
+    expect([...(sent[1]?.emphasis ?? [])].toSorted()).toEqual(['glutes', 'hamstrings'])
+  })
+
+  it('the Emphasis summary follows the selection, and its empty state reads unlike an empty kit', async () => {
+    renderApp({}, '/generate')
+    await screen.findByTestId('generate-screen')
+
+    const emphasis = () => screen.getByTestId('generate-emphasis-summary').textContent
+    const equipment = () => screen.getByTestId('generate-equipment-summary').textContent
+
+    expect(emphasis()).toBe('No emphasis — every strength exercise qualifies')
+
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    expect(emphasis()).toBe('1 group narrows the strength picks')
+    fireEvent.click(screen.getByTestId('generate-emphasis-hamstrings'))
+    expect(emphasis()).toBe('2 groups narrow the strength picks')
+
+    // The two empty states mean the opposite of each other. The lines are how
+    // the screen tells them apart.
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    fireEvent.click(screen.getByTestId('generate-emphasis-hamstrings'))
+    fireEvent.click(screen.getByTestId('generate-equipment-none'))
+    expect(equipment()).toBe('Bodyweight only')
+    expect(emphasis()).not.toBe(equipment())
   })
 })

@@ -16,6 +16,7 @@ import { EmphasisField } from '@/components/generate/emphasis-field'
 import { EquipmentField } from '@/components/generate/equipment-field'
 import { FocusField } from '@/components/generate/focus-field'
 import {
+  emphasisPayload,
   EQUIPMENT,
   infeasibleReason,
   mintSeed,
@@ -51,7 +52,7 @@ function useGenerateActions() {
         focus: c.focus,
         targetMinutes: c.targetMinutes,
         equipment: [...c.equipment],
-        ...(c.emphasis === undefined ? {} : { emphasis: c.emphasis }),
+        ...emphasisPayload(c.focus, c.emphasis),
         noRepeatSessions: c.noRepeatSessions,
         seed,
       },
@@ -83,7 +84,7 @@ function useConstraints(): FormModel {
   const [focus, setFocus] = React.useState<Focus>('hybrid')
   const [minutes, setMinutes] = React.useState(30)
   const [equipment, setEquipment] = React.useState<ReadonlySet<Equipment>>(() => new Set(EQUIPMENT))
-  const [emphasis, setEmphasis] = React.useState<MuscleGroup | undefined>(undefined)
+  const [emphasis, setEmphasis] = React.useState<ReadonlySet<MuscleGroup>>(() => new Set())
   const [noRepeat, setNoRepeat] = React.useState(3)
   return {
     c: { focus, targetMinutes: minutes, equipment, emphasis, noRepeatSessions: noRepeat },
