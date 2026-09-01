@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 
+import { expectNoGlassOverlapsTheCountdown } from './support/countdown-glass.js'
 import {
   APEX_STATION_1,
   APEX_STATION_2,
@@ -416,6 +417,51 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
       } finally {
         await contextB.close()
       }
+    },
+  )
+
+  test(
+    'no glass surface overlaps the live Session countdown: the refracting control dock stays ' +
+      'clear of the digits on a small, a standard and a large phone',
+    async ({ page, browserName }) => {
+      test.skip(
+        browserName !== 'chromium',
+        'live-session e2e is chromium-only (two logged-in browser contexts; not webkit).',
+      )
+      test.setTimeout(60_000)
+
+      const env = readE2eEnv()
+      const [codeA] = await mintTwoInviteCodes(page, env.baseUrl, env.owner)
+      await registerAndReachLibrary(page, env.baseUrl, {
+        code: codeA,
+        username: 'e2e-ls5-a',
+        displayName: 'Live Glass A',
+        pin: '6420',
+      })
+
+      // One client, not two. The measurement is of one screen's own layout,
+      // so a second Participant would add cost and tell it nothing.
+      await page.setViewportSize({ width: 390, height: 844 })
+      await startApexSession(page)
+      await expect(page.getByTestId('player-progress-arc')).toBeVisible()
+      await expect(page.getByTestId('session-count')).toBeVisible()
+
+      // This screen, not only the manual timer. The live Session's control
+      // dock takes the refract tier, so its composited slice becomes the
+      // visible refraction, and this is the one screen where a repaint of the
+      // digits could be seen. The manual timer caps its dock at the CSS tier.
+      await expectNoGlassOverlapsTheCountdown(page)
+      await page.setViewportSize({ width: 360, height: 640 })
+      await expectNoGlassOverlapsTheCountdown(page)
+      // The pixel ceiling binds on a large phone, where this screen holds the
+      // higher ceiling of the two and therefore the smaller clearance.
+      await page.setViewportSize({ width: 430, height: 932 })
+      await expectNoGlassOverlapsTheCountdown(page)
+
+      // End the session before the browser closes, so that its row does not
+      // stay in every account's lobby until the 60-second collector removes it.
+      await leaveSessionWithConfirm(page)
+      await expect(page.getByTestId('home-screen')).toBeVisible()
     },
   )
 })

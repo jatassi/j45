@@ -172,13 +172,16 @@ type LiveDigits = { rect: DocRect; value: string; digits: RenderedDigits }
  * urgency, so a critical count is red on screen and would repaint white here.
  *
  * This is allowed because it never runs. A proxy paints only where a
- * refracting surface covers its region, and nothing covers this one: the
- * countdown clears the control dock by 108px or more on every phone, and by
- * 62px on a viewport shorter than any phone. `e2e/timer.spec.ts` holds that
- * measurement, on the manual timer, which is the closer of the two screens.
+ * refracting surface covers its region, and nothing covers this one. The
+ * countdown clears the control dock by 108px or more on every phone.
  *
- * If that test fails, this function must read the digit colour the component
- * already sets, rather than white. The sheen gradient stays out: it is a
+ * Both player screens hold that measurement. `e2e/live-session.spec.ts` is
+ * where the defect would be seen, because that dock takes the refract tier.
+ * `e2e/timer.spec.ts` covers the manual timer, whose countdown sits lower on
+ * the screen.
+ *
+ * If those tests fail, this function must read the digit colour the component
+ * already sets, rather than white. The sheen gradient stays out. It is a
  * gradient rebuilt on every repaint, for a region behind frosted glass.
  */
 function paintDigits(ctx: CanvasRenderingContext2D, live: LiveDigits): void {
@@ -202,16 +205,18 @@ function paintDigits(ctx: CanvasRenderingContext2D, live: LiveDigits): void {
  *
  * **The held measurement goes stale.** The type scale changes with the
  * character count, so the countdown changes size at `1:00` and at `10:00`
- * during an ordinary Session, and the arc moves and resizes when the viewport
+ * during an ordinary Session. The arc also moves and resizes when the viewport
  * does. The measurement was safe while the countdown kept one size. It is not
- * safe now, and it is kept for the same reason {@link paintDigits} keeps flat
+ * safe now. It is kept for the same reason {@link paintDigits} keeps flat
  * white: nothing refracts over this region, so nothing repaints from the held
- * values. `e2e/timer.spec.ts` holds that measurement.
+ * values.
  *
- * The two shortcuts fall together. If that test fails, measure again whenever
- * the character count changes, and invalidate the union of the old rect and
- * the new one, so that a countdown which became smaller clears the region the
- * larger one left behind.
+ * The two shortcuts fall together, and the same two tests guard them.
+ *
+ * If those tests fail, repair this in two steps. Measure again whenever the
+ * character count changes. Then invalidate the union of the old rect and the
+ * new one, so that a countdown which became smaller clears the region the
+ * larger one left.
  */
 function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void {
   const handleRef = useRef<SceneProxyHandle | null>(null)
