@@ -1,6 +1,6 @@
 import { equipmentLabel } from '@j45/domain'
 
-import { FacetGroup } from '@/components/exercise-catalog-overlays'
+import { FacetGroup } from '@/components/facet-group'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 
 import { EQUIPMENT, type FormModel } from './model'
