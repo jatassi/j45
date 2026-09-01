@@ -84,8 +84,9 @@ unrecorded wherever they fit.
   kept as it stands when the two Segments are equal. An edit that changes a
   later Station does not change this interval, so a Participant with 10s left
   resumes with 10s left. A save that compiles to the plan already in force is
-  not a change. It puts the whole stored plan on the Session: the name, the
-  focus and the note. A completion record holds the whole plan, and it must
+  not a change. The plan holds the Flow, so a save that flips the Flow is a
+  change, even when the Segments are the same. It puts the whole stored plan
+  on the Session: the name, the focus and the note. A completion record holds the whole plan, and it must
   not hold two versions of it. Such a save raises no notice. Once the timer is
   done the plan is frozen, and a later change never reaches the Session. A
   delete ends every live Session of the Workout.
