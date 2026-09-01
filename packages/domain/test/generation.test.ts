@@ -238,7 +238,7 @@ describe('generate — infeasibility, never a throw', () => {
         new Exercise({
           name: `Move ${i + 1}`,
           modality: 'strength',
-          muscleGroups: ['full-body'],
+          muscleGroups: ['core'],
           equipment: [],
           intensity: 'moderate',
         }),

@@ -2,7 +2,7 @@
   {
     "name": "Rower",
     "modality": "cardio",
-    "muscleGroups": ["back"],
+    "muscleGroups": ["full-body", "back"],
     "equipment": ["rower"],
     "intensity": "moderate"
   },
@@ -17,7 +17,7 @@
     "name": "Burpee",
     "detail": "step back = no-jump",
     "modality": "cardio",
-    "muscleGroups": ["core"],
+    "muscleGroups": ["full-body", "core"],
     "equipment": [],
     "intensity": "high"
   },
@@ -25,7 +25,7 @@
     "name": "Bike",
     "detail": "or treadmill; seated, standing, or high-resistance climb",
     "modality": "cardio",
-    "muscleGroups": ["quads"],
+    "muscleGroups": ["quads", "full-body"],
     "equipment": ["bike"],
     "intensity": "moderate"
   },
@@ -48,7 +48,7 @@
     "name": "Dumbbell single-arm snatch",
     "detail": "alternate arms",
     "modality": "strength",
-    "muscleGroups": ["shoulders"],
+    "muscleGroups": ["full-body", "shoulders"],
     "equipment": ["dumbbell"],
     "intensity": "high"
   },
@@ -64,7 +64,7 @@
     "name": "Slam-ball over-shoulder throw",
     "detail": "or dumbbell; sub: dumbbell thruster",
     "modality": "strength",
-    "muscleGroups": ["shoulders", "back"],
+    "muscleGroups": ["full-body", "shoulders", "back"],
     "equipment": ["slam-ball"],
     "intensity": "high"
   },
@@ -196,7 +196,7 @@
   {
     "name": "Side burpee",
     "modality": "cardio",
-    "muscleGroups": ["core"],
+    "muscleGroups": ["full-body", "core"],
     "equipment": [],
     "intensity": "high"
   },
@@ -286,7 +286,7 @@
   {
     "name": "Med ball shuffle + rotation",
     "modality": "cardio",
-    "muscleGroups": ["core"],
+    "muscleGroups": ["core", "full-body"],
     "equipment": ["med-ball"],
     "intensity": "moderate"
   },
@@ -302,7 +302,7 @@
     "name": "Plate snatch",
     "detail": "or dumbbell",
     "modality": "strength",
-    "muscleGroups": ["shoulders"],
+    "muscleGroups": ["full-body", "shoulders"],
     "equipment": ["plate"],
     "intensity": "high"
   },
@@ -392,7 +392,7 @@
   {
     "name": "Sprawl + forward jump + back-pedal",
     "modality": "cardio",
-    "muscleGroups": ["core"],
+    "muscleGroups": ["full-body"],
     "equipment": [],
     "intensity": "high"
   },
@@ -462,7 +462,7 @@
     "name": "Jump rope",
     "detail": "or dumbbell fast alternating front raises",
     "modality": "cardio",
-    "muscleGroups": ["calves"],
+    "muscleGroups": ["calves", "full-body"],
     "equipment": ["jump-rope"],
     "intensity": "moderate"
   },
@@ -477,7 +477,7 @@
     "name": "Barbell thruster",
     "detail": "squat to press",
     "modality": "strength",
-    "muscleGroups": ["quads", "shoulders"],
+    "muscleGroups": ["quads", "shoulders", "full-body"],
     "equipment": ["barbell"],
     "intensity": "high"
   },
@@ -485,7 +485,7 @@
     "name": "Reverse burpee",
     "detail": "roll back, rock up",
     "modality": "cardio",
-    "muscleGroups": ["core"],
+    "muscleGroups": ["full-body", "core"],
     "equipment": [],
     "intensity": "high"
   },
@@ -499,7 +499,7 @@
   {
     "name": "Dumbbell double ski-stance hang clean",
     "modality": "strength",
-    "muscleGroups": ["shoulders"],
+    "muscleGroups": ["full-body", "shoulders"],
     "equipment": ["dumbbell"],
     "intensity": "high"
   },
@@ -515,7 +515,7 @@
     "name": "Shuttle shuffle",
     "detail": "grab a marker each end",
     "modality": "cardio",
-    "muscleGroups": ["quads"],
+    "muscleGroups": ["full-body", "quads"],
     "equipment": [],
     "intensity": "high"
   },
@@ -606,7 +606,7 @@
     "name": "Shuttle run",
     "detail": "3 lengths",
     "modality": "cardio",
-    "muscleGroups": ["quads"],
+    "muscleGroups": ["full-body", "quads"],
     "equipment": [],
     "intensity": "high"
   },
@@ -636,7 +636,7 @@
   {
     "name": "Dumbbell sprawl + lateral jump",
     "modality": "cardio",
-    "muscleGroups": ["core"],
+    "muscleGroups": ["full-body"],
     "equipment": ["dumbbell"],
     "intensity": "high"
   },
@@ -651,7 +651,7 @@
     "name": "Sandbag clean + forward lunge",
     "detail": "or dumbbell",
     "modality": "strength",
-    "muscleGroups": ["quads", "glutes"],
+    "muscleGroups": ["full-body", "quads", "glutes"],
     "equipment": ["sandbag"],
     "intensity": "high"
   },
@@ -666,7 +666,7 @@
   {
     "name": "Barbell hang clean",
     "modality": "strength",
-    "muscleGroups": ["shoulders", "back"],
+    "muscleGroups": ["full-body", "shoulders", "back"],
     "equipment": ["barbell"],
     "intensity": "high"
   },
@@ -680,7 +680,7 @@
   {
     "name": "Push-up + spider lunge + row",
     "modality": "strength",
-    "muscleGroups": ["chest", "core"],
+    "muscleGroups": ["full-body", "chest", "core"],
     "equipment": [],
     "intensity": "high"
   },
@@ -694,7 +694,7 @@
   {
     "name": "Slam ball throw-up squat + catch",
     "modality": "strength",
-    "muscleGroups": ["quads"],
+    "muscleGroups": ["full-body", "quads"],
     "equipment": ["slam-ball"],
     "intensity": "high"
   },
@@ -702,14 +702,14 @@
     "name": "Dumbbell bear-hug carry",
     "detail": "20m",
     "modality": "strength",
-    "muscleGroups": ["core"],
+    "muscleGroups": ["full-body", "core"],
     "equipment": ["dumbbell"],
     "intensity": "moderate"
   },
   {
     "name": "Hand-release burpee",
     "modality": "cardio",
-    "muscleGroups": ["chest"],
+    "muscleGroups": ["full-body", "chest"],
     "equipment": [],
     "intensity": "high"
   },

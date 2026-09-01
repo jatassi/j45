@@ -38,6 +38,16 @@ describe('vocabulary labels', () => {
     }
   })
 
+  /**
+   * ADR-0003 removed `full-body` from the vocabulary. The concept did not move
+   * to a different field. The schema no longer accepts the value, and a stored
+   * row that holds it does not decode.
+   */
+  it('has ten muscle groups and does not accept full-body', () => {
+    expect(MuscleGroup.literals).toHaveLength(10)
+    expect(() => Schema.decodeUnknownSync(MuscleGroup)('full-body')).toThrow()
+  })
+
   it('maps every equipment literal to a non-empty label', () => {
     for (const literal of Equipment.literals) {
       expect(equipmentLabel[literal].length).toBeGreaterThan(0)
@@ -45,7 +55,6 @@ describe('vocabulary labels', () => {
   })
 
   it('maps hyphenated ids to exact human text', () => {
-    expect(muscleGroupLabel['full-body']).toBe('Full body')
     expect(equipmentLabel['jump-rope']).toBe('Jump rope')
     expect(equipmentLabel['med-ball']).toBe('Med ball')
     expect(equipmentLabel['pull-up-bar']).toBe('Pull-up bar')
