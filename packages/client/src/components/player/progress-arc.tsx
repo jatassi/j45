@@ -72,11 +72,12 @@ export type ProgressArcProps = {
    */
   dirtyValue?: string | number
   /**
-   * The centred content: **two** elements, the phase label above the countdown
-   * digits. Both player screens pass that same shape — anything else a screen
-   * wants to say goes below the arc, not inside it. Mark the element that
-   * carries the countdown with `data-arc-digits` so the glass proxy repaints
-   * it at the size and place it actually renders at.
+   * The centred content. Pass **two** elements: the phase label, then the
+   * countdown digits. Both player screens pass this same shape. Anything else
+   * a screen must say goes below the arc, not inside it.
+   *
+   * Mark the element that carries the countdown with `data-arc-digits`. The
+   * glass proxy then repaints it at the size and place it actually renders at.
    */
   children?: ReactNode
 }
@@ -185,8 +186,9 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
 /**
  * The immersive centrepiece: a thin phase-tinted SVG arc that depletes across
  * the current segment via `stroke-dashoffset` (driven purely from `fraction` —
- * no timers of its own), with arbitrary `children` (the countdown digits)
- * centred inside. The arc sweeps 270° and leaves a gap on the bottom. The
+ * no timers of its own), with the `children` two-element contract (the phase
+ * label and the countdown digits) centred inside. The arc sweeps 270° and
+ * leaves a gap on the bottom. The
  * digits may overflow the circle into that gap. The digits region registers a
  * dirty-region scene proxy keyed on {@link ProgressArcProps.dirtyValue}.
  */

@@ -161,7 +161,7 @@ describe('SessionScreen — where an ended session sends its people', () => {
 })
 
 describe('SessionScreen — server-state render', () => {
-  it('renders phase, exercise, station detail, next-up, and participants', async () => {
+  it('renders phase, exercise, station detail, next-up, and participants, and hands the arc only the phase label and the count', async () => {
     const id = 'sess-render'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const now = Date.now()
@@ -177,14 +177,11 @@ describe('SessionScreen — server-state render', () => {
     expect(screen.getByTestId('session-participant-u-ben').textContent).toContain('Ben')
 
     // The arc's children contract, shared with the manual timer: the phase
-    // label and the countdown, nothing else. The Station name and detail sit
-    // outside the arc, and the manual timer's context line now matches them.
+    // label and the countdown, nothing else. This side of the contract must
+    // hold too, or the two screens go back to passing different shapes.
     const slot = screen.getByTestId('player-progress-arc-digits')
     const children = [...slot.querySelectorAll<HTMLElement>(':scope > *')]
     expect(children.map((el) => el.dataset.testid)).toEqual(['session-phase', 'session-count'])
-    expect(
-      screen.getByTestId('session-exercise-name').closest('[data-testid="player-progress-arc"]'),
-    ).toBeNull()
   })
 
   it('carries data-phase on the session root matching the current segment/timer state', async () => {

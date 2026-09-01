@@ -259,15 +259,15 @@ describe('TimerScreen — the arc children contract', () => {
     fireEvent.click(screen.getByTestId('start-button'))
     await advance(5000)
 
-    // The arc holds the phase label and the countdown, and nothing else.
-    // A half circle has no room for a third line, so the manual timer passes
-    // the shape `CenterStack` already passes in `session-player-parts.tsx`.
+    // The arc holds the phase label and the countdown, and nothing else —
+    // the same two children the live session passes. The arc opens to a half
+    // circle in later work, and a half circle has no room for a third line.
     const slot = screen.getByTestId('player-progress-arc-digits')
     const children = [...slot.querySelectorAll<HTMLElement>(':scope > *')]
     expect(children.map((el) => el.dataset.testid)).toEqual(['timer-phase', 'timer-count'])
 
-    // The context line keeps its test id and text, but sits outside the arc
-    // and after it — the place the live session gives the Station name.
+    // The context line keeps its test id and text. It now sits outside the
+    // arc and after it, where the live session puts the Station name.
     const context = screen.getByTestId('timer-context')
     expect(context.textContent).toBe('Round 1 of 2')
     expect(context.closest('[data-testid="player-progress-arc"]')).toBeNull()

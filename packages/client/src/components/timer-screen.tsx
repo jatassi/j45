@@ -24,9 +24,9 @@ type Settings = {
 type TimerState = Domain.TimerState
 type Segment = Domain.Segment
 type AudioProps = { audio: Audio.AudioState; onRetry: () => void }
-/** What the arc encloses: the phase label above the countdown. Nothing else. */
+/** The phase label and the countdown: the arc's two-element children shape. */
 type DigitsProps = { phase: string; count: string }
-/** Every string the screen displays — the arc's two, plus the context line. */
+/** Every string the screen shows: those two, plus the context line. */
 type ViewText = DigitsProps & { context: string }
 type ViewModel = ViewText & { fraction: number; playerPhase: PlayerPhase }
 
@@ -231,11 +231,11 @@ function Digits({ phase, count, place }: DigitsProps & { place: DigitsPlace }) {
 }
 
 /**
- * The round indicator while running, the settings summary while idle. It is
- * never a child of the arc: the arc takes the phase label and the countdown
- * and nothing else, the shape `CenterStack` passes in
- * `session-player-parts.tsx`. Running, this line sits below the arc, where
- * the live session puts the Station name.
+ * The round indicator while running, the settings summary while idle.
+ *
+ * This line is never a child of the arc. The arc takes two children only —
+ * see `ProgressArcProps.children`. While the timer runs, this line therefore
+ * sits below the arc.
  */
 function ContextLine({ context }: { context: string }) {
   return (
@@ -335,7 +335,10 @@ function RunningView(
       <Header className="relative z-10 flex items-center justify-between px-5 pt-6" audio={p.audio} onRetry={p.onRetry} />
       {/* pointer-events-none so the absolute ControlDock below receives taps */}
       <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center px-5 pb-40">
-        {/* Arc box then context line — `CenterStack`'s arrangement exactly. */}
+        {/* Arc box, then the context line below it. The live session stacks
+            the Station name below its arc the same way. The two wrappers are
+            not identical: this one has no width basis, because the manual
+            timer's arc box sizes itself. */}
         <div className="flex flex-col items-center gap-2">
           <div className="size-[min(290px,80vw)]">
             <ProgressArc fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
