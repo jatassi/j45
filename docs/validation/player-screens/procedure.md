@@ -20,7 +20,7 @@ Run from the integration worktree.
 - `bun run lint` → exit 0. One pre-existing `no-console` warning in
   `src/glass/scene.ts` (outside this feature's diff); no new suppressions.
 - `bun run test` → 90 files, 460 tests passed. Includes the new player-kit unit
-  suites (`player-progress-ring`, `player-control-dock`, `player-phase-backdrop`)
+  suites (`player-progress-arc`, `player-control-dock`, `player-phase-backdrop`)
   and the reworked `session-screen` / `timer-screen` suites.
 - `bun run test:e2e` (chromium + webkit) → 71 passed, 3 skipped. The 3 skips are
   the chromium-only specs (auth-passkey, the two-context live-session) correctly
@@ -29,7 +29,7 @@ Run from the integration worktree.
 Per-criterion observable behavior, exercised by the e2e suite:
 
 1. `live-session.spec.ts` — two logged-in contexts land on the same segment;
-   `session-count` renders inside `player-progress-ring`; the `session-screen`
+   `session-count` renders inside `player-progress-arc`; the `session-screen`
    root's `data-phase` tracks ready→work→rest as it advances; B's pause shows
    `Paused` on A; `session-next-up` names the following work station
    (`Sandbag/dumbbell clean`). PASS.
