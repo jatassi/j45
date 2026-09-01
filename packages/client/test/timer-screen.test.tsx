@@ -6,7 +6,7 @@ import * as Runtime from 'effect/Runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '@/app'
-import { RING_CIRCUMFERENCE } from '@/components/player/progress-ring'
+import { RING_SWEEP_LENGTH } from '@/components/player/progress-ring'
 import { TimerScreen } from '@/components/timer-screen'
 import { ServerRpcClient } from '@/lib/rpc-client'
 import * as audio from '@/player/audio'
@@ -62,6 +62,15 @@ function ringDashOffset(): string | null {
 }
 
 describe('TimerScreen — idle field kit composition', () => {
+  it('leaves the idle preview count off the ring contract — there is no ring around it', () => {
+    render(<TimerScreen />)
+
+    // The ring's marker also carries the in-ring type scale. The idle preview
+    // sits above the settings form, so it must claim neither.
+    expect(screen.queryByTestId('player-progress-ring')).toBeNull()
+    expect(Object.hasOwn(screen.getByTestId('timer-count').dataset, 'ringDigits')).toBe(false)
+  })
+
   it('composes work / rest / rounds from the ui/ Field kit (Field + kit Input, numeric inputMode) — no raw hand-styled native number rows', () => {
     render(<TimerScreen />)
 
@@ -185,6 +194,9 @@ describe('TimerScreen — immersive running layout', () => {
     expect(screen.getByTestId('timer-phase').textContent).toBe('Get ready')
     expect(screen.getByTestId('timer-count').textContent).toBe('0:05')
     expect(screen.getByTestId('timer-context').textContent).toBe('2 rounds · 5″/0″')
+    // The ring's glass proxy repaints the count, so it carries the marker the
+    // ring measures — the same contract the live session's countdown keeps.
+    expect(Object.hasOwn(screen.getByTestId('timer-count').dataset, 'ringDigits')).toBe(true)
     expect(screen.getByTestId('audio-indicator').dataset.audio).toBeDefined()
 
     // No next-up line content, no participant chrome.
@@ -229,7 +241,7 @@ describe('TimerScreen — immersive running layout', () => {
     expect(screen.getByTestId('timer-count').textContent).toBe('0:00')
     expect(screen.getByTestId('timer-context').textContent).toBe('Nice work')
     expect(screen.getByTestId('player-phase-backdrop').dataset.phase).toBe('done')
-    expect(ringDashOffset()).toBe(String(RING_CIRCUMFERENCE))
+    expect(ringDashOffset()).toBe(String(RING_SWEEP_LENGTH))
     // Done: only Reset remains (no Pause/Resume).
     expect(screen.queryByTestId('pause-button')).toBeNull()
     expect(screen.queryByTestId('resume-button')).toBeNull()

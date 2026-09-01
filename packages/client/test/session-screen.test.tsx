@@ -188,6 +188,10 @@ describe('SessionScreen — server-state render', () => {
     expect(screen.getByTestId('session-screen').dataset.phase).toBe('work')
     // The count freezes on the paused remainder (18s → 0:18), never ticking.
     expect(screen.getByTestId('session-count').textContent).toBe('0:18')
+    // The ring's glass proxy repaints this element, so it has to be the one
+    // marked: unmarked, the refraction falls back to the whole ring box and
+    // shows the count at a size the participant never sees.
+    expect(Object.hasOwn(screen.getByTestId('session-count').dataset, 'ringDigits')).toBe(true)
   })
 
   it('omits the station-detail line when the exercise has no detail', async () => {

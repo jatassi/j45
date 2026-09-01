@@ -10,16 +10,53 @@ import { PHASE_HUE } from './phase'
 
 /** Ring geometry — a thin arc on a 300×300 viewBox (the /proto reference). */
 export const RING_RADIUS = 132
-export const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
+const RING_CENTER = 150
+
+/**
+ * The gap in the ring: 90°, centred on the bottom. Nothing is drawn there. The
+ * gap is the room the countdown digits grow into.
+ */
+const RING_GAP_DEGREES = 90
+/** What the arc and its track occupy: all the ring the gap leaves. */
+const RING_SWEEP_DEGREES = 360 - RING_GAP_DEGREES
+
+/**
+ * The arc length of the sweep. All dash measurements use this length, not the
+ * circumference. A whole arc is therefore a whole 270°, and no part of the
+ * dash is left over to draw in the gap.
+ */
+export const RING_SWEEP_LENGTH = 2 * Math.PI * RING_RADIUS * (RING_SWEEP_DEGREES / 360)
+
+/** A point on the ring, `degrees` clockwise from the top of the box. */
+function ringPoint(degrees: number): string {
+  const radians = (degrees * Math.PI) / 180
+  const x = RING_CENTER + RING_RADIUS * Math.sin(radians)
+  const y = RING_CENTER - RING_RADIUS * Math.cos(radians)
+  return `${x.toFixed(3)} ${y.toFixed(3)}`
+}
+
+/**
+ * The sweep, as one arc command. It starts at the gap's trailing edge. It runs
+ * clockwise, the direction the full ring depleted in, over the top and down to
+ * the gap's leading edge. The track and the arc both use this path. A track
+ * behind the full circle would make the sweep look like a broken ring.
+ */
+const RING_SWEEP_PATH = [
+  `M ${ringPoint(180 + RING_GAP_DEGREES / 2)}`,
+  `A ${RING_RADIUS} ${RING_RADIUS} 0 ${RING_SWEEP_DEGREES > 180 ? 1 : 0} 1`,
+  ringPoint(180 - RING_GAP_DEGREES / 2),
+].join(' ')
 
 /**
  * Depleting stroke offset for a remaining `fraction` (0..1). At full (1) the
- * arc is whole (offset 0); at empty (0) it is fully retracted (offset =
- * circumference). Clamped so out-of-range interpolation never overdraws.
+ * arc is the whole sweep, so the offset is 0. At empty (0) the arc is fully
+ * retracted, so the offset is the sweep's length. The dash always starts where
+ * the sweep starts. Only its far end moves. The fraction is clamped, so
+ * out-of-range interpolation cannot overdraw.
  */
 function ringDashOffset(fraction: number): number {
   const clamped = Math.max(0, Math.min(1, fraction))
-  return RING_CIRCUMFERENCE * (1 - clamped)
+  return RING_SWEEP_LENGTH * (1 - clamped)
 }
 
 export type ProgressRingProps = {
@@ -33,7 +70,11 @@ export type ProgressRingProps = {
    * re-composites just that region.
    */
   dirtyValue?: string | number
-  /** The centred content — typically the huge countdown digits. */
+  /**
+   * The centred content — typically the huge countdown digits. Mark the
+   * element that carries the countdown with `data-ring-digits` so the glass
+   * proxy repaints it at the size and place it actually renders at.
+   */
   children?: ReactNode
 }
 
@@ -50,27 +91,58 @@ function readDocRect(el: HTMLElement): DocRect {
   }
 }
 
-type LiveDigits = { rect: DocRect; value: string }
+/** How the countdown is drawn, in the proxy rect's own coordinates. */
+type RenderedDigits = { font: string; centerX: number; centerY: number }
+
+/** Only held before the first measurement, which happens before the register. */
+const UNMEASURED: RenderedDigits = { font: 'bold 16px sans-serif', centerX: 0, centerY: 0 }
+
+/**
+ * Measure the countdown the ring draws. The caller marks that element with
+ * `data-ring-digits`. Without the mark, the whole box is measured, as before.
+ *
+ * The refraction repaints these digits, so it must use the size they render
+ * at. A fixed share of the box's height cannot give that size. The box and the
+ * digits take their clamps from different viewport terms, so a share drifts
+ * with the screen, and drifts again each time the type scale changes.
+ */
+function readRenderedDigits(container: HTMLElement): RenderedDigits {
+  const el = container.querySelector<HTMLElement>('[data-ring-digits]') ?? container
+  const box = el.getBoundingClientRect()
+  const host = container.getBoundingClientRect()
+  const style = getComputedStyle(el)
+  const size = style.fontSize === '' ? '16px' : style.fontSize
+  const family = style.fontFamily === '' ? 'sans-serif' : style.fontFamily
+  const weight = style.fontWeight === '' ? 'normal' : style.fontWeight
+  return {
+    font: `${weight} ${size} ${family}`,
+    centerX: box.left - host.left + box.width / 2,
+    centerY: box.top - host.top + box.height / 2,
+  }
+}
+
+type LiveDigits = { rect: DocRect; value: string; digits: RenderedDigits }
 
 function paintDigits(ctx: CanvasRenderingContext2D, live: LiveDigits): void {
   if (!live.value) {
     return
   }
   ctx.fillStyle = 'rgb(255, 255, 255)'
-  ctx.font = `bold ${Math.floor(live.rect.height * 0.6)}px sans-serif`
+  ctx.font = live.digits.font
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(live.value, live.rect.width / 2, live.rect.height / 2)
+  ctx.fillText(live.value, live.digits.centerX, live.digits.centerY)
 }
 
 /**
  * Register the digits region as a dirty-region scene proxy and invalidate it
  * whenever `value` changes — the `glass-demo/ticking-digit.tsx` pattern applied
- * to the countdown. The initial value is not an invalidation.
+ * to the countdown. The initial value is not an invalidation. The rect and the
+ * rendered size are measured together, once, when the proxy is registered.
  */
 function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void {
   const handleRef = useRef<SceneProxyHandle | null>(null)
-  const liveRef = useRef<LiveDigits>({ rect: EMPTY_RECT, value })
+  const liveRef = useRef<LiveDigits>({ rect: EMPTY_RECT, value, digits: UNMEASURED })
   liveRef.current.value = value
 
   useEffect(() => {
@@ -80,6 +152,7 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
     }
     const live = liveRef.current
     live.rect = readDocRect(el)
+    live.digits = readRenderedDigits(el)
     const handle = sceneRegistry.register({
       rect: live.rect,
       z: 4,
@@ -107,11 +180,12 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
 }
 
 /**
- * The immersive centrepiece: a thin phase-tinted SVG ring that depletes across
+ * The immersive centrepiece: a thin phase-tinted SVG arc that depletes across
  * the current segment via `stroke-dashoffset` (driven purely from `fraction` —
  * no timers of its own), with arbitrary `children` (the countdown digits)
- * centred inside. The digits region registers a dirty-region scene proxy keyed
- * on {@link ProgressRingProps.dirtyValue}.
+ * centred inside. The arc sweeps 270° and leaves a gap on the bottom. The
+ * digits may overflow the circle into that gap. The digits region registers a
+ * dirty-region scene proxy keyed on {@link ProgressRingProps.dirtyValue}.
  */
 export function ProgressRing(props: ProgressRingProps): JSX.Element {
   const { fraction, phase, dirtyValue, children } = props
@@ -123,25 +197,29 @@ export function ProgressRing(props: ProgressRingProps): JSX.Element {
       data-testid="player-progress-ring"
       className={cn('relative flex items-center justify-center')}
     >
-      <svg viewBox="0 0 300 300" className="size-full -rotate-90" aria-hidden="true">
-        <circle
-          cx="150"
-          cy="150"
-          r={RING_RADIUS}
+      {/*
+        `pathLength` is not decoration. A browser measures this arc by
+        flattening it, and gets 622.123 where the geometry gives 622.035.
+        Declaring the length makes the dash values exact instead of near.
+      */}
+      <svg viewBox="0 0 300 300" className="size-full" aria-hidden="true">
+        <path
+          d={RING_SWEEP_PATH}
           fill="none"
           stroke="rgb(255 255 255 / 0.08)"
           strokeWidth="8"
+          strokeLinecap="round"
+          pathLength={RING_SWEEP_LENGTH}
         />
-        <circle
+        <path
           data-testid="player-progress-ring-arc"
-          cx="150"
-          cy="150"
-          r={RING_RADIUS}
+          d={RING_SWEEP_PATH}
           fill="none"
           stroke={PHASE_HUE[phase]}
           strokeWidth="8"
           strokeLinecap="round"
-          strokeDasharray={RING_CIRCUMFERENCE}
+          pathLength={RING_SWEEP_LENGTH}
+          strokeDasharray={RING_SWEEP_LENGTH}
           strokeDashoffset={ringDashOffset(fraction)}
         />
       </svg>

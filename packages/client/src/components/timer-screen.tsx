@@ -200,12 +200,29 @@ function Header({ audio, onRetry, className }: AudioProps & { className: string 
   )
 }
 
+/** Where the countdown is drawn: above the idle form, or inside the ring. */
+type DigitsPlace = 'form' | 'ring'
+
+/**
+ * The countdown's type scale. Inside the ring it is 28% of the ring box, the
+ * share the live session's countdown also holds — see `CenterStack` in
+ * `session-player-parts.tsx`. The idle preview has no ring around it and no
+ * gap to grow into, so it keeps its own size.
+ *
+ * `data-ring-digits` goes with the ring size. It tells the ring's glass proxy
+ * which element to repaint, so only the count inside the ring carries it.
+ */
+const COUNT_TYPE: Record<DigitsPlace, string> = {
+  form: 'text-6xl',
+  ring: 'text-[min(22.4vw,81px)] leading-none',
+}
+
 // prettier-ignore
-function Digits({ phase, count, context }: DigitsProps) {
+function Digits({ phase, count, context, place }: DigitsProps & { place: DigitsPlace }) {
   return (
     <>
       <p className="text-sm font-medium" data-testid="timer-phase">{phase}</p>
-      <p className="text-6xl font-semibold tabular-nums" data-testid="timer-count">{count}</p>
+      <p className={`${COUNT_TYPE[place]} font-semibold tabular-nums`} data-testid="timer-count" data-ring-digits={place === 'ring' ? '' : undefined}>{count}</p>
       <p className="text-sm text-muted-foreground" data-testid="timer-context">{context}</p>
     </>
   )
@@ -249,7 +266,7 @@ function IdleView(
           audio={p.audio}
           onRetry={p.onRetry}
         />
-        <Digits phase={p.phase} count={p.count} context={p.context} />
+        <Digits phase={p.phase} count={p.count} context={p.context} place="form" />
       </div>
       <IdleForm inputs={p.inputs} onStart={p.onStart} />
     </>
@@ -302,7 +319,7 @@ function RunningView(
       <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center px-5 pb-40">
         <div className="size-[min(290px,80vw)]">
           <ProgressRing fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
-            <Digits phase={p.phase} count={p.count} context={p.context} />
+            <Digits phase={p.phase} count={p.count} context={p.context} place="ring" />
           </ProgressRing>
         </div>
       </div>

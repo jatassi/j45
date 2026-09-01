@@ -53,6 +53,13 @@ const URGENCY_DIGIT_COLOR: Record<TimerUrgency | 'none', string> = {
  * both. The ring diameter is clamped by both viewport axes so the whole stack
  * fits on-screen without scrolling.
  *
+ * The digits take about 28% of the ring box. Each of their three clamp terms
+ * is 28% of the box's matching term, so the digits stay clamped by both
+ * viewport axes, as before. 28% is what the ring allows: the widest count the
+ * formatter can make (`12:00`) still clears the arc, and 30% touches it. No
+ * term falls below the old one, so no screen gets smaller digits. What rises
+ * most is the ceiling, which held the digits at 20% of a large box.
+ *
  * Pod, round and station are not written here. The Progress strip below
  * carries them as marks, which a participant reads more quickly than words.
  */
@@ -88,9 +95,10 @@ export function CenterStack({
           </span>
           <span
             data-testid="session-count"
+            data-ring-digits=""
             data-urgency={urgency}
             className={cn(
-              'player-digits mt-1 inline-flex text-[min(17vw,9.6svh,64px)] leading-none font-semibold tabular-nums',
+              'player-digits mt-1 inline-flex text-[min(21.3vw,9.6svh,89px)] leading-none font-semibold tabular-nums',
               URGENCY_DIGIT_COLOR[urgency ?? 'none'],
             )}
           >
