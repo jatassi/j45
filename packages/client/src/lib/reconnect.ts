@@ -19,3 +19,15 @@ export type FeedClient = Effect.Effect.Success<typeof ServerRpcClient>
 /** Exponential reconnect backoff, capped at 8s so a long outage keeps retrying. */
 export const reconnectDelay = (attempt: number): Duration.Duration =>
   Duration.millis(Math.min(500 * 2 ** attempt, 8000))
+
+/**
+ * How long a break may last before the participant is told about it. A break
+ * shorter than this heals on the first retry and says nothing at all: a
+ * notice on every blip costs more than the blip.
+ *
+ * It is longer than the first backoff step, so the retry that heals a blip
+ * gets to land inside it. It is a rung on this ladder rather than a timer
+ * inside a component, for the same reason the backoff is: one reconnection
+ * approach in this app, not one per feed.
+ */
+export const RECONNECT_GRACE: Duration.Duration = Duration.millis(1000)

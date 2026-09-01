@@ -9,11 +9,12 @@ import type {
   WorkContext,
 } from '@j45/domain'
 import * as Effect from 'effect/Effect'
+import * as Ref from 'effect/Ref'
 import * as Stream from 'effect/Stream'
 
 import type { PlayerPhase } from '@/components/player/phase'
 import type { HomeNotice } from '@/lib/home-notice'
-import { reconnectDelay, type FeedClient } from '@/lib/reconnect'
+import { RECONNECT_GRACE, reconnectDelay, type FeedClient } from '@/lib/reconnect'
 import { ServerRpcClient } from '@/lib/rpc-client'
 
 /**
@@ -23,17 +24,47 @@ import { ServerRpcClient } from '@/lib/rpc-client'
  * outcomes the screen must distinguish into one value the atom can hold:
  *
  * - `live` — the latest server snapshot.
- * - `reconnecting` — a transport failure is being retried with backoff.
+ * - `reconnecting` — a transport failure is being retried with backoff, and
+ *   `state` is the **Stale snapshot** the screen keeps running from. It is
+ *   `null` only when the break came before the first snapshot ever arrived,
+ *   where there is no workout on screen to protect.
  * - `ended` — the session is over; the screen navigates home. `notice` is
  *   what home then tells the participant.
+ *
+ * The stale snapshot is carried here, not held by a component, so that no
+ * second copy of session state can disagree with the feed.
+ *
+ * This stays a sum type. A product of `state` plus a connection flag was
+ * considered and rejected: `ended` does not fit the product, so it still
+ * needs a sum on top of it.
  */
 export type SessionFeed =
   | { readonly _tag: 'live'; readonly state: SessionState }
-  | { readonly _tag: 'reconnecting' }
+  | { readonly _tag: 'reconnecting'; readonly state: SessionState | null }
   | { readonly _tag: 'ended'; readonly notice: HomeNotice }
 
 const endedFeed: SessionFeed = { _tag: 'ended', notice: 'session-ended' }
-const reconnectingFeed: SessionFeed = { _tag: 'reconnecting' }
+
+/**
+ * What one watch remembers across its own failures: the last snapshot it
+ * produced, and where the connection stands.
+ *
+ * `up` is a connection delivering snapshots. `breaking` is a failure still
+ * inside its grace, which nothing on screen knows about yet. `announced` is a
+ * break the participant has been told about, which keeps a deeper retry from
+ * saying the same thing a second time.
+ */
+type FeedMemory = {
+  readonly snapshot: SessionState | null
+  readonly link: 'up' | 'breaking' | 'announced'
+}
+
+/** One watch's fixed parts — the client, the session, and its memory. */
+type Watch = {
+  readonly client: FeedClient
+  readonly id: SessionId
+  readonly memory: Ref.Ref<FeedMemory>
+}
 
 /**
  * What home tells a participant about one ending. `null` is an ending the
@@ -56,6 +87,34 @@ const toFeed = (state: SessionState): SessionFeed =>
   state.ended === null ? { _tag: 'live', state } : endedBy(state.ended)
 
 /**
+ * The break's own announcement: after the grace, and only if the break is
+ * still going, the stale snapshot as a `reconnecting` value. A break that
+ * healed inside the grace says nothing at all, so nothing on screen changes
+ * for it — not the chip, and not the controls the chip stands down.
+ *
+ * `Ref.modify` reads and marks in one step, so the retry that keeps failing
+ * underneath announces the same break only once.
+ */
+const announce = (memory: Ref.Ref<FeedMemory>): Stream.Stream<SessionFeed> =>
+  Stream.unwrap(
+    Effect.sleep(RECONNECT_GRACE).pipe(
+      Effect.zipRight(
+        Ref.modify(memory, (held): [SessionFeed | null, FeedMemory] =>
+          held.link === 'breaking'
+            ? [
+                { _tag: 'reconnecting', state: held.snapshot },
+                { snapshot: held.snapshot, link: 'announced' },
+              ]
+            : [null, held],
+        ),
+      ),
+      Effect.map((feed): Stream.Stream<SessionFeed> =>
+        feed === null ? Stream.empty : Stream.make(feed),
+      ),
+    ),
+  )
+
+/**
  * The retrying watch stream. Each server snapshot becomes a `live` feed,
  * except the last one a session publishes, which becomes `ended` and carries
  * why.
@@ -69,16 +128,21 @@ const toFeed = (state: SessionState): SessionFeed =>
  *
  * A stream that stops without a last snapshot means that the participant
  * left, or that the server went away. That is the plain `ended`, with nothing
- * more to say. Every other failure emits `reconnecting`, waits out the
- * backoff, then resubscribes. The fresh snapshot heals the drift that the
- * disconnect caused.
+ * more to say.
+ *
+ * Every other failure is a break in the connection. The announcement and the
+ * retry run together, not one after the other: the retry has to be able to
+ * heal the break inside the grace, and a `concat` would leave nothing running
+ * to heal it. The fresh snapshot is an ordinary `live` value, so the heal
+ * needs no case of its own — it fires the cue for the segment it lands on and
+ * raises the plan-change notice if the plan moved while the participant was
+ * away.
  */
-const watchFeed = (
-  client: FeedClient,
-  id: SessionId,
-  attempt: number,
-): Stream.Stream<SessionFeed> =>
-  client('WatchSession', { id }).pipe(
+const watchFeed = (watch: Watch, attempt: number): Stream.Stream<SessionFeed> =>
+  watch.client('WatchSession', { id: watch.id }).pipe(
+    Stream.tap((state: SessionState) =>
+      Ref.set(watch.memory, { snapshot: state, link: 'up' as const }),
+    ),
     Stream.map(toFeed),
     // The fallback ending, for a stream that stops without a last snapshot
     // of its own: the participant left, or the server went away. `takeUntil`
@@ -88,10 +152,20 @@ const watchFeed = (
     Stream.catchAll((error) =>
       error instanceof SessionNotFound
         ? Stream.make(endedBy(error.endedAs))
-        : Stream.make(reconnectingFeed).pipe(
+        : Stream.execute(
+            Ref.update(watch.memory, (held) =>
+              held.link === 'up' ? { snapshot: held.snapshot, link: 'breaking' as const } : held,
+            ),
+          ).pipe(
             Stream.concat(
-              Stream.fromEffect(Effect.sleep(reconnectDelay(attempt))).pipe(
-                Stream.flatMap(() => watchFeed(client, id, attempt + 1)),
+              Stream.merge(
+                announce(watch.memory),
+                Stream.fromEffect(Effect.sleep(reconnectDelay(attempt))).pipe(
+                  Stream.flatMap(() => watchFeed(watch, attempt + 1)),
+                ),
+                // The retry decides when this feed is over; a pending
+                // announcement never holds it open past the ending.
+                { haltStrategy: 'right' },
               ),
             ),
           ),
@@ -106,7 +180,12 @@ const watchFeed = (
  */
 export const sessionFeedFamily = Atom.family((id: SessionId) =>
   ServerRpcClient.runtime.atom(
-    Stream.unwrap(Effect.map(ServerRpcClient, (client) => watchFeed(client, id, 0))),
+    Stream.unwrap(
+      Effect.map(
+        Effect.all([ServerRpcClient, Ref.make<FeedMemory>({ snapshot: null, link: 'up' })]),
+        ([client, memory]) => watchFeed({ client, id, memory }, 0),
+      ),
+    ),
   ),
 )
 
@@ -116,8 +195,11 @@ export const sendSessionCommandAtom = ServerRpcClient.mutation('SendSessionComma
 /**
  * Drives `LeaveSession` — the only exit from a session. Leaving records the
  * caller's progress (if the session progressed) and removes them; when the last
- * participant leaves the session ends. The leaver's own feed folds to `ended`
- * once their stream detaches, which navigates them home.
+ * participant leaves the session ends.
+ *
+ * The screen goes home whether this rpc succeeds or not: a participant with no
+ * connection must still be able to leave. The server observes the departure
+ * when their watch stream drops.
  */
 export const leaveSessionAtom = ServerRpcClient.mutation('LeaveSession')
 

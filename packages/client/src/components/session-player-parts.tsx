@@ -150,19 +150,26 @@ export function Participants({ participants }: { readonly participants: readonly
   )
 }
 
-/** A round icon control — the >=64px `primary` (Pause·Resume) or a >=48px side. */
+/**
+ * A round icon control — the >=64px `primary` (Pause·Resume) or a >=48px
+ * side. `disabled` is how a timer command stands down while the connection is
+ * away: a participant cannot drive a timer they cannot reach, and a control
+ * that looked available would be tapped and do nothing.
+ */
 function RoundButton({
   testId,
   label,
   icon: Icon,
   onClick,
   primary = false,
+  disabled = false,
 }: {
   readonly testId: string
   readonly label: string
   readonly icon: typeof Pause
   readonly onClick: () => void
   readonly primary?: boolean
+  readonly disabled?: boolean
 }) {
   return (
     <button
@@ -170,8 +177,9 @@ function RoundButton({
       data-testid={testId}
       aria-label={label}
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        'flex items-center justify-center rounded-full',
+        'flex items-center justify-center rounded-full disabled:opacity-40',
         primary
           ? 'size-16 bg-primary text-primary-foreground shadow-[0_10px_40px_-8px_var(--primary)]'
           : 'size-12 bg-foreground/5 text-foreground/70 ring-1 ring-border',
@@ -185,9 +193,11 @@ function RoundButton({
 /** Prev, the Pause/Resume primary (>=64px), and Skip — the timer-driving row. */
 function RunControls({
   state,
+  offline,
   dispatch,
 }: {
   readonly state: SessionState
+  readonly offline: boolean
   readonly dispatch: Dispatch
 }) {
   const paused = state.timer._tag === 'paused'
@@ -198,6 +208,7 @@ function RunControls({
         label="Previous"
         icon={SkipBack}
         onClick={() => dispatch('prev')}
+        disabled={offline}
       />
       <RoundButton
         testId={paused ? 'session-resume' : 'session-pause'}
@@ -205,12 +216,14 @@ function RunControls({
         icon={paused ? Play : Pause}
         onClick={() => dispatch(paused ? 'resume' : 'pause')}
         primary
+        disabled={offline}
       />
       <RoundButton
         testId="session-skip"
         label="Skip"
         icon={SkipForward}
         onClick={() => dispatch('skip')}
+        disabled={offline}
       />
     </>
   )
@@ -274,13 +287,49 @@ function AudioIndicator() {
   )
 }
 
-/** The top chrome: rose Leave (left), LIVE eyebrow + workout name (center), audio (right). */
+/**
+ * The notice that the connection is being retried, sitting under the top
+ * strip on the same layout the workout already occupies.
+ *
+ * It is part of the layout and not a toast. A toast is built to appear and
+ * dismiss itself, where a connection state persists and must clear the moment
+ * the connection returns; and a toast can be pushed off screen by a plan
+ * change arriving at the same time.
+ *
+ * It is read mid-exercise from arm's length, so it is sized to be legible
+ * without stopping — and kept small enough that it never covers the count or
+ * the station name.
+ */
+export function ReconnectingChip() {
+  return (
+    <div
+      data-testid="session-reconnecting"
+      role="status"
+      className="inline-flex shrink-0 items-center gap-2 rounded-full bg-foreground/10 px-3 py-1 text-sm font-medium text-foreground/80 ring-1 ring-border"
+    >
+      <span className="size-2 animate-pulse rounded-full bg-destructive" aria-hidden="true" />
+      Reconnecting…
+    </div>
+  )
+}
+
+/**
+ * The top chrome: rose Leave (left), LIVE eyebrow + workout name (center),
+ * audio (right).
+ *
+ * The eyebrow reads `Offline` while the connection is away, because a screen
+ * that kept saying `Live` would be telling the participant something false.
+ * It is too quiet to carry the news on its own, which is what the
+ * {@link ReconnectingChip} is for.
+ */
 export function TopStrip({
   workoutName,
+  offline,
   showLeave,
   onLeave,
 }: {
   readonly workoutName: string
+  readonly offline: boolean
   readonly showLeave: boolean
   readonly onLeave: Leave
 }) {
@@ -292,7 +341,9 @@ export function TopStrip({
         <span className="size-11" aria-hidden="true" />
       )}
       <div className="text-center">
-        <p className={EYEBROW}>Live</p>
+        <p className={EYEBROW} data-testid="session-connection">
+          {offline ? 'Offline' : 'Live'}
+        </p>
         <p className="font-heading text-sm font-bold tracking-tight">{workoutName}</p>
       </div>
       <AudioIndicator />
@@ -309,10 +360,12 @@ export function TopStrip({
  */
 export function SessionDock({
   state,
+  offline,
   dispatch,
   onLeave,
 }: {
   readonly state: SessionState
+  readonly offline: boolean
   readonly dispatch: Dispatch
   readonly onLeave: Leave
 }) {
@@ -345,7 +398,7 @@ export function SessionDock({
         </>
       }
     >
-      <RunControls state={state} dispatch={dispatch} />
+      <RunControls state={state} offline={offline} dispatch={dispatch} />
     </ControlDock>
   )
 }
