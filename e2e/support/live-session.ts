@@ -161,6 +161,21 @@ export async function assertBMatchesAPhase(pageA: Page, pageB: Page): Promise<vo
   await expect(pageB.getByTestId('session-screen')).toHaveAttribute('data-phase', dataPhase ?? '')
 }
 
+/**
+ * Every mark of the Progress strip, in document order, as its `done` /
+ * `active` / `upcoming` state — the bars, their cells and the round dots.
+ *
+ * This is what the strip shows a participant, and it replaces the context
+ * line as the value two phones are compared on. The line said pod, round and
+ * station in words; the strip says the same three in marks, so the comparison
+ * still proves the two screens agree on the session's position.
+ */
+export function readStripStates(page: Page): Promise<readonly string[]> {
+  return page
+    .locator('[data-testid="session-progress"] [data-state]')
+    .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.state ?? ''))
+}
+
 export async function assertBothNextUp(pageA: Page, pageB: Page, text: string): Promise<void> {
   await expect(pageA.getByTestId('session-next-up')).toContainText(text)
   await expect(pageB.getByTestId('session-next-up')).toContainText(text)

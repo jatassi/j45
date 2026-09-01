@@ -121,56 +121,9 @@ export const sendSessionCommandAtom = ServerRpcClient.mutation('SendSessionComma
  */
 export const leaveSessionAtom = ServerRpcClient.mutation('LeaveSession')
 
-/** Every work in run order — the flat list the progress cells render. */
+/** Every work in run order — the flat list the Progress strip is derived from. */
 export const sessionWorks = (segments: readonly Segment[]): readonly WorkContext[] =>
   segments.flatMap((segment) => (segment._tag === 'work' ? [segment.work] : []))
-
-/** The works of one pod, in run order, for a progress-cell row. */
-export type PodGroup = {
-  readonly podIndex: number
-  readonly podName: string
-  readonly works: readonly WorkContext[]
-}
-
-/** Works grouped by pod (pod-index ascending) — the progress cells, one row per pod. */
-export const podGroups = (works: readonly WorkContext[]): readonly PodGroup[] => {
-  const byPod = new Map<number, WorkContext[]>()
-  for (const work of works) {
-    const existing = byPod.get(work.podIndex)
-    if (existing === undefined) byPod.set(work.podIndex, [work])
-    else existing.push(work)
-  }
-  return [...byPod.entries()]
-    .toSorted(([a], [b]) => a - b)
-    .map(([podIndex, podWorks]) => ({ podIndex, podName: podWorks[0].podName, works: podWorks }))
-}
-
-/** Pod/lap/station counts derived from the compiled works, for the context line. */
-export type SessionTotals = {
-  readonly podCount: number
-  readonly roundCount: number
-  readonly stationsByPod: ReadonlyMap<number, number>
-}
-
-/** Distinct pods, the highest round number, and per-pod station counts. */
-export const sessionTotals = (works: readonly WorkContext[]): SessionTotals => {
-  const stationsByPod = new Map<number, number>()
-  let roundCount = 0
-  for (const work of works) {
-    roundCount = Math.max(roundCount, work.round)
-    stationsByPod.set(
-      work.podIndex,
-      Math.max(stationsByPod.get(work.podIndex) ?? 0, work.stationInPod),
-    )
-  }
-  return { podCount: stationsByPod.size, roundCount, stationsByPod }
-}
-
-/** `Pod x/y · Lap k/n · Station s/m`, the legacy live-session context strip. */
-export const contextLine = (ctx: WorkContext, totals: SessionTotals): string => {
-  const stations = totals.stationsByPod.get(ctx.podIndex) ?? ctx.stationInPod
-  return `Pod ${ctx.podIndex + 1}/${totals.podCount} · Lap ${ctx.round}/${totals.roundCount} · Station ${ctx.stationInPod}/${stations}`
-}
 
 /** The segment the timer currently sits in, or `undefined` when idle/done. */
 export const currentSegment = (state: SessionState): Segment | undefined => {

@@ -2,6 +2,7 @@
 import type { Page, TestInfo, WebSocketRoute } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
+import { readStripStates } from './support/live-session.js'
 import type { E2eProjectName } from './support/state.js'
 import { readE2eEnv } from './support/state.js'
 
@@ -302,13 +303,20 @@ test.describe('home dashboard (chromium + webkit)', () => {
       // poll until the pair agrees.
       await expect
         .poll(async () => {
-          const [phaseA, phaseB, contextA, contextB] = await Promise.all([
+          const [phaseA, phaseB, stripA, stripB] = await Promise.all([
             page.getByTestId('session-phase').textContent(),
             pageB.getByTestId('session-phase').textContent(),
-            page.getByTestId('session-context').textContent(),
-            pageB.getByTestId('session-context').textContent(),
+            readStripStates(page),
+            readStripStates(pageB),
           ])
-          return Boolean(phaseA) && phaseA === phaseB && contextA === contextB
+          // The strip replaces the context line as the shared position: the
+          // same bars, cells and dots in the same states on both phones.
+          return (
+            Boolean(phaseA) &&
+            phaseA === phaseB &&
+            stripA.length > 0 &&
+            stripA.join(',') === stripB.join(',')
+          )
         })
         .toBe(true)
       await leaveWithConfirm(pageB)

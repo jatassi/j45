@@ -14,6 +14,7 @@ import {
   mintTwoInviteCodes,
   planChangeNotice,
   readBeepCount,
+  readStripStates,
   readTabLiveCount,
   readWakeLockAcquired,
   readWakeLockReleaseCount,
@@ -109,8 +110,12 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
         await assertBothPhase([page, pageB], { data: 'rest', label: 'Rest' })
         // Rest still names the following work station in next-up; both screens stay in sync.
         await assertBothNextUp(page, pageB, APEX_STATION_2)
-        const contextOnRest = await page.getByTestId('session-context').textContent()
-        await expect(pageB.getByTestId('session-context')).toHaveText(contextOnRest ?? '')
+        // Both phones read the same Progress strip: the same bars, cells and
+        // round dots in the same states. This is the position agreement the
+        // context line used to prove.
+        const stripOnRest = await readStripStates(page)
+        expect(stripOnRest.length).toBeGreaterThan(0)
+        await expect.poll(() => readStripStates(pageB)).toEqual(stripOnRest)
 
         // A leaves mid-workout via confirm dialog — only A navigates home; B keeps running.
         await leaveSessionWithConfirm(page)
