@@ -8,7 +8,7 @@ import * as Schema from 'effect/Schema'
 import { toast } from 'sonner'
 
 import { PhaseBackdrop } from '@/components/player/phase-backdrop'
-import { ProgressDots } from '@/components/player/progress-dots'
+import { ProgressStrip } from '@/components/player/progress-strip'
 import {
   CenterStack,
   Participants,
@@ -18,17 +18,14 @@ import {
   type Leave,
 } from '@/components/session-player-parts'
 import {
-  contextLine,
   cueKey,
   currentWorkContext,
   displayMillis,
   leaveSessionAtom,
-  podGroups,
+  progressStrip,
   sendSessionCommandAtom,
   sessionFeedFamily,
   sessionPhase,
-  sessionTotals,
-  sessionWorks,
   type SessionFeed,
 } from '@/lib/session'
 import { beepCountdown, beepDone, beepReady, beepRest, beepWork } from '@/player/audio'
@@ -157,11 +154,15 @@ function SessionView({ state }: { readonly state: SessionState }) {
   usePlanChangeNotice(state)
   useWakeLock(state.timer._tag === 'running')
 
-  const works = useMemo(() => sessionWorks(state.compiled.segments), [state.compiled.segments])
-  const totals = useMemo(() => sessionTotals(works), [works])
-  const groups = useMemo(() => podGroups(works), [works])
   const ctx = currentWorkContext(state)
   const phase = sessionPhase(state)
+  // The whole strip from one pure call: the compiled plan and the work in
+  // focus decide every bar, cell and dot. An applied plan change replaces the
+  // compiled plan, so the strip redraws with it.
+  const strip = useMemo(
+    () => progressStrip(state.compiled, ctx?.workIndex),
+    [state.compiled, ctx?.workIndex],
+  )
   // Tracks iOS Safari's toolbar live (see the hook): the container — and with
   // it the bottom-anchored dock and the flexing center stack — resizes with
   // every visualViewport change instead of waiting for `dvh` to re-resolve.
@@ -181,14 +182,8 @@ function SessionView({ state }: { readonly state: SessionState }) {
         onLeave={onLeave}
       />
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
-        <CenterStack
-          state={state}
-          phase={phase}
-          ctx={ctx}
-          count={count}
-          context={ctx === undefined ? '' : contextLine(ctx, totals)}
-        />
-        <ProgressDots groups={groups} currentWorkIndex={ctx?.workIndex} />
+        <CenterStack state={state} phase={phase} ctx={ctx} count={count} />
+        <ProgressStrip strip={strip} />
         <Participants participants={state.participants} />
       </div>
       <SessionDock state={state} dispatch={dispatch} onLeave={onLeave} />

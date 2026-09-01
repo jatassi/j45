@@ -143,7 +143,7 @@ describe('SessionScreen — where an ended session sends its people', () => {
 })
 
 describe('SessionScreen — server-state render', () => {
-  it('renders phase, exercise, station detail, context line, next-up, progress cells, and participants', async () => {
+  it('renders phase, exercise, station detail, next-up, and participants', async () => {
     const id = 'sess-render'
     const sessionId = Schema.decodeSync(SessionId)(id)
     const now = Date.now()
@@ -154,12 +154,7 @@ describe('SessionScreen — server-state render', () => {
     expect(screen.getByTestId('session-phase').textContent).toBe('Work')
     expect(screen.getByTestId('session-exercise-name').textContent).toBe('Rower')
     expect(screen.getByTestId('session-exercise-detail').textContent).toBe('10 cal')
-    expect(screen.getByTestId('session-context').textContent).toBe(
-      'Pod 1/1 · Lap 1/2 · Station 1/2',
-    )
     expect(screen.getByTestId('session-next-up').textContent).toContain('Burpee')
-    expect(screen.getByTestId('session-progress-cell-0').dataset.state).toBe('active')
-    expect(screen.getByTestId('session-progress-cell-1').dataset.state).toBe('upcoming')
     expect(screen.getByTestId('session-participant-u-ann').textContent).toContain('Ann')
     expect(screen.getByTestId('session-participant-u-ben').textContent).toContain('Ben')
   })
@@ -193,6 +188,10 @@ describe('SessionScreen — server-state render', () => {
     expect(screen.getByTestId('session-screen').dataset.phase).toBe('work')
     // The count freezes on the paused remainder (18s → 0:18), never ticking.
     expect(screen.getByTestId('session-count').textContent).toBe('0:18')
+    // The ring's glass proxy repaints this element, so it has to be the one
+    // marked: unmarked, the refraction falls back to the whole ring box and
+    // shows the count at a size the participant never sees.
+    expect(Object.hasOwn(screen.getByTestId('session-count').dataset, 'ringDigits')).toBe(true)
   })
 
   it('omits the station-detail line when the exercise has no detail', async () => {

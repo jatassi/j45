@@ -2,7 +2,7 @@ import type { NonEmptyReadonlyArray } from 'effect/Array'
 import type * as Equivalence from 'effect/Equivalence'
 import * as Schema from 'effect/Schema'
 
-import { Station, type Workout } from './workout.js'
+import { FlowType, Station, type Workout } from './workout.js'
 
 /** Leading countdown before the first work segment, in seconds. */
 export const READY_SECONDS = 5
@@ -33,6 +33,16 @@ export type Segment = typeof Segment.Type
 
 export class CompiledWorkout extends Schema.Class<CompiledWorkout>('CompiledWorkout')({
   segments: Schema.NonEmptyArray(Segment),
+  /**
+   * The flow that the plan was compiled from. A client groups the segments by
+   * this field: by pod on `laps`, and by station on `sets`.
+   *
+   * The compiler states the flow. A reader must not infer it from the order
+   * of the works. A pod of one station gives the same order under both flows.
+   * A flow of one round does the same. An inference would then pick a
+   * grouping at random, and it would report nothing wrong.
+   */
+  flowType: FlowType,
   workTotal: Schema.Int,
   totalDurationMillis: Schema.Int,
 }) {}
@@ -44,6 +54,11 @@ export class CompiledWorkout extends Schema.Class<CompiledWorkout>('CompiledWork
  * The workout *name* is not in a compiled plan, so two workouts that differ
  * only by name are equal here. That is the point: a new name is a rename, and
  * a rename changes nothing anyone runs.
+ *
+ * The flow type *is* in a compiled plan. Two workouts that differ only by
+ * flow type are therefore not equal here, even when they compile to the same
+ * segments. That is also the point: the progress strip groups by the flow, so
+ * a new flow gives the participant a new screen.
  */
 export const compiledEquals: Equivalence.Equivalence<CompiledWorkout> =
   Schema.equivalence(CompiledWorkout)
@@ -152,6 +167,7 @@ export const compile = (workout: Workout): CompiledWorkout => {
   })
   return new CompiledWorkout({
     segments: segments satisfies NonEmptyReadonlyArray<Segment>,
+    flowType: workout.flow.type,
     workTotal: works.length,
     totalDurationMillis: segments.reduce((sum, segment) => sum + segment.durationMillis, 0),
   })
