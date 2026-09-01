@@ -3,26 +3,45 @@ import { useEffect, useRef } from 'react'
 
 import type { DocRect, SceneProxyHandle } from '@/glass/scene'
 import { sceneRegistry } from '@/glass/scene'
-import { cn } from '@/lib/utils'
 
 import type { PlayerPhase } from './phase'
 import { PHASE_HUE } from './phase'
 
-/** Arc geometry — a thin arc on a 300×300 viewBox (the /proto reference). */
-export const ARC_RADIUS = 132
-const ARC_CENTER = 150
+/**
+ * Arc geometry — a half circle on a wide, half-height 300×150 viewBox.
+ *
+ * The centre sits on the middle of the box's bottom edge, so the arc's chord
+ * *is* that edge. The radius and the stroke are chosen so the stroke's outer
+ * edge (radius + half the stroke) lands on 150: exactly the box's left, top
+ * and right edges, with no dead margin on any of the three.
+ *
+ * The half-height viewBox is what makes the half circle a vertical saving
+ * rather than a vertical cost. A square box would carry an empty bottom half
+ * that still consumed layout, and would push the Progress strip and the
+ * Participants off the bottom of the screen.
+ */
+export const ARC_RADIUS = 142.5
+const ARC_CENTER_X = 150
+const ARC_CENTER_Y = 150
 
 /**
- * The gap the arc leaves: 90°, centred on the bottom. Nothing is drawn there.
+ * The stroke, in viewBox units, so it scales with the arc: on a 390px-wide
+ * screen it lands at about 18px. A fixed pixel stroke was rejected — it reads
+ * heavy on a small phone and thin on a large one, relative to its own arc.
+ */
+const ARC_STROKE = 15
+
+/**
+ * The gap the arc leaves: 180°, centred on the bottom. Nothing is drawn there.
  * The gap is the room the countdown digits grow into.
  */
-const ARC_GAP_DEGREES = 90
+const ARC_GAP_DEGREES = 180
 /** What the arc and its track occupy: everything the gap leaves. */
 const ARC_SWEEP_DEGREES = 360 - ARC_GAP_DEGREES
 
 /**
  * The arc length of the sweep. All dash measurements use this length, not the
- * circumference. A whole arc is therefore a whole 270°, and no part of the
+ * circumference. A whole arc is therefore a whole 180°, and no part of the
  * dash is left over to draw in the gap.
  */
 export const ARC_SWEEP_LENGTH = 2 * Math.PI * ARC_RADIUS * (ARC_SWEEP_DEGREES / 360)
@@ -30,17 +49,17 @@ export const ARC_SWEEP_LENGTH = 2 * Math.PI * ARC_RADIUS * (ARC_SWEEP_DEGREES / 
 /** A point on the arc's circle, `degrees` clockwise from the top of the box. */
 function arcPoint(degrees: number): string {
   const radians = (degrees * Math.PI) / 180
-  const x = ARC_CENTER + ARC_RADIUS * Math.sin(radians)
-  const y = ARC_CENTER - ARC_RADIUS * Math.cos(radians)
+  const x = ARC_CENTER_X + ARC_RADIUS * Math.sin(radians)
+  const y = ARC_CENTER_Y - ARC_RADIUS * Math.cos(radians)
   return `${x.toFixed(3)} ${y.toFixed(3)}`
 }
 
 /**
- * The sweep, as one arc command. It starts at the gap's trailing edge. It runs
- * clockwise, the direction the countdown has always depleted in, over the top
- * and down to the gap's leading edge. The track and the arc both use this path.
- * A track drawn as a closed circle behind the sweep would make the sweep look
- * broken.
+ * The sweep, as one arc command. It starts at the left end of the chord. It
+ * runs clockwise, the direction the countdown has always depleted in, over the
+ * top and down to the right end of the chord. The track and the arc both use
+ * this path. A track drawn as a closed circle behind the sweep would make the
+ * sweep look broken.
  */
 const ARC_SWEEP_PATH = [
   `M ${arcPoint(180 + ARC_GAP_DEGREES / 2)}`,
@@ -184,13 +203,26 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
 }
 
 /**
- * The immersive centrepiece: a thin phase-tinted SVG arc that depletes across
- * the current segment via `stroke-dashoffset` (driven purely from `fraction` —
- * no timers of its own), with the `children` two-element contract (the phase
- * label and the countdown digits) centred inside. The arc sweeps 270° and
- * leaves a gap on the bottom. The
- * digits may overflow the circle into that gap. The digits region registers a
- * dirty-region scene proxy keyed on {@link ProgressArcProps.dirtyValue}.
+ * The immersive centrepiece: a phase-tinted SVG half circle that depletes
+ * across the current segment via `stroke-dashoffset` (driven purely from
+ * `fraction` — no timers of its own), with the `children` two-element contract
+ * (the phase label and the countdown digits) sitting on its chord. The arc
+ * sweeps 180° and leaves the whole bottom half open, so the digits overflow
+ * below the chord into space nothing encloses.
+ *
+ * The children stack is anchored to the chord and then pushed down by half its
+ * own height, so it straddles the chord instead of sitting inside the arc: the
+ * label stays clear of the stroke above, and the digits run past the chord into
+ * the open.
+ *
+ * The transform is on the stack, not on the digits alone, for two reasons. The
+ * scene proxy's rect is this element's own bounding box, and a bounding box
+ * takes in its element's transform, never a child's. And the stack keeps its
+ * height either way, so the label rides with the digits as they grow rather
+ * than being pushed off the top of the arc by them.
+ *
+ * The digits region registers a dirty-region scene proxy keyed on
+ * {@link ProgressArcProps.dirtyValue}.
  */
 export function ProgressArc(props: ProgressArcProps): JSX.Element {
   const { fraction, phase, dirtyValue, children } = props
@@ -198,21 +230,18 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
   useDigitProxy(digitsRef, dirtyValue === undefined ? '' : String(dirtyValue))
 
   return (
-    <div
-      data-testid="player-progress-arc"
-      className={cn('relative flex items-center justify-center')}
-    >
+    <div data-testid="player-progress-arc" className="relative size-full">
       {/*
         `pathLength` is not decoration. A browser measures this arc by
-        flattening it, and gets 622.123 where the geometry gives 622.035.
+        flattening it, and gets 447.740 where the geometry gives 447.677.
         Declaring the length makes the dash values exact instead of near.
       */}
-      <svg viewBox="0 0 300 300" className="size-full" aria-hidden="true">
+      <svg viewBox="0 0 300 150" className="size-full" aria-hidden="true">
         <path
           d={ARC_SWEEP_PATH}
           fill="none"
           stroke="rgb(255 255 255 / 0.08)"
-          strokeWidth="8"
+          strokeWidth={ARC_STROKE}
           strokeLinecap="round"
           pathLength={ARC_SWEEP_LENGTH}
         />
@@ -221,7 +250,7 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
           d={ARC_SWEEP_PATH}
           fill="none"
           stroke={PHASE_HUE[phase]}
-          strokeWidth="8"
+          strokeWidth={ARC_STROKE}
           strokeLinecap="round"
           pathLength={ARC_SWEEP_LENGTH}
           strokeDasharray={ARC_SWEEP_LENGTH}
@@ -231,7 +260,7 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
       <div
         ref={digitsRef}
         data-testid="player-progress-arc-digits"
-        className="absolute inset-0 flex flex-col items-center justify-center"
+        className="absolute inset-x-0 bottom-0 flex translate-y-1/2 flex-col items-center"
       >
         {children}
       </div>

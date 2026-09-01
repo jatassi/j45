@@ -3,6 +3,7 @@ import { useReducer } from 'react'
 import type { Participant, SessionCommand, SessionState, WorkContext } from '@j45/domain'
 import { LogOut, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 
+import { ArcBox } from '@/components/player/arc-box'
 import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PHASE_HUE } from '@/components/player/phase'
@@ -46,19 +47,21 @@ const URGENCY_DIGIT_COLOR: Record<TimerUrgency | 'none', string> = {
 }
 
 /**
- * The immersive centrepiece: the phase-tinted Progress arc wrapping the huge
- * tabular-nums countdown and its phase eyebrow, with the exercise name (plus
- * its optional `detail`, e.g. "10 cal") beneath. The arc depletes from the
- * same interpolated `remainingMillis` the digits show, so a pause freezes
- * both. The arc's diameter is clamped by both viewport axes so the whole stack
- * fits on-screen without scrolling.
+ * The live session's arc width — see {@link ArcBox}. The ceiling is higher
+ * than the manual timer's, which keeps the live session the more prominent of
+ * the two.
+ */
+const ARC_WIDTH = '[--arc-width:min(92vw,420px)]'
+
+/**
+ * The immersive centrepiece: the phase-tinted Progress arc with the huge
+ * tabular-nums countdown and its phase eyebrow straddling the arc's chord, and
+ * the exercise name (plus its optional `detail`, e.g. "10 cal") beneath. The
+ * arc depletes from the same interpolated `remainingMillis` the digits show,
+ * so a pause freezes both.
  *
- * The digits take about 28% of the arc box. Each of their three clamp terms
- * is 28% of the box's matching term, so the digits stay clamped by both
- * viewport axes, as before. 28% is what the arc allows: the widest count the
- * formatter can make (`12:00`) still clears the arc, and 30% touches it. No
- * term falls below the old one, so no screen gets smaller digits. What rises
- * most is the ceiling, which held the digits at 20% of a large box.
+ * The countdown keeps the type scale it already had. Sizing it from the
+ * character count, as a share of the arc, is separate work.
  *
  * Pod, round and station are not written here. The Progress strip below
  * carries them as marks, which a participant reads more quickly than words.
@@ -78,8 +81,8 @@ export function CenterStack({
   const fraction = arcFraction(state, count)
   const urgency = timerUrgency(phase, count)
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-2">
-      <div className="size-[min(76vw,34svh,320px)] [&>*]:size-full">
+    <div className="flex min-h-0 w-full max-w-sm flex-col items-center gap-2">
+      <ArcBox className={ARC_WIDTH}>
         <ProgressArc fraction={fraction} phase={phase} dirtyValue={digits}>
           <span
             data-testid="session-phase"
@@ -105,7 +108,7 @@ export function CenterStack({
             <RollingDigits value={digits} />
           </span>
         </ProgressArc>
-      </div>
+      </ArcBox>
       <WorkMeta ctx={ctx} />
     </div>
   )
