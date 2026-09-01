@@ -20,10 +20,11 @@ import { expect } from '@playwright/test'
  * The manual timer caps its dock at the CSS tier, which composites the slice
  * for the rim tint only and shows none of it.
  *
- * Neither screen bounds the other, so one check cannot stand for both. The
- * manual timer has the smaller clearance on a small phone, because its
- * countdown sits lower on the screen. The live Session has the smaller
- * clearance on a large phone, because its arc has the higher ceiling.
+ * Neither screen bounds the other, so one check cannot stand for both. They
+ * take their arc widths from different ceilings — 350px here, 420px there —
+ * and they put different content below the arc. On a small phone the manual
+ * timer has the smaller clearance, by about 8px. On a 430px phone the two are
+ * within 2px of each other. Do not read either screen's number off the other.
  *
  * The region measured is the region the proxy registers. `readDigitsRegion`
  * takes the union of the digits' container and the countdown's own box,
