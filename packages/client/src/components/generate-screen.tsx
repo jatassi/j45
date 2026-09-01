@@ -52,7 +52,7 @@ function useGenerateActions() {
         focus: c.focus,
         targetMinutes: c.targetMinutes,
         equipment: [...c.equipment],
-        ...emphasisPayload(c.emphasis),
+        ...emphasisPayload(c.focus, c.emphasis),
         noRepeatSessions: c.noRepeatSessions,
         seed,
       },

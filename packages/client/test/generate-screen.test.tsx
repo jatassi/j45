@@ -19,6 +19,7 @@ import {
   libraryWorkoutOf,
   pressed,
   renderApp,
+  renderCapturingPayloads,
 } from './generate-harness'
 
 afterEach(() => {
@@ -292,16 +293,7 @@ describe('GenerateScreen', () => {
   })
 
   it('sends the empty equipment list after None, and the full list after All', async () => {
-    const sent: (readonly Equipment[])[] = []
-    renderApp(
-      {
-        GenerateWorkout: (payload) => {
-          sent.push((payload as GenerationConstraints).equipment)
-          return Effect.succeed(athleticaWorkout)
-        },
-      },
-      '/generate',
-    )
+    const sent = renderCapturingPayloads()
     await screen.findByTestId('generate-screen')
 
     // None means bodyweight only, and it travels as the empty allowed set.
@@ -309,13 +301,13 @@ describe('GenerateScreen', () => {
     fireEvent.click(screen.getByTestId('generate-button'))
     await screen.findByTestId('generate-preview')
     expect(sent).toHaveLength(1)
-    expect(sent[0]).toEqual([])
+    expect(sent[0]?.equipment).toEqual([])
 
     // All sends every value. The wire shape stays the same list of literals.
     fireEvent.click(screen.getByTestId('generate-equipment-all'))
     fireEvent.click(screen.getByTestId('generate-regenerate'))
     await waitFor(() => expect(sent).toHaveLength(2))
-    expect((sent[1] ?? []).toSorted()).toEqual(Equipment.literals.toSorted())
+    expect([...(sent[1]?.equipment ?? [])].toSorted()).toEqual(Equipment.literals.toSorted())
   })
 
   it('focus, emphasis, and equipment options render domain labels (not raw vocabulary literals)', async () => {
@@ -350,16 +342,7 @@ describe('GenerateScreen', () => {
   })
 
   it('Emphasis chips start off; taps add and remove groups, and the payload carries the list', async () => {
-    const sent: GenerationConstraints[] = []
-    renderApp(
-      {
-        GenerateWorkout: (payload) => {
-          sent.push(payload as GenerationConstraints)
-          return Effect.succeed(athleticaWorkout)
-        },
-      },
-      '/generate',
-    )
+    const sent = renderCapturingPayloads()
     await screen.findByTestId('generate-screen')
 
     // No selected chip is now how the form says "no emphasis".
@@ -391,6 +374,59 @@ describe('GenerateScreen', () => {
     fireEvent.click(screen.getByTestId('generate-regenerate'))
     await waitFor(() => expect(sent).toHaveLength(3))
     expect(sent[2]?.emphasis).toEqual(['hamstrings'])
+  })
+
+  it('a cardio Focus disables the Emphasis chips in place, states why, keeps the selection, and sends no emphasis', async () => {
+    const sent = renderCapturingPayloads()
+    await screen.findByTestId('generate-screen')
+
+    const summary = () => screen.getByTestId('generate-emphasis-summary').textContent
+    const groups = MuscleGroup.literals
+    const disabledChips = () => groups.filter((g) => isDisabled(`generate-emphasis-${g}`)).length
+
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    fireEvent.click(screen.getByTestId('generate-emphasis-hamstrings'))
+    expect(summary()).toBe('2 groups narrow the strength picks')
+    const field = screen.getByTestId('generate-emphasis')
+    const shapeBefore = field.querySelectorAll('*').length
+
+    fireEvent.click(screen.getByTestId('generate-focus-cardio'))
+
+    // Emphasis narrows the strength picks, and a cardio workout has none. The
+    // field stops taking input instead of looking live and doing nothing.
+    expect(disabledChips()).toBe(groups.length)
+    expect(summary()).toBe('Not used — Emphasis applies to strength picks')
+
+    // The note reuses the summary line rather than adding a second element, so
+    // the field holds exactly the elements it held before. That is the
+    // structural half of "the form does not reflow"; the pixel half is measured
+    // against the live layout in `e2e/generate.spec.ts`, which jsdom cannot do.
+    expect(screen.getByTestId('generate-emphasis')).toBe(field)
+    expect(field.querySelectorAll('*').length).toBe(shapeBefore)
+
+    // The work of the user survives, no press can change it, and the check
+    // marks keep it visible while the line speaks about the focus instead.
+    expect(pressed('generate-emphasis-glutes')).toBe('true')
+    expect(screen.queryByTestId('generate-emphasis-glutes-check')).not.toBeNull()
+    fireEvent.click(screen.getByTestId('generate-emphasis-quads'))
+    expect(pressed('generate-emphasis-quads')).toBe('false')
+
+    // A field that does nothing must put nothing on the wire.
+    fireEvent.click(screen.getByTestId('generate-button'))
+    await screen.findByTestId('generate-preview')
+    expect(sent).toHaveLength(1)
+    expect(Object.hasOwn(sent[0] ?? {}, 'emphasis')).toBe(false)
+
+    // Back to a focus that draws strength: live again, selection intact.
+    fireEvent.click(screen.getByTestId('generate-focus-hybrid'))
+    expect(disabledChips()).toBe(0)
+    expect(pressed('generate-emphasis-glutes')).toBe('true')
+    expect(pressed('generate-emphasis-hamstrings')).toBe('true')
+    expect(summary()).toBe('2 groups narrow the strength picks')
+
+    fireEvent.click(screen.getByTestId('generate-regenerate'))
+    await waitFor(() => expect(sent).toHaveLength(2))
+    expect([...(sent[1]?.emphasis ?? [])].toSorted()).toEqual(['glutes', 'hamstrings'])
   })
 
   it('the Emphasis summary follows the selection, and its empty state reads unlike an empty kit', async () => {

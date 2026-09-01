@@ -30,16 +30,40 @@ export type FormModel = {
 }
 
 /**
+ * Whether the Emphasis field is disabled for a focus.
+ *
+ * Emphasis narrows the strength picks, and it does nothing to a cardio pick.
+ * It therefore has no work to do under a cardio focus. The field then states
+ * that and stops taking input, instead of looking live while it has no effect.
+ *
+ * The rule lives here because two places read it: the field, which disables
+ * its chips, and the payload, which drops the key. It is a rule about which
+ * field accepts input, and not a rule of generation — the domain already lets
+ * every cardio exercise pass the emphasis filter — so it stays in the form.
+ */
+export const isEmphasisDisabled = (focus: Focus): boolean => focus === 'cardio'
+
+/**
  * The Emphasis part of the generate payload.
  *
  * The constraint carries a nonempty list of groups, or nothing at all. An
  * empty selection is therefore not a value that the payload can hold: it is an
  * absence. The form holds the selection as a set, which can be empty, so this
  * is where that empty set becomes an absent key.
+ *
+ * A disabled field sends nothing either, and it keeps the selection it holds.
+ * The two halves are deliberate: the kept selection protects the work of the
+ * user across a change of focus, and the absent key keeps the request true to
+ * what the form applies. The workout is the same either way, because a cardio
+ * focus admits no strength exercise.
  */
 export const emphasisPayload = (
+  focus: Focus,
   groups: ReadonlySet<MuscleGroup>,
 ): { readonly emphasis?: readonly [MuscleGroup, ...MuscleGroup[]] } => {
+  if (isEmphasisDisabled(focus)) {
+    return {}
+  }
   const list = [...groups]
   return Arr.isNonEmptyReadonlyArray(list) ? { emphasis: list } : {}
 }

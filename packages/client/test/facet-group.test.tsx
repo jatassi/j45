@@ -229,6 +229,60 @@ describe('FacetGroup', () => {
     expect(on).not.toBe(off)
   })
 
+  it('turns the whole facet off — the chips and the bulk actions alike', () => {
+    const onChange = vi.fn<(next: Equipment[]) => void>()
+    const all = vi.fn()
+    render(
+      <FacetGroup
+        values={VALUES}
+        selected={['barbell']}
+        labels={equipmentLabel}
+        testIdPrefix="facet"
+        onChange={onChange}
+        bulkActions={[{ label: 'All', testId: 'facet-all', onSelect: all }]}
+        disabled
+      />,
+    )
+
+    // A dim style is not the contract. A disabled chip carries the DOM disabled
+    // state, so the keyboard and assistive technology skip it, and so a test can
+    // assert it. A live bulk button would be a second route into the same set,
+    // so the bulk row goes off with the chips.
+    for (const value of VALUES) {
+      expect(screen.getByTestId<HTMLButtonElement>(`facet-${value}`).disabled).toBe(true)
+    }
+    expect(screen.getByTestId<HTMLButtonElement>('facet-all').disabled).toBe(true)
+
+    // The chips still report what they hold. A disabled facet states its
+    // selection; it does not throw it away.
+    expect(screen.getByTestId('facet-barbell').getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('facet-rower').getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByTestId('facet-barbell-check')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('facet-rower'))
+    fireEvent.click(screen.getByTestId('facet-all'))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(all).not.toHaveBeenCalled()
+    expect(screen.getByTestId('facet-rower').getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('leaves every control live when the caller asks for no disabled state', () => {
+    render(
+      <FacetGroup
+        values={VALUES}
+        selected={[]}
+        labels={equipmentLabel}
+        testIdPrefix="facet"
+        onChange={noop}
+        bulkActions={[{ label: 'All', testId: 'facet-all', onSelect: noop }]}
+      />,
+    )
+
+    // The prop is opt-in. The five call sites that never pass it keep live chips.
+    expect(screen.getByTestId<HTMLButtonElement>('facet-barbell').disabled).toBe(false)
+    expect(screen.getByTestId<HTMLButtonElement>('facet-all').disabled).toBe(false)
+  })
+
   it('renders nothing for an empty vocabulary, whatever the slots hold', () => {
     const { container } = render(
       <FacetGroup

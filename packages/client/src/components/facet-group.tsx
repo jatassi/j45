@@ -64,6 +64,7 @@ function FacetChips<A extends string>(props: {
   readonly labels: Record<A, string>
   readonly testIdPrefix: string
   readonly onChange: (next: A[]) => void
+  readonly disabled: boolean
 }) {
   const selectedValues = new Set<A>(props.selected)
   return (
@@ -83,6 +84,7 @@ function FacetChips<A extends string>(props: {
             key={value}
             value={value}
             data-testid={testId}
+            disabled={props.disabled}
             className={isSelected ? CHIP_SELECTED : CHIP_UNSELECTED}
           >
             {/* The kit reduces the chip padding when a child carries
@@ -101,16 +103,20 @@ function FacetChips<A extends string>(props: {
   )
 }
 
-function FacetBulkRow({ actions }: { readonly actions: readonly FacetBulkAction[] }) {
+function FacetBulkRow(props: {
+  readonly actions: readonly FacetBulkAction[]
+  readonly disabled: boolean
+}) {
   return (
     <div className="flex flex-row flex-wrap gap-2">
-      {actions.map((action) => (
+      {props.actions.map((action) => (
         <Button
           key={action.testId}
           type="button"
           variant="outline"
           size="sm"
           data-testid={action.testId}
+          disabled={props.disabled}
           onClick={action.onSelect}
         >
           {action.label}
@@ -132,6 +138,13 @@ function FacetBulkRow({ actions }: { readonly actions: readonly FacetBulkAction[
  * below the chips that states the selection. If the caller supplies neither,
  * the control shows the toggle group and nothing else. A call site that wants
  * only chips thus keeps the markup and the layout that it has today.
+ *
+ * `disabled` turns the whole facet off — the chips and the bulk actions alike.
+ * A control that reports itself as disabled must not leave one half of itself
+ * live. The chips take the real DOM disabled state, so the keyboard and
+ * assistive technology skip them, and so a test can assert the state. They keep
+ * their `aria-pressed`: a disabled facet still states its selection. Nothing
+ * leaves the markup, so a facet that goes off does not move what is below it.
  */
 export function FacetGroup<A extends string>(props: {
   readonly values: readonly A[]
@@ -141,11 +154,13 @@ export function FacetGroup<A extends string>(props: {
   readonly onChange: (next: A[]) => void
   readonly bulkActions?: readonly FacetBulkAction[]
   readonly summary?: React.ReactNode
+  readonly disabled?: boolean
 }) {
   if (props.values.length === 0) {
     return null
   }
   const bulkActions = props.bulkActions ?? []
+  const disabled = props.disabled ?? false
   // A caller that shows the line only sometimes writes `summary={on ? x : null}`.
   // Null thus means "not supplied", the same as undefined.
   const hasSummary = props.summary !== undefined && props.summary !== null
@@ -156,6 +171,7 @@ export function FacetGroup<A extends string>(props: {
       labels={props.labels}
       testIdPrefix={props.testIdPrefix}
       onChange={props.onChange}
+      disabled={disabled}
     />
   )
   if (bulkActions.length === 0 && !hasSummary) {
@@ -163,7 +179,7 @@ export function FacetGroup<A extends string>(props: {
   }
   return (
     <div className="flex w-full max-w-full flex-col gap-2">
-      {bulkActions.length > 0 ? <FacetBulkRow actions={bulkActions} /> : null}
+      {bulkActions.length > 0 ? <FacetBulkRow actions={bulkActions} disabled={disabled} /> : null}
       {chips}
       {hasSummary ? (
         <FieldDescription data-testid={`${props.testIdPrefix}-summary`}>

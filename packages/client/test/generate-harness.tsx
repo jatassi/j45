@@ -1,6 +1,15 @@
 // @vitest-environment jsdom
 import { RegistryProvider, Result } from '@effect-atom/atom-react'
-import { Flow, LibraryWorkout, Pod, Round, Station, Workout, WorkoutId } from '@j45/domain'
+import {
+  Flow,
+  LibraryWorkout,
+  Pod,
+  Round,
+  Station,
+  Workout,
+  WorkoutId,
+  type GenerationConstraints,
+} from '@j45/domain'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -11,7 +20,7 @@ import {
 } from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
-import type * as Effect from 'effect/Effect'
+import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
 import * as Schema from 'effect/Schema'
 
@@ -130,6 +139,28 @@ export function renderApp(handlers: Handlers, initialPath: string) {
       <RouterProvider router={testRouter} />
     </RegistryProvider>,
   )
+}
+
+/**
+ * Renders `/generate` over a fake runtime that records every generate payload,
+ * and gives back the list it records into.
+ *
+ * Several cases read the payload that leaves the screen, and every one of them
+ * wants the same fake handler. The handler answers with the golden workout, so
+ * a case that presses Generate reaches a preview and can press Regenerate.
+ */
+export function renderCapturingPayloads(): GenerationConstraints[] {
+  const sent: GenerationConstraints[] = []
+  renderApp(
+    {
+      GenerateWorkout: (payload) => {
+        sent.push(payload as GenerationConstraints)
+        return Effect.succeed(athleticaWorkout)
+      },
+    },
+    '/generate',
+  )
+  return sent
 }
 
 /** The state contract of a chip, for the tests and for assistive technology. */
