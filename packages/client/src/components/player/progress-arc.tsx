@@ -165,6 +165,25 @@ function readDigitsRegion(container: HTMLElement): DigitsRegion {
 
 type LiveDigits = { rect: DocRect; value: string; digits: RenderedDigits }
 
+/**
+ * Repaint the countdown into the glass, flat white and with no sheen.
+ *
+ * White is not the countdown's own colour. The component tints the digits for
+ * urgency, so a critical count is red on screen and would repaint white here.
+ *
+ * This is allowed because it never runs. A proxy paints only where a
+ * refracting surface covers its region, and nothing covers this one. The
+ * countdown clears the control dock by 108px or more on every phone.
+ *
+ * Both player screens hold that measurement. `e2e/live-session.spec.ts` is
+ * where the defect would be seen, because that dock takes the refract tier.
+ * `e2e/timer.spec.ts` covers the manual timer, whose countdown sits lower on
+ * the screen.
+ *
+ * If those tests fail, this function must read the digit colour the component
+ * already sets, rather than white. The sheen gradient stays out. It is a
+ * gradient rebuilt on every repaint, for a region behind frosted glass.
+ */
 function paintDigits(ctx: CanvasRenderingContext2D, live: LiveDigits): void {
   if (!live.value) {
     return
@@ -179,8 +198,25 @@ function paintDigits(ctx: CanvasRenderingContext2D, live: LiveDigits): void {
 /**
  * Register the digits region as a dirty-region scene proxy and invalidate it
  * whenever `value` changes — the `glass-demo/ticking-digit.tsx` pattern applied
- * to the countdown. The initial value is not an invalidation. The rect and the
- * rendered size are measured together, once, when the proxy is registered.
+ * to the countdown. The initial value is not an invalidation.
+ *
+ * The rect and the rendered size are measured together, once, when the proxy
+ * is registered, and they are then held.
+ *
+ * **The held measurement goes stale.** The type scale changes with the
+ * character count, so the countdown changes size at `1:00` and at `10:00`
+ * during an ordinary Session. The arc also moves and resizes when the viewport
+ * does. The measurement was safe while the countdown kept one size. It is not
+ * safe now. It is kept for the same reason {@link paintDigits} keeps flat
+ * white: nothing refracts over this region, so nothing repaints from the held
+ * values.
+ *
+ * The two shortcuts fall together, and the same two tests guard them.
+ *
+ * If those tests fail, repair this in two steps. Measure again whenever the
+ * character count changes. Then invalidate the union of the old rect and the
+ * new one, so that a countdown which became smaller clears the region the
+ * larger one left.
  */
 function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void {
   const handleRef = useRef<SceneProxyHandle | null>(null)
