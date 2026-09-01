@@ -249,9 +249,8 @@ describe('SessionScreen — server-state render', () => {
   it('keeps the minute on a segment that runs past one', async () => {
     const id = 'sess-long'
     const sessionId = Schema.decodeSync(SessionId)(id)
-    // Only the leading *zero* minute is dropped. A `Segment`'s duration has no
-    // upper bound, so a long station still reads m:ss and must not be
-    // written as a bare second count.
+    // Only the leading *zero* minute is dropped. A long Segment still reads
+    // m:ss, and is never written as a bare count of seconds.
     const timer = new TimerPaused({ segmentIndex: 1, remainingMillis: 90_000 })
     renderLive(id, makeState(sessionId, timer, Date.now()))
 

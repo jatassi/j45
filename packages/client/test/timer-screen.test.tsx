@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { RegistryProvider, Result } from '@effect-atom/atom-react'
-import { READY_SECONDS } from '@j45/domain'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
@@ -70,10 +69,11 @@ describe('TimerScreen — idle field kit composition', () => {
     // sits above the settings form, so it must claim neither.
     expect(screen.queryByTestId('player-progress-arc')).toBeNull()
     expect(Object.hasOwn(screen.getByTestId('timer-count').dataset, 'arcDigits')).toBe(false)
-    // It does take the player's format, though: the preview reads the ready
-    // countdown the same way the running arc will, so what a member sets is
-    // what they see. `formatDuration` would write this "0:05".
-    expect(screen.getByTestId('timer-count').textContent).toBe(String(READY_SECONDS))
+    // It does take the player's format, though: the preview writes the ready
+    // countdown (5s) the same way the running arc will, so the countdown
+    // reads the same way before a run as during it. `formatDuration` would
+    // write this "0:05".
+    expect(screen.getByTestId('timer-count').textContent).toBe('5')
   })
 
   it('composes work / rest / rounds from the ui/ Field kit (Field + kit Input, numeric inputMode) — no raw hand-styled native number rows', () => {

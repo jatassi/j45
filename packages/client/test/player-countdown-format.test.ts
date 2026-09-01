@@ -22,10 +22,8 @@ describe('formatCountdown', () => {
   })
 
   it('rounds up to the next whole second, never showing less time than is left', () => {
-    // A second is on screen until it has fully elapsed: any part of the 45th
-    // second still reads 45. This is `formatDuration`'s convention and the
-    // whole second `useCountdown` cues the 3-2-1 beeps from, so the digits,
-    // the beeps and the urgency tint all change on one boundary.
+    // A second stays on screen until it has fully elapsed: any part of the
+    // 45th second still reads 45.
     expect(formatCountdown(44_999)).toBe('45')
     expect(formatCountdown(44_001)).toBe('45')
     expect(formatCountdown(44_000)).toBe('44')
@@ -41,8 +39,7 @@ describe('formatCountdown', () => {
   })
 
   it('crosses the 10:00 boundary in both directions', () => {
-    // Five characters are reachable: a `Segment`'s duration has no upper
-    // bound, so a long finisher is written in full rather than capped.
+    // Five characters are reachable. The digits are rebucketed here.
     expect(formatCountdown(600_000)).toBe('10:00')
     expect(formatCountdown(599_001)).toBe('10:00')
     expect(formatCountdown(599_000)).toBe('9:59')

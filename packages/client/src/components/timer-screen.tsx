@@ -85,9 +85,9 @@ function arcFraction(
 }
 
 /**
- * Every string the screen shows, for whichever view is up. The idle preview
- * and the running arc read the same `count` from the same player format, so
- * what a member sets is what they see when it starts.
+ * What the screen draws, for whichever view is up. The idle preview and the
+ * running arc take their `count` from the same player format, so the
+ * countdown reads the same way before a run starts as it does during it.
  */
 function viewModel(timer: ReturnType<typeof useManualTimer>, settings: Settings): ViewModel {
   const millis = displayMillis(timer.state, timer.liveRemaining)
