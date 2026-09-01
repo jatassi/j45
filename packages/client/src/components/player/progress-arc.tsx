@@ -127,11 +127,11 @@ const UNMEASURED: DigitsRegion = {
  * `data-arc-digits`. Without the mark, the whole box is measured, as before.
  *
  * The region is the container's box together with the countdown's own box. The
- * countdown is pushed down to straddle the arc's chord, and a transform on a
- * child never grows its parent's box. The container alone would therefore leave
- * the lower half of the countdown outside the region the glass repaints. The
- * countdown only moves down, so the union keeps the container's own origin, and
- * the coordinates below stay in the region's frame.
+ * countdown hangs past the arc's chord on a negative bottom margin, which
+ * shrinks the container's box rather than growing it. The container alone
+ * would therefore leave the lower half of the countdown outside the region the
+ * glass repaints. The countdown only hangs downward, so the union keeps the
+ * container's own origin, and the coordinates below stay in the region's frame.
  *
  * The refraction repaints these digits, so it must use the size they render at.
  * A fixed share of the box's height cannot give that size. The box and the
@@ -230,14 +230,23 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
  * sweeps 180° and leaves the whole bottom half open, so the digits overflow
  * below the chord into space nothing encloses.
  *
- * The children sit in a column whose bottom edge is the chord, so the label
- * stays inside the arc and clear of the stroke. The countdown is then pushed
- * down by half its own height, which puts its centre on the chord: half of it
- * is inside the arc and half is below, in the open.
+ * The children sit in a column whose bottom edge is the chord. The countdown
+ * takes half its own height off its bottom margin, so its box hangs half a
+ * height past that edge: half of it is inside the arc and half is below, in
+ * the open, with its centre on the chord.
  *
- * The countdown is the element that moves, not the whole column. A column
- * pushed down by half its own height would carry the label's height into the
- * offset, and the countdown would land below the chord by half of that.
+ * A margin, not a transform. Both put the countdown in the same place, but a
+ * transform leaves the layout behind: the column would still be a whole
+ * countdown tall, and the label above it would sit a whole countdown clear of
+ * the chord. At the sizes the type scale now reaches, that puts the label
+ * outside the arc altogether. The margin moves the layout with it, so the
+ * label stays where it belongs — inside the arc, above the countdown's head,
+ * and clear of the stroke — at every size the buckets give.
+ *
+ * The countdown is the element that carries the margin, not the whole column.
+ * A column pulled up by half its own height would carry the label's height
+ * into the offset, and the countdown would land below the chord by half of
+ * that.
  *
  * The digits region registers a dirty-region scene proxy keyed on
  * {@link ProgressArcProps.dirtyValue}.
@@ -278,7 +287,7 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
       <div
         ref={digitsRef}
         data-testid="player-progress-arc-digits"
-        className="absolute inset-x-0 bottom-0 flex flex-col items-center [&>[data-arc-digits]]:translate-y-1/2"
+        className="absolute inset-x-0 bottom-0 flex flex-col items-center [&>[data-arc-digits]]:mb-[-0.5em]"
       >
         {children}
       </div>

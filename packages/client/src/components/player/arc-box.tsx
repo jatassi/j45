@@ -30,7 +30,12 @@ export function ArcBox({
 }: {
   /** What the arc takes when the column has the height for it, as a CSS length. */
   readonly width: string
-  /** The countdown's type scale, as a CSS length. Its glyphs are one em tall. */
+  /**
+   * The countdown's type scale, as a CSS length. Its glyphs are one em tall.
+   *
+   * It may read `--arc-width`, which is set on the same element: that is how
+   * both screens size the countdown as a share of their own arc.
+   */
   readonly countSize: string
   readonly children: ReactNode
 }): JSX.Element {
