@@ -24,8 +24,11 @@ type Settings = {
 type TimerState = Domain.TimerState
 type Segment = Domain.Segment
 type AudioProps = { audio: Audio.AudioState; onRetry: () => void }
-type DigitsProps = { phase: string; count: string; context: string }
-type ViewModel = DigitsProps & { fraction: number; playerPhase: PlayerPhase }
+/** The phase label and the countdown: the arc's two-element children shape. */
+type DigitsProps = { phase: string; count: string }
+/** Every string the screen shows: those two, plus the context line. */
+type ViewText = DigitsProps & { context: string }
+type ViewModel = ViewText & { fraction: number; playerPhase: PlayerPhase }
 
 const WORK_MIN = 5
 const REST_MIN = 0
@@ -218,13 +221,27 @@ const COUNT_TYPE: Record<DigitsPlace, string> = {
 }
 
 // prettier-ignore
-function Digits({ phase, count, context, place }: DigitsProps & { place: DigitsPlace }) {
+function Digits({ phase, count, place }: DigitsProps & { place: DigitsPlace }) {
   return (
     <>
       <p className="text-sm font-medium" data-testid="timer-phase">{phase}</p>
       <p className={`${COUNT_TYPE[place]} font-semibold tabular-nums`} data-testid="timer-count" data-arc-digits={place === 'arc' ? '' : undefined}>{count}</p>
-      <p className="text-sm text-muted-foreground" data-testid="timer-context">{context}</p>
     </>
+  )
+}
+
+/**
+ * The round indicator while running, the settings summary while idle.
+ *
+ * This line is never a child of the arc. The arc takes two children only —
+ * see `ProgressArcProps.children`. While the timer runs, this line therefore
+ * sits below the arc.
+ */
+function ContextLine({ context }: { context: string }) {
+  return (
+    <p className="text-sm text-muted-foreground" data-testid="timer-context">
+      {context}
+    </p>
   )
 }
 
@@ -256,7 +273,7 @@ function IdleForm({
 }
 
 function IdleView(
-  p: AudioProps & DigitsProps & { inputs: ReturnType<typeof useTimerInputs>; onStart: () => void },
+  p: AudioProps & ViewText & { inputs: ReturnType<typeof useTimerInputs>; onStart: () => void },
 ) {
   return (
     <>
@@ -266,7 +283,8 @@ function IdleView(
           audio={p.audio}
           onRetry={p.onRetry}
         />
-        <Digits phase={p.phase} count={p.count} context={p.context} place="form" />
+        <Digits phase={p.phase} count={p.count} place="form" />
+        <ContextLine context={p.context} />
       </div>
       <IdleForm inputs={p.inputs} onStart={p.onStart} />
     </>
@@ -302,7 +320,7 @@ function RunControls(p: {
 
 // prettier-ignore
 function RunningView(
-  p: AudioProps & DigitsProps & {
+  p: AudioProps & ViewText & {
     state: TimerState
     fraction: number
     playerPhase: PlayerPhase
@@ -317,10 +335,17 @@ function RunningView(
       <Header className="relative z-10 flex items-center justify-between px-5 pt-6" audio={p.audio} onRetry={p.onRetry} />
       {/* pointer-events-none so the absolute ControlDock below receives taps */}
       <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center px-5 pb-40">
-        <div className="size-[min(290px,80vw)]">
-          <ProgressArc fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
-            <Digits phase={p.phase} count={p.count} context={p.context} place="arc" />
-          </ProgressArc>
+        {/* Arc box, then the context line below it. The live session stacks
+            the Station name below its arc the same way. The two wrappers are
+            not identical: this one has no width basis, because the manual
+            timer's arc box sizes itself. */}
+        <div className="flex flex-col items-center gap-2">
+          <div className="size-[min(290px,80vw)]">
+            <ProgressArc fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
+              <Digits phase={p.phase} count={p.count} place="arc" />
+            </ProgressArc>
+          </div>
+          <ContextLine context={p.context} />
         </div>
       </div>
       <div className="relative z-20">
