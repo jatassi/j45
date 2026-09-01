@@ -453,8 +453,9 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
       await expectNoGlassOverlapsTheCountdown(page)
       await page.setViewportSize({ width: 360, height: 640 })
       await expectNoGlassOverlapsTheCountdown(page)
-      // The pixel ceiling binds on a large phone, where this screen holds the
-      // higher ceiling of the two and therefore the smaller clearance.
+      // A large phone as well: the arc's pixel ceiling binds here, and this
+      // screen's ceiling is the higher of the two, so it is the only screen
+      // whose largest arc this can measure.
       await page.setViewportSize({ width: 430, height: 932 })
       await expectNoGlassOverlapsTheCountdown(page)
 
