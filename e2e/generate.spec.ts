@@ -127,9 +127,13 @@ async function assertEquipmentSummary(page: Page): Promise<void> {
 }
 
 /**
- * Asserts domain label maps render on the generate form and that the raw
- * vocabulary strings `full-body`, `med-ball`, `jump-rope`, and focus literals
- * never appear as visible text.
+ * Asserts that the generate form shows the domain labels. The raw vocabulary
+ * strings `med-ball` and `jump-rope`, and the focus literals, must not appear
+ * as visible text.
+ *
+ * After ADR-0003 no muscle group has a hyphen. The Emphasis popup therefore
+ * shows only that the field uses labels. Equipment tests the raw-literal
+ * rule.
  */
 async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
   await expect(page.getByTestId('generate-screen')).toBeVisible()
@@ -141,8 +145,7 @@ async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
 
   // Emphasis options live in the base-ui Select popup — open, assert, dismiss.
   await page.getByTestId('generate-emphasis').click()
-  await expect(page.getByRole('option', { name: 'Full body' })).toBeVisible()
-  await expect(page.getByRole('option', { name: 'full-body' })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: 'Core' })).toBeVisible()
   // Pick None so the popup closes without changing the default.
   await page.getByRole('option', { name: 'None' }).click()
 
@@ -152,7 +155,6 @@ async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
   expect(generateText).toContain('Hybrid')
   expect(generateText).toContain('Med ball')
   expect(generateText).toContain('Jump rope')
-  expect(generateText).not.toMatch(/\bfull-body\b/)
   expect(generateText).not.toMatch(/\bmed-ball\b/)
   expect(generateText).not.toMatch(/\bjump-rope\b/)
   // Focus toggle visible text is labels only — raw focus literals stay off-screen.

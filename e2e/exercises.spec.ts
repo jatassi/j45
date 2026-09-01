@@ -116,12 +116,12 @@ test.describe('exercises (chromium + webkit)', () => {
       await expect(exerciseRows(page)).toHaveCount(SEEDED_EXERCISE_COUNT)
 
       // Domain labels render; raw vocabulary literals never appear as visible text.
-      // Seed catalog surfaces full-body / med-ball / jump-rope on filter chips + tags.
+      // The seed catalog shows med-ball and jump-rope on the filter chips and
+      // on the tags. After ADR-0003 no muscle group has a hyphen. Only
+      // equipment can test this rule now.
       const libraryText = await page.getByTestId('exercise-library-screen').textContent()
-      expect(libraryText).toContain('Full body')
       expect(libraryText).toContain('Med ball')
       expect(libraryText).toContain('Jump rope')
-      expect(libraryText).not.toMatch(/\bfull-body\b/)
       expect(libraryText).not.toMatch(/\bmed-ball\b/)
       expect(libraryText).not.toMatch(/\bjump-rope\b/)
 

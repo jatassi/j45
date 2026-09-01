@@ -100,7 +100,7 @@ const makeExercise = (
   new Exercise({
     name,
     modality: overrides.modality ?? 'cardio',
-    muscleGroups: ['full-body'],
+    muscleGroups: ['core'],
     equipment: [...(overrides.equipment ?? [])],
     intensity: 'moderate',
   })

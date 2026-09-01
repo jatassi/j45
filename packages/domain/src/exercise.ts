@@ -20,7 +20,6 @@ export const intensityLabel: Record<Intensity, string> = {
 
 /** Primary muscle targets an exercise loads. */
 export const MuscleGroup = Schema.Literal(
-  'full-body',
   'glutes',
   'hamstrings',
   'quads',
@@ -35,7 +34,6 @@ export const MuscleGroup = Schema.Literal(
 export type MuscleGroup = typeof MuscleGroup.Type
 
 export const muscleGroupLabel: Record<MuscleGroup, string> = {
-  'full-body': 'Full body',
   glutes: 'Glutes',
   hamstrings: 'Hamstrings',
   quads: 'Quads',
