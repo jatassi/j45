@@ -330,7 +330,7 @@
     },
     {
       "id": "player-screens",
-      "title": "Immersive session player and manual timer — ring countdown on phase-tinted ground, glass control dock, leave UX",
+      "title": "Immersive session player and manual timer — arc countdown on phase-tinted ground, glass control dock, leave UX",
       "status": "shipped",
       "depends_on": [
         "glass-live-refraction",
@@ -338,7 +338,7 @@
         "nav-shell"
       ],
       "acceptance": [
-        "e2e (chromium, two logged-in contexts): both players show the same segment with the countdown inside the progress ring; the player root's data-phase matches the segment type as it advances (ready/work/rest); B's pause shows Paused on A's screen; the next-up line names the following work segment.",
+        "e2e (chromium, two logged-in contexts): both players show the same segment with the countdown inside the progress arc; the player root's data-phase matches the segment type as it advances (ready/work/rest); B's pause shows Paused on A's screen; the next-up line names the following work segment.",
         "e2e: the Leave control opens an alert-dialog; confirming lands the leaver home while the other participant keeps running with the leaver gone from the participant pills; the done state offers Finish without a confirm and both participants' /history records the session.",
         "e2e: the join/start tap itself unlocks audio (data-audio=\"on\"), at least one beep fires on a segment transition, and the wake lock is held while running and released on pause — the existing instrumented assertions preserved.",
         "e2e: the exercise-demo slot element is present on the session player (data-slot=\"exercise-demo\") and renders acceptably when empty — the reserved slot for future animations.",
