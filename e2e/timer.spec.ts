@@ -142,6 +142,64 @@ async function expectPhaseLabelStaysInsideTheArc(page: Page): Promise<void> {
 }
 
 /**
+ * No glass surface overlaps the countdown.
+ *
+ * This is the condition two shortcuts in `progress-arc.tsx` depend on. The
+ * digits' scene proxy repaints them flat white, and it measures their size and
+ * their place once, when it registers. Both are correct only while nothing
+ * refracts over the digits: a proxy that never repaints cannot show the wrong
+ * colour, and it cannot show a stale size either.
+ *
+ * Measured, not assumed. On the manual timer the countdown sits lower on the
+ * screen than it does on the live Session, so this screen is the closer of the
+ * two, and the clearance here is the smaller number.
+ *
+ * Every `.glass-surface` is checked, not the dock alone. The dock is the one
+ * the digits could reach, but the proxy repaints under any refracting surface,
+ * so a new one placed over the digits must fail this as well.
+ *
+ * The region checked is the region the proxy registers: `readDigitsRegion`
+ * takes the union of the digits' container and the countdown's own box,
+ * because the countdown hangs below the container on a negative margin.
+ *
+ * A failure here is not a broken layout. It says the arc has grown into the
+ * dock, and that both shortcuts must now be paid for: the proxy must paint the
+ * digit colour rather than white, and it must measure again when the type
+ * scale changes.
+ */
+async function expectNoGlassOverlapsTheCountdown(page: Page): Promise<void> {
+  const overlaps = await page.evaluate(() => {
+    const container = document.querySelector<HTMLElement>(
+      '[data-testid="player-progress-arc-digits"]',
+    )
+    const digits = document.querySelector<HTMLElement>('[data-arc-digits]')
+    if (container === null || digits === null) {
+      throw new Error('the countdown did not lay out')
+    }
+    const host = container.getBoundingClientRect()
+    const own = digits.getBoundingClientRect()
+    const region = {
+      left: Math.min(host.left, own.left),
+      top: Math.min(host.top, own.top),
+      right: Math.max(host.right, own.right),
+      bottom: Math.max(host.bottom, own.bottom),
+    }
+    return [...document.querySelectorAll<HTMLElement>('.glass-surface')]
+      .map((element) => {
+        const box = element.getBoundingClientRect()
+        const width = Math.min(region.right, box.right) - Math.max(region.left, box.left)
+        const height = Math.min(region.bottom, box.bottom) - Math.max(region.top, box.top)
+        return {
+          surface: element.dataset.testid ?? 'unnamed glass surface',
+          overlapPx: width > 0 && height > 0 ? Math.round(width * height) : 0,
+        }
+      })
+      .filter((entry) => entry.overlapPx > 0)
+  })
+  expect(overlaps).toEqual([])
+}
+
+/**
  * The Progress arc is meant to span nearly the whole width of a phone, and
  * only a real browser can say whether it does: the size is CSS — an aspect
  * ratio, a viewport-width clamp and a pixel ceiling — and jsdom computes none
@@ -185,6 +243,8 @@ async function expectArcAndItsContentFillThePhone(page: Page): Promise<void> {
     // can say what it renders at.
     await expectCountFillsTheArc(page, 160)
     await expectPhaseLabelStaysInsideTheArc(page)
+    // The largest bucket reaches lowest, so it is the one the dock is nearest.
+    await expectNoGlassOverlapsTheCountdown(page)
   } finally {
     if (before !== null) {
       await page.setViewportSize(before)
@@ -255,7 +315,8 @@ test.describe('timer (chromium + webkit)', () => {
       '(5s work, 0s rest, 2 rounds) Start runs ready → work → work → Done with the round ' +
       'indicator advancing; Pause freezes the displayed count, Resume continues, Reset ' +
       'returns to the idle input state; and on a 390px phone the countdown clears its size ' +
-      'floor and stays inside the arc in both the short and the five-character bucket.',
+      'floor, stays inside the arc, and is overlapped by no glass surface, in both the short ' +
+      'and the five-character bucket.',
     async ({ page }, testInfo) => {
       test.setTimeout(75_000)
 
@@ -348,6 +409,7 @@ test.describe('timer (chromium + webkit)', () => {
       // well past the ~80px the screen rendered before this change.
       await expectCountFillsTheArc(page, 90)
       await expectPhaseLabelStaysInsideTheArc(page)
+      await expectNoGlassOverlapsTheCountdown(page)
     },
   )
 
