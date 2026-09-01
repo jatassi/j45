@@ -3,6 +3,7 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import * as Domain from '@j45/domain'
 import * as Option from 'effect/Option'
 
+import { ArcBox } from '@/components/player/arc-box'
 import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PhaseBackdrop } from '@/components/player/phase-backdrop'
@@ -207,18 +208,34 @@ function Header({ audio, onRetry, className }: AudioProps & { className: string 
 type DigitsPlace = 'form' | 'arc'
 
 /**
- * The countdown's type scale. Inside the arc it is 28% of the arc box, the
- * share the live session's countdown also holds — see `CenterStack` in
- * `session-player-parts.tsx`. The idle preview has no arc around it and no
- * gap to grow into, so it keeps its own size.
+ * The countdown's type scale. Inside the arc it reads {@link COUNT_SIZE},
+ * which the running view sets on the arc box. The idle preview has no arc
+ * around it and no gap to grow into, so it keeps its own size.
  *
- * `data-arc-digits` goes with the arc size. It tells the arc's glass proxy
- * which element to repaint, so only the count inside the arc carries it.
+ * `data-arc-digits` goes with the arc size. It marks the countdown as the
+ * element centred on the arc's chord, and it tells the arc's glass proxy which
+ * element to repaint. Only the count inside the arc carries it.
  */
 const COUNT_TYPE: Record<DigitsPlace, string> = {
   form: 'text-6xl',
-  arc: 'text-[min(22.4vw,81px)] leading-none',
+  arc: 'text-[length:var(--count-size)] leading-none',
 }
+
+/**
+ * What the manual timer's arc takes when the column has the height for it. The
+ * ceiling is lower than the live session's, so the live session stays the more
+ * prominent of the two.
+ */
+const ARC_WIDTH = 'min(92vw, 350px)'
+
+/**
+ * The in-arc countdown's type scale. It is unchanged. Sizing it from the
+ * character count as a share of the arc is separate work.
+ *
+ * {@link ArcBox} reserves half of this below the arc, because the countdown's
+ * centre is on the arc's chord.
+ */
+const COUNT_SIZE = 'min(22.4vw, 81px)'
 
 // prettier-ignore
 function Digits({ phase, count, place }: DigitsProps & { place: DigitsPlace }) {
@@ -334,17 +351,15 @@ function RunningView(
       <PhaseBackdrop phase={p.playerPhase} paused={p.state._tag === 'paused'} />
       <Header className="relative z-10 flex items-center justify-between px-5 pt-6" audio={p.audio} onRetry={p.onRetry} />
       {/* pointer-events-none so the absolute ControlDock below receives taps */}
-      <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center px-5 pb-40">
+      <div className="pointer-events-none relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-5 pb-40">
         {/* Arc box, then the context line below it. The live session stacks
-            the Station name below its arc the same way. The two wrappers are
-            not identical: this one has no width basis, because the manual
-            timer's arc box sizes itself. */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="size-[min(290px,80vw)]">
+            the Station name below its arc the same way. */}
+        <div className="flex min-h-0 flex-col items-center gap-2">
+          <ArcBox width={ARC_WIDTH} countSize={COUNT_SIZE}>
             <ProgressArc fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
               <Digits phase={p.phase} count={p.count} place="arc" />
             </ProgressArc>
-          </div>
+          </ArcBox>
           <ContextLine context={p.context} />
         </div>
       </div>
@@ -372,7 +387,12 @@ export function TimerScreen() {
     ? 'relative flex min-h-svh flex-col items-center gap-6 p-6'
     : // dvh, not svh: the immersive shell (and the dock anchored to its
       // bottom) must track iOS Safari's toolbar as it expands/collapses.
-      'relative flex min-h-dvh flex-col overflow-hidden'
+      //
+      // A height, not a minimum. The shell hides its overflow, so a column
+      // that grew past the viewport did not scroll — it was cut off, and the
+      // dock went with it. A fixed height instead makes the column shrink the
+      // arc, which is what keeps landscape on screen.
+      'relative flex h-dvh flex-col overflow-hidden'
   return (
     <div className={shell} data-testid="timer-screen">
       {isIdle ? (

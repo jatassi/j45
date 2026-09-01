@@ -155,11 +155,14 @@ unrecorded wherever they fit.
   arrives there is no stale snapshot to keep, and the screen says only that it
   is connecting.
 - **Progress arc** — the player's centrepiece: an open SVG arc that depletes
-  around the countdown digits as the current **Segment** runs down. It is driven
+  over the countdown digits as the current **Segment** runs down. It is driven
   only by a remaining fraction, so it keeps no timer of its own, and it freezes
   with the digits when a **Session** pauses. The live Session player and the
   manual timer draw the same arc. It is never called a ring. The shape is open,
-  not closed, and the gap it leaves is the room the digits grow into.
+  and the gap it leaves is the room the digits grow into: the digits sit on the
+  arc's chord, so about half of their height is inside the arc and half falls
+  below it, where nothing encloses them. The arc is therefore not a frame
+  around the digits, and it is not sized to hold them.
 - **Progress strip** — how far a live Session has got, shown as one bar per
   group and one dot per **Round**. The group is the **Pod** when the **Flow**
   is `laps`, and the **Station** when it is `sets`, because a `sets` workout is

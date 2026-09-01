@@ -10,13 +10,16 @@ function handle(): SceneProxyHandle {
   return { update: vi.fn(), invalidate: vi.fn(), dispose: vi.fn() }
 }
 
-/** The 300×300 viewBox the arc is drawn on. */
-const BOX = 300
-const CENTER = BOX / 2
+/** The 300×150 viewBox the arc is drawn on — wide, and half as tall. */
+const BOX_WIDTH = 300
+const BOX_HEIGHT = 150
+/** The circle's centre: the middle of the box's bottom edge, so the chord is that edge. */
+const CENTER_X = BOX_WIDTH / 2
+const CENTER_Y = BOX_HEIGHT
 
 /** Bearing of a point on the circle, in degrees clockwise from the box's top. */
 function bearing(x: number, y: number): number {
-  return ((Math.atan2(x - CENTER, CENTER - y) * 180) / Math.PI + 360) % 360
+  return ((Math.atan2(x - CENTER_X, CENTER_Y - y) * 180) / Math.PI + 360) % 360
 }
 
 type Arc = {
@@ -39,7 +42,10 @@ function readArc(d: string): Arc {
     radius: n[2],
     largeArc: n[5],
     clockwise: n[6],
-    onCircle: [Math.hypot(n[0] - CENTER, n[1] - CENTER), Math.hypot(n[7] - CENTER, n[8] - CENTER)],
+    onCircle: [
+      Math.hypot(n[0] - CENTER_X, n[1] - CENTER_Y),
+      Math.hypot(n[7] - CENTER_X, n[8] - CENTER_Y),
+    ],
   }
 }
 
@@ -72,8 +78,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('ProgressArc — the 270° sweep', () => {
-  it('sweeps 270° clockwise with the gap centred on the bottom', () => {
+describe('ProgressArc — the 180° sweep', () => {
+  it('sweeps 180° clockwise on a half-height box, with the gap across the bottom', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     render(
@@ -82,23 +88,48 @@ describe('ProgressArc — the 270° sweep', () => {
       </ProgressArc>,
     )
 
+    // The box is half as tall as it is wide, which is what makes the half
+    // circle a vertical saving: a square box would carry an empty bottom half.
+    const svg = screen.getByTestId('player-progress-arc').querySelector('svg')
+    expect(svg?.getAttribute('viewBox')).toBe(`0 0 ${BOX_WIDTH} ${BOX_HEIGHT}`)
+
     const d = screen.getByTestId('player-progress-arc-sweep').getAttribute('d') ?? ''
     const arc = readArc(d)
 
-    // Both ends sit on the circle the digits are inscribed in.
+    // Both ends sit on the circle, at the ends of the chord.
     expect(arc.radius).toBe(ARC_RADIUS)
     for (const distance of arc.onCircle) {
       expect(distance).toBeCloseTo(ARC_RADIUS, 2)
     }
 
-    // 270° of sweep, leaving a 90° gap whose midpoint is the bottom (180°).
+    // 180° of sweep, leaving a 180° gap whose midpoint is the bottom (180°).
     const swept = (arc.to - arc.from + 360) % 360
-    expect(swept).toBeCloseTo(270, 6)
+    expect(swept).toBeCloseTo(180, 6)
     expect((arc.to + (360 - swept) / 2) % 360).toBeCloseTo(180, 6)
 
-    // Drawn the long way round, in the clockwise direction it depletes in.
-    expect(arc.largeArc).toBe(1)
+    // A half circle is never the long way round, and it keeps the clockwise
+    // direction the countdown has always depleted in.
+    expect(arc.largeArc).toBe(0)
     expect(arc.clockwise).toBe(1)
+  })
+
+  it('meets the box on all three sides with the stroke it scales by', () => {
+    vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
+
+    render(
+      <ProgressArc fraction={1} phase="work">
+        <span>12:00</span>
+      </ProgressArc>,
+    )
+
+    // The stroke stays in viewBox units, so it grows with the arc rather than
+    // reading heavy on a small phone and thin on a large one. Half of it lies
+    // outside the radius, and that outer edge must land on the box exactly.
+    for (const shape of shapes()) {
+      const stroke = Number(shape.getAttribute('stroke-width'))
+      expect(stroke).toBeGreaterThan(0)
+      expect(ARC_RADIUS + stroke / 2).toBeCloseTo(BOX_WIDTH / 2, 6)
+    }
   })
 
   it('draws the track over the sweep only, and puts nothing in the gap', () => {
@@ -113,7 +144,7 @@ describe('ProgressArc — the 270° sweep', () => {
     const drawn = shapes()
     const sweep = screen.getByTestId('player-progress-arc-sweep').getAttribute('d')
 
-    // Exactly the track and the arc, both on the same 270° path. There is no
+    // Exactly the track and the arc, both on the same 180° path. There is no
     // full circle behind the sweep, and no third shape to put in the gap.
     expect(drawn).toHaveLength(2)
     for (const shape of drawn) {
@@ -138,10 +169,10 @@ describe('ProgressArc — the 270° sweep', () => {
 })
 
 describe('ProgressArc — depleting against the sweep length', () => {
-  it('measures the dash against three quarters of the circle, not the whole one', () => {
+  it('measures the dash against half the circle, not the whole one', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
-    expect(ARC_SWEEP_LENGTH).toBeCloseTo(2 * Math.PI * ARC_RADIUS * 0.75, 9)
+    expect(ARC_SWEEP_LENGTH).toBeCloseTo(2 * Math.PI * ARC_RADIUS * 0.5, 9)
     expect(dashAt(1).pathLength).toBeCloseTo(ARC_SWEEP_LENGTH, 6)
   })
 
@@ -196,7 +227,7 @@ function rect(box: Box): DOMRect {
 }
 
 /**
- * Lay the arc box out at 300×300 and the digits low and wide inside it, so a
+ * Lay the arc box out at 300×150 and the digits low and wide inside it, so a
  * paint centred on the box is told apart from one centred on the digits.
  */
 function stubLayout(): { center: readonly [number, number] } {
@@ -205,13 +236,13 @@ function stubLayout(): { center: readonly [number, number] } {
   ): DOMRect {
     return Object.hasOwn((this as HTMLElement).dataset, 'arcDigits')
       ? rect({ left: 140, top: 260, width: 200, height: 90 })
-      : rect({ left: 40, top: 100, width: BOX, height: BOX })
+      : rect({ left: 40, top: 100, width: BOX_WIDTH, height: BOX_HEIGHT })
   })
   return { center: [140 - 40 + 100, 260 - 100 + 45] }
 }
 
-describe('ProgressArc — centered children + dirty-region proxy', () => {
-  it('centers arbitrary children and registers a dirty-region proxy for the digits', () => {
+describe('ProgressArc — children on the chord + dirty-region proxy', () => {
+  it('renders arbitrary children and registers a dirty-region proxy for the digits', () => {
     const register = vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     render(
@@ -291,6 +322,6 @@ describe('ProgressArc — centered children + dirty-region proxy', () => {
 
     // Unmarked, the box is measured — but the paint still lands in its middle,
     // never in a corner.
-    expect(ctx.fillText).toHaveBeenCalledWith('12:00', BOX / 2, BOX / 2)
+    expect(ctx.fillText).toHaveBeenCalledWith('12:00', BOX_WIDTH / 2, BOX_HEIGHT / 2)
   })
 })

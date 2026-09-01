@@ -93,6 +93,45 @@ function instrumentAudioBeeps(): void {
   }
 }
 
+/**
+ * The Progress arc is meant to span nearly the whole width of a phone, and
+ * only a real browser can say whether it does: the size is CSS — an aspect
+ * ratio, a viewport-width clamp and a pixel ceiling — and jsdom computes none
+ * of it. Without this, an arc that silently rendered at 200px would still pass
+ * every other assertion in the suite.
+ *
+ * Measured on a phone viewport rather than the project's desktop default,
+ * because the pixel ceiling is what binds on a wide window, by design.
+ *
+ * The arc is also checked against its own box, so a wide box holding a small
+ * arc cannot pass: the drawn path must fill the box it was given.
+ */
+async function expectArcSpansThePhone(page: Page): Promise<void> {
+  const before = page.viewportSize()
+  const phone = { width: 390, height: 844 }
+  await page.setViewportSize(phone)
+  try {
+    const arc = page.getByTestId('player-progress-arc')
+    await expect(arc).toBeVisible()
+
+    const box = await arc.boundingBox()
+    const sweep = await page.getByTestId('player-progress-arc-sweep').boundingBox()
+    if (box === null || sweep === null) {
+      throw new Error('the progress arc did not lay out')
+    }
+    expect(box.width / phone.width).toBeGreaterThan(0.85)
+    // Half as tall as it is wide: the box is the half circle's letterbox.
+    expect(box.height).toBeCloseTo(box.width / 2, 0)
+    // The drawn path fills the box it was given, so a wide box holding a
+    // small arc cannot pass this.
+    expect(sweep.width / box.width).toBeGreaterThan(0.9)
+  } finally {
+    if (before !== null) {
+      await page.setViewportSize(before)
+    }
+  }
+}
+
 type FakeWakeLockSentinel = {
   release(): Promise<void>
   addEventListener(type: string, listener: () => void): void
@@ -190,6 +229,8 @@ test.describe('timer (chromium + webkit)', () => {
       await expect(page.getByTestId('player-phase-backdrop')).toBeVisible()
       await expect(page.getByTestId('player-progress-arc')).toBeVisible()
       await expect(page.getByTestId('player-control-dock')).toBeVisible()
+
+      await expectArcSpansThePhone(page)
 
       await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 8000 })
       await expect(page.getByTestId('timer-context')).toHaveText('Round 1 of 2')
