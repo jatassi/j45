@@ -80,11 +80,8 @@ function workoutCards(page: Page) {
 /** Compile chip shape: `N works · MM:SS` (or `M:SS` for short totals). */
 const SUMMARY_SHAPE = /^\d+ works · \d{1,2}:\d{2}$/
 
-/** Opens a base-ui Select by its trigger testid and picks the option with the given label. */
-async function pickSelectOption(page: Page, testId: string, optionLabel: string): Promise<void> {
-  await page.getByTestId(testId).click()
-  await page.getByRole('option', { name: optionLabel }).click()
-}
+/** What the Emphasis summary line reads when no chip is on. */
+const NO_EMPHASIS = 'No emphasis — every strength exercise qualifies'
 
 /**
  * Opens `/generate` from the tab bar, applies permissive constraints
@@ -103,7 +100,9 @@ async function generatePreview(page: Page): Promise<void> {
   await page.getByTestId('generate-target-minutes-dec').click()
   await page.getByTestId('generate-target-minutes-inc').click()
   await expect(page.getByTestId('generate-target-minutes')).toHaveValue('30')
-  await pickSelectOption(page, 'generate-emphasis', 'None')
+  // No emphasis: the journey taps no chip, and the summary line says what that
+  // empty selection means.
+  await expect(page.getByTestId('generate-emphasis-summary')).toHaveText(NO_EMPHASIS)
 
   await page.getByTestId('generate-button').click()
   await expect(page.getByTestId('generate-preview')).toBeVisible({ timeout: 30_000 })
@@ -131,9 +130,8 @@ async function assertEquipmentSummary(page: Page): Promise<void> {
  * strings `med-ball` and `jump-rope`, and the focus literals, must not appear
  * as visible text.
  *
- * After ADR-0003 no muscle group has a hyphen. The Emphasis popup therefore
- * shows only that the field uses labels. Equipment tests the raw-literal
- * rule.
+ * After ADR-0003 no muscle group has a hyphen. The Emphasis chips therefore
+ * show only that the field uses labels. Equipment tests the raw-literal rule.
  */
 async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
   await expect(page.getByTestId('generate-screen')).toBeVisible()
@@ -143,11 +141,13 @@ async function assertDomainLabelsOnGenerateScreen(page: Page): Promise<void> {
   await expect(page.getByTestId('generate-equipment-med-ball')).toHaveText('Med ball')
   await expect(page.getByTestId('generate-equipment-jump-rope')).toHaveText('Jump rope')
 
-  // Emphasis options live in the base-ui Select popup — open, assert, dismiss.
-  await page.getByTestId('generate-emphasis').click()
-  await expect(page.getByRole('option', { name: 'Core' })).toBeVisible()
-  // Pick None so the popup closes without changing the default.
-  await page.getByRole('option', { name: 'None' }).click()
+  // Emphasis is a row of chips. The test id keeps the raw literal, and the
+  // chip shows the label. Nothing has to open.
+  await expect(page.getByTestId('generate-emphasis-core')).toHaveText('Core')
+  await expect(page.getByTestId('generate-emphasis-hamstrings')).toHaveText('Hamstrings')
+  const emphasisText = await page.getByTestId('generate-emphasis').textContent()
+  expect(emphasisText).not.toMatch(/\bcore\b/)
+  expect(emphasisText).not.toMatch(/\bhamstrings\b/)
 
   const generateText = await page.getByTestId('generate-screen').textContent()
   expect(generateText).toContain('Cardio')
@@ -223,7 +223,7 @@ test.describe('generate (chromium + webkit)', () => {
       // Resume the generate flow after the label assertion (same knobs as generatePreview).
       await page.getByTestId('generate-focus-hybrid').click()
       await expect(page.getByTestId('generate-target-minutes')).toHaveValue('30')
-      await pickSelectOption(page, 'generate-emphasis', 'None')
+      await expect(page.getByTestId('generate-emphasis-summary')).toHaveText(NO_EMPHASIS)
       await page.getByTestId('generate-button').click()
       await expect(page.getByTestId('generate-preview')).toBeVisible({ timeout: 30_000 })
       await expect(page.getByTestId('generate-error')).toHaveCount(0)
@@ -310,7 +310,11 @@ test.describe('generate (chromium + webkit)', () => {
       // Strength + Calves starves the seed catalog (one calves-tagged strength
       // exercise) while keeping the form knobs on the real kit controls.
       await page.getByTestId('generate-focus-strength').click()
-      await pickSelectOption(page, 'generate-emphasis', 'Calves')
+      await page.getByTestId('generate-emphasis-calves').click()
+      await expect(page.getByTestId('generate-emphasis-calves')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
       await page.getByTestId('generate-button').click()
 
       const error = page.getByTestId('generate-error')
@@ -330,7 +334,7 @@ test.describe('generate (chromium + webkit)', () => {
         'true',
       )
       await expect(page.getByTestId('generate-target-minutes')).toBeEnabled()
-      await expect(page.getByTestId('generate-emphasis')).toBeEnabled()
+      await expect(page.getByTestId('generate-emphasis-calves')).toBeEnabled()
     },
   )
 })

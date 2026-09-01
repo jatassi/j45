@@ -1,43 +1,50 @@
-import { MuscleGroup, muscleGroupLabel } from '@j45/domain'
+import { muscleGroupLabel } from '@j45/domain'
 
+import { FacetGroup } from '@/components/facet-group'
 import { Field, FieldLabel } from '@/components/ui/field'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
-import type { FormModel } from './model'
+import { facetSummary, type FacetSummaryCases } from './facet-summary'
+import { MUSCLE_GROUPS, type FormModel } from './model'
 
-const MUSCLE_GROUPS = MuscleGroup.literals
-const NONE = 'none' as const
-const EMPHASIS_ITEMS: Record<string, string> = { [NONE]: 'None', ...muscleGroupLabel }
+/**
+ * The words of the Emphasis summary line.
+ *
+ * An absent Emphasis is an absence, and not a choice. The line therefore says
+ * that the field applies no filter at all, and that every strength exercise
+ * qualifies. An empty equipment kit means the opposite — bodyweight only — so
+ * the two empty states of this form must never read alike.
+ *
+ * There is no `all` case. A full selection of the ten groups carries no
+ * special meaning, because the rule is a union: it narrows nothing.
+ */
+const EMPHASIS_SUMMARY: FacetSummaryCases = {
+  none: 'No emphasis — every strength exercise qualifies',
+  some: (selected) =>
+    `${selected} ${selected === 1 ? 'group narrows' : 'groups narrow'} the strength picks`,
+}
 
+/**
+ * The Emphasis field: one chip for each muscle group.
+ *
+ * A user selects as many groups as they want, and a strength exercise
+ * qualifies when it carries at least one of them. No selected chip means no
+ * emphasis, so the field needs no `None` item to say it.
+ *
+ * The field carries a test id of its own, so that a test can address the field
+ * as a whole and not only its chips.
+ */
 export function EmphasisField({ form }: { readonly form: FormModel }) {
   return (
-    <Field>
+    <Field data-testid="generate-emphasis">
       <FieldLabel>Emphasis</FieldLabel>
-      <Select
-        value={form.c.emphasis ?? NONE}
-        onValueChange={(next) =>
-          form.setEmphasis(next === null || next === NONE ? undefined : next)
-        }
-        items={EMPHASIS_ITEMS}
-      >
-        <SelectTrigger className="w-full" data-testid="generate-emphasis">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>None</SelectItem>
-          {MUSCLE_GROUPS.map((g) => (
-            <SelectItem key={g} value={g}>
-              {muscleGroupLabel[g]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <FacetGroup
+        values={MUSCLE_GROUPS}
+        selected={[...form.c.emphasis]}
+        labels={muscleGroupLabel}
+        testIdPrefix="generate-emphasis"
+        onChange={(next) => form.setEmphasis(new Set(next))}
+        summary={facetSummary(EMPHASIS_SUMMARY, form.c.emphasis.size, MUSCLE_GROUPS.length)}
+      />
     </Field>
   )
 }

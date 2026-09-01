@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
-import { Equipment, GenerationInfeasible, Workout, type GenerationConstraints } from '@j45/domain'
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import {
+  Equipment,
+  GenerationInfeasible,
+  MuscleGroup,
+  Workout,
+  type GenerationConstraints,
+} from '@j45/domain'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import * as Effect from 'effect/Effect'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -325,11 +331,15 @@ describe('GenerateScreen', () => {
     expect(focusRoot.textContent).not.toMatch(/\bcardio\b/)
     expect(focusRoot.textContent).not.toMatch(/\bstrength\b/)
 
-    // Emphasis select: open the popup and assert option labels.
-    fireEvent.click(screen.getByTestId('generate-emphasis'))
-    expect(await screen.findByRole('option', { name: 'Core' })).toBeTruthy()
-    // Trigger shows the selected "None" domain label, not a raw empty value.
-    expect(within(screen.getByTestId('generate-emphasis')).getByText('None')).toBeTruthy()
+    // Emphasis chips: one per muscle group, testids raw, chip text the label.
+    for (const group of MuscleGroup.literals) {
+      expect(screen.getByTestId(`generate-emphasis-${group}`)).toBeTruthy()
+    }
+    expect(screen.getByTestId('generate-emphasis-core').textContent).toBe('Core')
+    expect(screen.getByTestId('generate-emphasis-hamstrings').textContent).toBe('Hamstrings')
+    const emphasisField = screen.getByTestId('generate-emphasis')
+    expect(emphasisField.textContent).not.toMatch(/\bcore\b/)
+    expect(emphasisField.textContent).not.toMatch(/\bhamstrings\b/)
 
     // Equipment chips: testids stay raw; chip text is the domain label.
     expect(screen.getByTestId('generate-equipment-med-ball').textContent).toBe('Med ball')
@@ -337,5 +347,72 @@ describe('GenerateScreen', () => {
     expect(screen.getByTestId('generate-equipment-dumbbell').textContent).toBe('Dumbbells')
     expect(screen.getByTestId('generate-equipment-med-ball').textContent).not.toBe('med-ball')
     expect(screen.getByTestId('generate-equipment-jump-rope').textContent).not.toBe('jump-rope')
+  })
+
+  it('Emphasis chips start off; taps add and remove groups, and the payload carries the list', async () => {
+    const sent: GenerationConstraints[] = []
+    renderApp(
+      {
+        GenerateWorkout: (payload) => {
+          sent.push(payload as GenerationConstraints)
+          return Effect.succeed(athleticaWorkout)
+        },
+      },
+      '/generate',
+    )
+    await screen.findByTestId('generate-screen')
+
+    // No selected chip is now how the form says "no emphasis".
+    for (const group of MuscleGroup.literals) {
+      expect(pressed(`generate-emphasis-${group}`)).toBe('false')
+      expect(screen.queryByTestId(`generate-emphasis-${group}-check`)).toBeNull()
+    }
+
+    // An empty selection is an absence, and it travels as one. The schema
+    // cannot hold an empty list, so the key itself goes.
+    fireEvent.click(screen.getByTestId('generate-button'))
+    await screen.findByTestId('generate-preview')
+    expect(sent).toHaveLength(1)
+    expect(Object.hasOwn(sent[0] ?? {}, 'emphasis')).toBe(false)
+
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    fireEvent.click(screen.getByTestId('generate-emphasis-hamstrings'))
+    expect(pressed('generate-emphasis-glutes')).toBe('true')
+    expect(screen.queryByTestId('generate-emphasis-glutes-check')).not.toBeNull()
+    expect(pressed('generate-emphasis-quads')).toBe('false')
+
+    fireEvent.click(screen.getByTestId('generate-regenerate'))
+    await waitFor(() => expect(sent).toHaveLength(2))
+    expect([...(sent[1]?.emphasis ?? [])].toSorted()).toEqual(['glutes', 'hamstrings'])
+
+    // A second tap on a selected chip removes that group.
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    expect(pressed('generate-emphasis-glutes')).toBe('false')
+    fireEvent.click(screen.getByTestId('generate-regenerate'))
+    await waitFor(() => expect(sent).toHaveLength(3))
+    expect(sent[2]?.emphasis).toEqual(['hamstrings'])
+  })
+
+  it('the Emphasis summary follows the selection, and its empty state reads unlike an empty kit', async () => {
+    renderApp({}, '/generate')
+    await screen.findByTestId('generate-screen')
+
+    const emphasis = () => screen.getByTestId('generate-emphasis-summary').textContent
+    const equipment = () => screen.getByTestId('generate-equipment-summary').textContent
+
+    expect(emphasis()).toBe('No emphasis — every strength exercise qualifies')
+
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    expect(emphasis()).toBe('1 group narrows the strength picks')
+    fireEvent.click(screen.getByTestId('generate-emphasis-hamstrings'))
+    expect(emphasis()).toBe('2 groups narrow the strength picks')
+
+    // The two empty states mean the opposite of each other. The lines are how
+    // the screen tells them apart.
+    fireEvent.click(screen.getByTestId('generate-emphasis-glutes'))
+    fireEvent.click(screen.getByTestId('generate-emphasis-hamstrings'))
+    fireEvent.click(screen.getByTestId('generate-equipment-none'))
+    expect(equipment()).toBe('Bodyweight only')
+    expect(emphasis()).not.toBe(equipment())
   })
 })

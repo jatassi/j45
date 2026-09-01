@@ -10,9 +10,12 @@ import { Flow, Focus, Pod, Round, Station, Workout } from './workout.js'
 /**
  * The generate form's knobs. `equipment` is the ALLOWED set (an exercise
  * qualifies when its equipment is a subset — empty allowed set means
- * bodyweight-only). `emphasis` filters strength-modality picks to that
- * muscle group. `noRepeatSessions` is N (0 disables). `seed` makes the
- * whole generation deterministic; Regenerate is just a fresh seed.
+ * bodyweight-only). `emphasis` narrows the strength picks to the exercises
+ * that carry at least one of its groups. It is a nonempty list, or nothing at
+ * all: an empty emphasis cannot be built, and an absent one is no emphasis.
+ * That is the opposite of an empty `equipment` list, which is a choice, so the
+ * two carry different shapes. `noRepeatSessions` is N (0 disables). `seed`
+ * makes the whole generation deterministic; Regenerate is just a fresh seed.
  */
 export class GenerationConstraints extends Schema.Class<GenerationConstraints>(
   'GenerationConstraints',
@@ -20,7 +23,7 @@ export class GenerationConstraints extends Schema.Class<GenerationConstraints>(
   focus: Focus,
   targetMinutes: Schema.Int.pipe(Schema.positive()),
   equipment: Schema.Array(Equipment),
-  emphasis: Schema.optional(MuscleGroup),
+  emphasis: Schema.optional(Schema.NonEmptyArray(MuscleGroup)),
   noRepeatSessions: Schema.Int.pipe(Schema.nonNegative()),
   seed: Schema.Int,
 }) {}
@@ -109,14 +112,29 @@ const modalityMatches = (exercise: Exercise, focus: Focus): boolean => {
   return exercise.modality === focus
 }
 
-const emphasisMatches = (exercise: Exercise, emphasis: MuscleGroup | undefined): boolean => {
+/**
+ * The emphasis rule is a union test, and never an intersection: one group is
+ * enough. Every group added therefore widens the pool, so an added group can
+ * never make a feasible generation infeasible.
+ *
+ * A non-strength exercise bypasses the rule and always qualifies. An emphasis
+ * says nothing about cardio.
+ *
+ * This is a filter alone. It admits an exercise or it rejects one, and it
+ * counts nothing. Nothing downstream applies a quota per group either, so a
+ * two-group emphasis may draw a whole workout from one of them.
+ */
+const emphasisMatches = (
+  exercise: Exercise,
+  emphasis: readonly MuscleGroup[] | undefined,
+): boolean => {
   if (emphasis === undefined) {
     return true
   }
   if (exercise.modality !== 'strength') {
     return true
   }
-  return exercise.muscleGroups.includes(emphasis)
+  return exercise.muscleGroups.some((group) => emphasis.includes(group))
 }
 
 const filterPool = (
