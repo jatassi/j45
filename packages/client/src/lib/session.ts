@@ -254,9 +254,19 @@ export const cellState = (workIndex: number, currentWorkIndex: number | undefine
 }
 
 /**
- * The room the progress strip has, and the smallest cell a participant can
- * see in it. The cell collapse divides the first among the bars and compares
- * the result against the second.
+ * The room the progress strip has, the smallest cell a participant can see in
+ * it, and the gaps the renderer draws inside it. The cell collapse takes the
+ * gaps out of the width first, shares what is left among the bars, and
+ * compares the cell that follows against the minimum.
+ *
+ * The gaps belong here because the strip never gives all of its width to
+ * cells. `progress-strip.tsx` draws a gap between two bars, a wider one
+ * before a bar that opens a pod's run, and a gap between two cells of one
+ * bar. A budget that ignored them would report a bar as keeping cells that
+ * render under the floor, and the floor is the whole point of the rule. The
+ * error grows with the number of bars, so it is worst on exactly the
+ * hand-authored workout the rule exists to protect: `Pod.stations` and
+ * `Flow.rounds` have no upper bound.
  *
  * It is a parameter, not a measurement. The derivation must stay pure, so it
  * cannot read the element's real width, and a rule that waited on the dom
@@ -267,15 +277,32 @@ export const cellState = (workIndex: number, currentWorkIndex: number | undefine
 export type StripBudget = {
   readonly stripWidthPx: number
   readonly minCellWidthPx: number
+  /** The gap between two bars. */
+  readonly barGapPx: number
+  /** What a bar that opens a pod's run adds on top of that gap. */
+  readonly podRunGapPx: number
+  /** The gap between two cells of one bar. */
+  readonly cellGapPx: number
 }
 
 /**
  * The default budget: the strip's width on the narrowest supported phone
  * (320px, less the 20px of padding on each side that `session-screen.tsx`
- * gives the live screen), and a cell of 4px, which is about the smallest mark
- * that reads from arm's length.
+ * gives the live screen), a cell of 4px, which is about the smallest mark
+ * that reads from arm's length, and the three gaps the live strip draws.
+ *
+ * The gaps are the renderer's own measurements, and `progress-strip.tsx`
+ * reads them from here instead of naming them again. One source keeps the two
+ * in step: a gap that changes moves the collapse with it, and no comment has
+ * to be obeyed for the floor to stay true.
  */
-export const STRIP_BUDGET: StripBudget = { stripWidthPx: 280, minCellWidthPx: 4 }
+export const STRIP_BUDGET: StripBudget = {
+  stripWidthPx: 280,
+  minCellWidthPx: 4,
+  barGapPx: 6,
+  podRunGapPx: 8,
+  cellGapPx: 1,
+}
 
 /**
  * One bar of the progress strip. A bar is a group of works — never a
@@ -412,23 +439,43 @@ export const progressStrip = (
   const focus = currentWorkIndex === undefined ? undefined : works[currentWorkIndex]
   const byPod = compiled.flowType === 'laps'
   const groups = stripGroups(works, byPod)
-  const sharePx = budget.stripWidthPx / groups.length
+
+  // A pod boundary is worth a wider gap only where a bar is not already a
+  // pod. On `laps` the bar boundary is the pod boundary, so nothing is
+  // marked; on a one-pod `sets` workout no bar changes pod.
+  //
+  // The widths need this before the bars are built, not with them: the wider
+  // gap is width no cell ever gets, so the share cannot be known until every
+  // boundary is.
+  const podRunStarts = groups.map(
+    (group, index) => !byPod && index > 0 && group.podIndex !== groups[index - 1].podIndex,
+  )
+
+  // The width one bar is really drawn at. The renderer spends part of the
+  // strip on the gap between each pair of bars and on the wider gap before
+  // each pod run, and the bars share only what is left of it.
+  //
+  // A share falls to zero or below once the bars are numerous enough to spend
+  // the whole strip on gaps. Every bar then renders plain, which is the only
+  // honest reading of that shape.
+  const gapsPx =
+    budget.barGapPx * Math.max(groups.length - 1, 0) +
+    budget.podRunGapPx * podRunStarts.filter(Boolean).length
+  const sharePx = (budget.stripWidthPx - gapsPx) / groups.length
 
   const bars = groups.map((group, index): ProgressBar => {
     const state = spanState(group, focus?.workIndex)
-    // The budget divided among the bars, then among one bar's stations. A
-    // pod authored with more stations than its share can divide gives up its
-    // cells and renders plain: the strip then says less, and it still says
-    // nothing false.
-    const plain = sharePx / group.stations.length < budget.minCellWidthPx
+    // One bar's width, less the gaps between its own cells, divided among its
+    // stations. A pod authored with more stations than its share can divide
+    // gives up its cells and renders plain: the strip then says less, and it
+    // still says nothing false.
+    const cellsPx = sharePx - budget.cellGapPx * (group.stations.length - 1)
+    const plain = cellsPx / group.stations.length < budget.minCellWidthPx
     return {
       key: group.key,
       state,
       cells: plain ? [] : barCells(group, state, focus?.stationInPod),
-      // A pod boundary is worth a wider gap only where a bar is not already a
-      // pod. On `laps` the bar boundary is the pod boundary, so nothing is
-      // marked; on a one-pod `sets` workout no bar changes pod.
-      startsPodRun: !byPod && index > 0 && group.podIndex !== groups[index - 1].podIndex,
+      startsPodRun: podRunStarts[index],
     }
   })
 

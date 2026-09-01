@@ -6,7 +6,13 @@
 import { compile, Flow, Pod, Round, Station, Workout, type FlowType } from '@j45/domain'
 import { describe, expect, it } from 'vitest'
 
-import { progressStrip, STRIP_BUDGET, type CellState } from '@/lib/session'
+import {
+  progressStrip,
+  STRIP_BUDGET,
+  type CellState,
+  type ProgressStrip,
+  type StripBudget,
+} from '@/lib/session'
 
 /**
  * A compiled plan from a shape: pods named by their station lists, one flow,
@@ -203,14 +209,56 @@ describe('progressStrip — states', () => {
   })
 })
 
+/**
+ * The width one cell of a bar really gets, laid out the way
+ * `progress-strip.tsx` draws it.
+ *
+ * The bars share what the strip has left after the gap between each pair of
+ * them and the wider gap before each pod run. The cells of one bar then share
+ * their bar's width after the gaps between themselves. `cells` is the bar's
+ * station count, which a bar that went plain no longer reports, so the caller
+ * names it from the shape it authored.
+ *
+ * This restates the renderer's geometry, not the derivation's expression. It
+ * cannot be measured instead: jsdom runs no layout, so every width it reports
+ * is zero.
+ */
+const renderedCellWidthPx = (strip: ProgressStrip, budget: StripBudget, cells: number): number => {
+  const bars = strip.bars.length
+  const podRuns = strip.bars.filter((bar) => bar.startsPodRun).length
+  const gapsPx = budget.barGapPx * Math.max(bars - 1, 0) + budget.podRunGapPx * podRuns
+  const barPx = (budget.stripWidthPx - gapsPx) / bars
+  return (barPx - budget.cellGapPx * (cells - 1)) / cells
+}
+
+/**
+ * Every uniform shape the collapse sweep reads: both flows, one to six pods,
+ * one to twelve stations each. Uniform pods give one station count per bar,
+ * which is what lets the sweep name the width a bar that went plain would
+ * have been drawn at.
+ */
+const SWEEP_SHAPES = (['laps', 'sets'] as const).flatMap((flow) =>
+  Array.from({ length: 6 }, (_, pod) =>
+    Array.from({ length: 12 }, (_, station) => ({
+      flow,
+      podCount: pod + 1,
+      stationCount: station + 1,
+    })),
+  ).flat(),
+)
+
+/** The default budget with every gap taken out, so one gap can be added back alone. */
+const NO_GAPS: StripBudget = { ...STRIP_BUDGET, barGapPx: 0, podRunGapPx: 0, cellGapPx: 0 }
+
 describe('progressStrip — cell collapse', () => {
   it('drops the cells of a bar whose share is too narrow, and keeps its neighbour’s', () => {
-    // Budget 20px over 2 bars is a 10px share. Alpha's three cells would be
-    // 3.3px each — under the 4px minimum, so Alpha goes plain. Bravo's one
-    // cell gets the whole 10px, so Bravo keeps it.
+    // Budget 20px over 2 bars, less the 6px gap between them, is a 7px share.
+    // Alpha's three cells would be 5px after their two 1px gaps — 1.7px each,
+    // under the 4px minimum, so Alpha goes plain. Bravo's one cell takes no
+    // gap and gets the whole 7px, so Bravo keeps it.
     const strip = progressStrip(planOf('laps', unevenPods, 2), 3, {
+      ...STRIP_BUDGET,
       stripWidthPx: 20,
-      minCellWidthPx: 4,
     })
     expect(strip.bars.map((bar) => bar.cells)).toEqual([[], ['upcoming']])
     // A plain bar still says where the session is.
@@ -239,5 +287,102 @@ describe('progressStrip — cell collapse', () => {
     expect(sets.bars).toHaveLength(12)
     expect(sets.bars.every((bar) => bar.cells.length === 1)).toBe(true)
     expect(sets.dots).toHaveLength(4)
+  })
+})
+
+/**
+ * The gaps the renderer draws are width the cells never get, so the collapse
+ * spends them before it divides. Each test below adds one gap back on its own
+ * to a plan the budget otherwise keeps, and the plan gives its cells up.
+ */
+describe('progressStrip — cell collapse counts the renderer’s gaps', () => {
+  it('counts the gap between the bars', () => {
+    // 7 pods of 8 stations. Without the gap the share is 40px and a cell is
+    // 4.1px, so the cells stay. The six 6px gaps take the share to 34.9px and
+    // the cell to 3.5px, under the floor.
+    const pods = Array.from({ length: 7 }, (_, pod) => names(8, `P${pod}`))
+    const plan = planOf('laps', pods, 1)
+    const kept = progressStrip(plan, 0, { ...NO_GAPS, cellGapPx: STRIP_BUDGET.cellGapPx })
+    expect(kept.bars.every((bar) => bar.cells.length === 8)).toBe(true)
+
+    const dropped = progressStrip(plan, 0)
+    expect(dropped.bars.every((bar) => bar.cells.length === 0)).toBe(true)
+  })
+
+  it('counts the gap between the cells of one bar', () => {
+    // 2 pods of 30 stations, with the bar gaps taken out so only the cell gap
+    // moves. 140px over 30 cells is 4.7px each; the twenty-nine 1px gaps take
+    // 111px over 30 to 3.7px, under the floor.
+    const plan = planOf('laps', [names(30, 'A'), names(30, 'B')], 1)
+    const kept = progressStrip(plan, 0, NO_GAPS)
+    expect(kept.bars.every((bar) => bar.cells.length === 30)).toBe(true)
+
+    const dropped = progressStrip(plan, 0, { ...NO_GAPS, cellGapPx: STRIP_BUDGET.cellGapPx })
+    expect(dropped.bars.every((bar) => bar.cells.length === 0)).toBe(true)
+  })
+
+  it('counts the wider gap a bar that opens a pod run takes', () => {
+    // A `sets` workout of 2 pods of 14 stations: 28 one-cell bars, one of
+    // which opens the second pod's run. After the bar gaps the share is
+    // 4.2px, so the cells stay. That one bar's extra 8px takes every share to
+    // 3.9px, under the floor — the boundary of one bar collapses all 28.
+    const plan = planOf('sets', [names(14, 'A'), names(14, 'B')], 1)
+    const kept = progressStrip(plan, 0, { ...STRIP_BUDGET, podRunGapPx: 0 })
+    expect(kept.bars).toHaveLength(28)
+    expect(kept.bars.every((bar) => bar.cells.length === 1)).toBe(true)
+
+    const dropped = progressStrip(plan, 0)
+    expect(dropped.bars.every((bar) => bar.cells.length === 0)).toBe(true)
+  })
+
+  it('drops the cells of a plan the ungapped budget called exactly wide enough', () => {
+    // 7 pods of 10 stations divides the bare 280px into cells of exactly 4px,
+    // which a budget blind to the gaps reports as kept. The strip draws six
+    // 6px gaps and nine 1px gaps per bar, so the cell is really 2.6px.
+    const pods = Array.from({ length: 7 }, (_, pod) => names(10, `P${pod}`))
+    const strip = progressStrip(planOf('laps', pods, 1), 0)
+    expect(strip.bars).toHaveLength(7)
+    expect(strip.bars.every((bar) => bar.cells.length === 0)).toBe(true)
+    expect(renderedCellWidthPx(strip, STRIP_BUDGET, 10)).toBeLessThan(STRIP_BUDGET.minCellWidthPx)
+  })
+
+  it('gives every bar up when the gaps alone would spend the whole strip', () => {
+    // 60 one-cell bars carry 59 gaps of 6px — 354px of a 280px strip. The
+    // share goes negative rather than to a nonsense width, and every bar
+    // renders plain while the strip still says where the session is.
+    const strip = progressStrip(planOf('sets', [names(60, 'S')], 1), 0)
+    expect(strip.bars).toHaveLength(60)
+    expect(strip.bars.every((bar) => bar.cells.length === 0)).toBe(true)
+    expect(strip.bars.filter((bar) => bar.state === 'active')).toHaveLength(1)
+  })
+
+  it('keeps a cell at or above the floor, and drops one below it, for every shape swept', () => {
+    // The rule's whole claim, over both flows: a bar reports cells only where
+    // the renderer draws them at the floor or wider, and never where it would
+    // draw them narrower. Uniform pods keep one station count per bar, so the
+    // sweep can name the width a plain bar would have had.
+    let kept = 0
+    let plain = 0
+    for (const { flow, podCount, stationCount } of SWEEP_SHAPES) {
+      const pods = Array.from({ length: podCount }, (_, pod) => names(stationCount, `P${pod}`))
+      const strip = progressStrip(planOf(flow, pods, 1), 0)
+      // A `laps` bar is a pod, a `sets` bar is one station of one pod.
+      const cells = flow === 'laps' ? stationCount : 1
+      const widthPx = renderedCellWidthPx(strip, STRIP_BUDGET, cells)
+      for (const bar of strip.bars) {
+        if (bar.cells.length === 0) {
+          plain++
+          expect(widthPx).toBeLessThan(STRIP_BUDGET.minCellWidthPx)
+        } else {
+          kept++
+          expect(bar.cells).toHaveLength(cells)
+          expect(widthPx).toBeGreaterThanOrEqual(STRIP_BUDGET.minCellWidthPx)
+        }
+      }
+    }
+    // Neither branch may be the only one the sweep reached, or it proves half
+    // a rule.
+    expect(kept).toBeGreaterThan(0)
+    expect(plain).toBeGreaterThan(0)
   })
 })
