@@ -1,38 +1,19 @@
 // @vitest-environment jsdom
-import { RegistryProvider, Result } from '@effect-atom/atom-react'
-import {
-  Equipment,
-  Flow,
-  GenerationInfeasible,
-  LibraryWorkout,
-  Pod,
-  Round,
-  Station,
-  Workout,
-  WorkoutId,
-  type GenerationConstraints,
-} from '@j45/domain'
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import * as DateTime from 'effect/DateTime'
+import { Equipment, GenerationInfeasible, Workout, type GenerationConstraints } from '@j45/domain'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import * as Effect from 'effect/Effect'
-import * as Runtime from 'effect/Runtime'
-import * as Schema from 'effect/Schema'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { GenerateScreen } from '@/components/generate-screen'
-import { LibraryScreen } from '@/components/library-screen'
-import { WorkoutDetailScreen } from '@/components/workout-detail-screen'
-import { NewWorkoutScreen } from '@/components/workout-editor-screen'
 import { takeInitialDraft } from '@/lib/editor-draft'
-import { ServerRpcClient } from '@/lib/rpc-client'
+
+import {
+  athleticaWorkout,
+  fieldValue,
+  isDisabled,
+  libraryWorkoutOf,
+  pressed,
+  renderApp,
+} from './generate-harness'
 
 afterEach(() => {
   cleanup()
@@ -40,118 +21,6 @@ afterEach(() => {
   // Drain any leftover one-shot handoff so tests stay isolated.
   takeInitialDraft()
 })
-
-type Handlers = Partial<Record<string, (payload: unknown) => Effect.Effect<unknown, unknown>>>
-
-/** Fake rpc runtime — the same idiom `workout-editor-screen.test.tsx` uses. */
-function makeFakeRuntime(handlers: Handlers) {
-  const client = (tag: string, payload: unknown) => {
-    const handler = handlers[tag]
-    if (handler === undefined) {
-      throw new Error(`unexpected rpc call: ${tag}`)
-    }
-    return handler(payload)
-  }
-  return Runtime.defaultRuntime.pipe(Runtime.provideService(ServerRpcClient, client as never))
-}
-
-const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
-
-/** Athletica: 3 pods × 3 stations, uniform laps 40″/20″ × 3 — domain golden 27 works · 26:45. */
-const athleticaWorkout = new Workout({
-  name: 'Iron Falcon',
-  focus: 'hybrid',
-  pods: [
-    new Pod({
-      name: 'Pod 1',
-      stations: [
-        new Station({ name: 'Rower' }),
-        new Station({ name: 'Squat press' }),
-        new Station({ name: 'Burpee' }),
-      ],
-    }),
-    new Pod({
-      name: 'Pod 2',
-      stations: [
-        new Station({ name: 'Bike' }),
-        new Station({ name: 'Swing' }),
-        new Station({ name: 'Climbers' }),
-      ],
-    }),
-    new Pod({
-      name: 'Pod 3',
-      stations: [
-        new Station({ name: 'Snatch' }),
-        new Station({ name: 'Step-ups' }),
-        new Station({ name: 'Slam ball' }),
-      ],
-    }),
-  ],
-  flow: new Flow({
-    type: 'laps',
-    rounds: [
-      new Round({ workSeconds: 40, restSeconds: 20 }),
-      new Round({ workSeconds: 40, restSeconds: 20 }),
-      new Round({ workSeconds: 40, restSeconds: 20 }),
-    ],
-  }),
-})
-
-const libraryWorkoutOf = (id: string, workout: Workout) =>
-  new LibraryWorkout({
-    id: Schema.decodeSync(WorkoutId)(id),
-    workout,
-    createdAt: seededAt,
-    updatedAt: seededAt,
-  })
-
-/** Full route tree covering library home, generate, new editor, and detail. */
-function renderApp(handlers: Handlers, initialPath: string) {
-  const fakeRuntime = makeFakeRuntime(handlers)
-  const rootRoute = createRootRoute({ component: Outlet })
-  const indexRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/',
-    component: LibraryScreen,
-  })
-  const generateRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/generate',
-    component: GenerateScreen,
-  })
-  const newRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workouts/new',
-    component: NewWorkoutScreen,
-  })
-  const detailRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/workouts/$workoutId',
-    component: WorkoutDetailScreen,
-  })
-  const testRouter = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, generateRoute, newRoute, detailRoute]),
-    history: createMemoryHistory({ initialEntries: [initialPath] }),
-  })
-  render(
-    <RegistryProvider initialValues={[[ServerRpcClient.runtime, Result.success(fakeRuntime)]]}>
-      <RouterProvider router={testRouter} />
-    </RegistryProvider>,
-  )
-}
-
-const pressed = (testId: string): string | null =>
-  screen.getByTestId(testId).getAttribute('aria-pressed')
-
-const fieldValue = (testId: string): string => {
-  const el = screen.getByTestId(testId)
-  return el instanceof HTMLInputElement ? el.value : ''
-}
-
-const isDisabled = (testId: string): boolean => {
-  const el = screen.getByTestId(testId)
-  return el instanceof HTMLButtonElement && el.disabled
-}
 
 describe('GenerateScreen', () => {
   it('renders at /generate with library-nav-link pointing to /library', async () => {
@@ -380,6 +249,67 @@ describe('GenerateScreen', () => {
     expect(screen.queryByTestId('generate-equipment-barbell-check')).toBeNull()
     expect(pressed('generate-equipment-rower')).toBe('true')
     expect(screen.queryByTestId('generate-equipment-rower-check')).not.toBeNull()
+  })
+
+  it('equipment All and None set the whole kit, and the summary line states each of the three states', async () => {
+    renderApp({}, '/generate')
+    await screen.findByTestId('generate-screen')
+
+    const summary = () => screen.getByTestId('generate-equipment-summary').textContent
+    const total = Equipment.literals.length
+    const allPressed = (state: string) =>
+      Equipment.literals.every((eq) => pressed(`generate-equipment-${eq}`) === state)
+
+    // Arrival: every chip on, and the line says so in words.
+    expect(allPressed('true')).toBe(true)
+    expect(summary()).toBe('All kit')
+
+    // None clears the kit. The empty kit is a choice, so the line names it.
+    fireEvent.click(screen.getByTestId('generate-equipment-none'))
+    expect(allPressed('false')).toBe(true)
+    expect(summary()).toBe('Bodyweight only')
+
+    // "I own dumbbells only" is now two taps, and the line counts them.
+    fireEvent.click(screen.getByTestId('generate-equipment-dumbbell'))
+    expect(pressed('generate-equipment-dumbbell')).toBe('true')
+    expect(pressed('generate-equipment-barbell')).toBe('false')
+    expect(summary()).toBe(`1 of ${total} selected`)
+
+    // All restores the full kit.
+    fireEvent.click(screen.getByTestId('generate-equipment-all'))
+    expect(allPressed('true')).toBe(true)
+    expect(summary()).toBe('All kit')
+
+    // One chip off is a partial kit, and not the full kit.
+    fireEvent.click(screen.getByTestId('generate-equipment-rower'))
+    expect(summary()).toBe(`${total - 1} of ${total} selected`)
+  })
+
+  it('sends the empty equipment list after None, and the full list after All', async () => {
+    const sent: (readonly Equipment[])[] = []
+    renderApp(
+      {
+        GenerateWorkout: (payload) => {
+          sent.push((payload as GenerationConstraints).equipment)
+          return Effect.succeed(athleticaWorkout)
+        },
+      },
+      '/generate',
+    )
+    await screen.findByTestId('generate-screen')
+
+    // None means bodyweight only, and it travels as the empty allowed set.
+    fireEvent.click(screen.getByTestId('generate-equipment-none'))
+    fireEvent.click(screen.getByTestId('generate-button'))
+    await screen.findByTestId('generate-preview')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toEqual([])
+
+    // All sends every value. The wire shape stays the same list of literals.
+    fireEvent.click(screen.getByTestId('generate-equipment-all'))
+    fireEvent.click(screen.getByTestId('generate-regenerate'))
+    await waitFor(() => expect(sent).toHaveLength(2))
+    expect((sent[1] ?? []).toSorted()).toEqual(Equipment.literals.toSorted())
   })
 
   it('focus, emphasis, and equipment options render domain labels (not raw vocabulary literals)', async () => {

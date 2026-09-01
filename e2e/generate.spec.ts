@@ -111,6 +111,22 @@ async function generatePreview(page: Page): Promise<void> {
 }
 
 /**
+ * Asserts the equipment summary line through the two bulk controls.
+ *
+ * The form arrives with the full kit, and the line says so. None clears the
+ * kit, and the line then names the bodyweight-only meaning that an empty kit
+ * carries. All restores the kit, so the journey keeps permissive constraints.
+ */
+async function assertEquipmentSummary(page: Page): Promise<void> {
+  const summary = page.getByTestId('generate-equipment-summary')
+  await expect(summary).toHaveText('All kit')
+  await page.getByTestId('generate-equipment-none').click()
+  await expect(summary).toHaveText('Bodyweight only')
+  await page.getByTestId('generate-equipment-all').click()
+  await expect(summary).toHaveText('All kit')
+}
+
+/**
  * Asserts domain label maps render on the generate form and that the raw
  * vocabulary strings `full-body`, `med-ball`, `jump-rope`, and focus literals
  * never appear as visible text.
@@ -200,6 +216,7 @@ test.describe('generate (chromium + webkit)', () => {
       await page.getByTestId('tab-generate').click()
       await expect(page).toHaveURL(/\/generate/)
       await assertDomainLabelsOnGenerateScreen(page)
+      await assertEquipmentSummary(page)
 
       // Resume the generate flow after the label assertion (same knobs as generatePreview).
       await page.getByTestId('generate-focus-hybrid').click()
