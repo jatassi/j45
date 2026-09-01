@@ -29,7 +29,7 @@ import {
 } from '@/lib/session'
 import { cn } from '@/lib/utils'
 import { audioState, unlockAudio } from '@/player/audio'
-import { formatCountdown } from '@/player/countdown-format'
+import { countdownTypeScale, formatCountdown } from '@/player/countdown-format'
 
 /** Fire a session command (pause/resume/prev/skip); any participant may drive. */
 export type Dispatch = (command: SessionCommand) => void
@@ -48,17 +48,6 @@ const URGENCY_DIGIT_COLOR: Record<TimerUrgency | 'none', string> = {
 
 /** What the live session's arc takes when the centre column has the height for it. */
 const ARC_WIDTH = 'min(92vw, 420px)'
-
-/**
- * The countdown's type scale. It is unchanged, and it is the one term left in
- * the player that still reads the viewport height: the arc no longer does.
- * Both are replaced together when the countdown is sized from the character
- * count as a share of the arc, which is separate work.
- *
- * {@link ArcBox} reserves half of this below the arc, because the countdown's
- * centre is on the arc's chord.
- */
-const COUNT_SIZE = 'min(21.3vw, 9.6svh, 89px)'
 
 /**
  * The immersive centrepiece: the phase-tinted Progress arc with the huge
@@ -86,7 +75,7 @@ export function CenterStack({
   const urgency = timerUrgency(phase, count)
   return (
     <div className="flex min-h-0 w-full max-w-sm flex-col items-center gap-2">
-      <ArcBox width={ARC_WIDTH} countSize={COUNT_SIZE}>
+      <ArcBox width={ARC_WIDTH} countSize={countdownTypeScale(digits)}>
         <ProgressArc fraction={fraction} phase={phase} dirtyValue={digits}>
           <span
             data-testid="session-phase"
