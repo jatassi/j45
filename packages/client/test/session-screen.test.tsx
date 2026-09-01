@@ -211,8 +211,10 @@ describe('SessionScreen — server-state render', () => {
     await screen.findByTestId('session-screen')
     expect(screen.getByTestId('session-phase').textContent).toBe('Paused')
     expect(screen.getByTestId('session-screen').dataset.phase).toBe('work')
-    // The count freezes on the paused remainder (18s → 0:18), never ticking.
-    expect(screen.getByTestId('session-count').textContent).toBe('0:18')
+    // The count freezes on the paused remainder (18s → 18), never ticking.
+    // The player drops the leading zero minute; `formatDuration` would write
+    // this "0:18".
+    expect(screen.getByTestId('session-count').textContent).toBe('18')
     // The arc's glass proxy repaints this element, so it has to be the one
     // marked: unmarked, the refraction falls back to the whole arc box and
     // shows the count at a size the participant never sees.
@@ -235,13 +237,25 @@ describe('SessionScreen — server-state render', () => {
     const id = 'sess-offset'
     const sessionId = Schema.decodeSync(SessionId)(id)
     // Server is 4000s ahead of this phone. The raw phone delta would read
-    // 67:20; only applying (clientNow − serverNow) yields the true 0:40.
+    // 67:20; only applying (clientNow − serverNow) yields the true 40.
     const serverNow = Date.now() + 4_000_000
     const timer = new TimerRunning({ segmentIndex: 1, endsAtMillis: serverNow + 40_000 })
     renderLive(id, makeState(sessionId, timer, serverNow))
 
     await screen.findByTestId('session-count')
-    expect(screen.getByTestId('session-count').textContent).toBe('0:40')
+    expect(screen.getByTestId('session-count').textContent).toBe('40')
+  })
+
+  it('keeps the minute on a segment that runs past one', async () => {
+    const id = 'sess-long'
+    const sessionId = Schema.decodeSync(SessionId)(id)
+    // Only the leading *zero* minute is dropped. A long Segment still reads
+    // m:ss, and is never written as a bare count of seconds.
+    const timer = new TimerPaused({ segmentIndex: 1, remainingMillis: 90_000 })
+    renderLive(id, makeState(sessionId, timer, Date.now()))
+
+    await screen.findByTestId('session-count')
+    expect(screen.getByTestId('session-count').textContent).toBe('1:30')
   })
 })
 

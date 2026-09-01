@@ -12,8 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { buildManualWorkout } from '@/lib/manual-workout'
-import { formatDuration } from '@/lib/workouts'
 import * as Audio from '@/player/audio'
+import { formatCountdown } from '@/player/countdown-format'
 import { useCountdown } from '@/player/use-countdown'
 import { useWakeLock } from '@/player/wake-lock'
 
@@ -84,11 +84,16 @@ function arcFraction(
   return Math.max(0, Math.min(1, displayMillis(state, liveRemaining) / duration))
 }
 
+/**
+ * What the screen draws, for whichever view is up. The idle preview and the
+ * running arc take their `count` from the same player format, so the
+ * countdown reads the same way before a run starts as it does during it.
+ */
 function viewModel(timer: ReturnType<typeof useManualTimer>, settings: Settings): ViewModel {
   const millis = displayMillis(timer.state, timer.liveRemaining)
   return {
     ...phaseInfo(timer.state, timer.segments, settings),
-    count: formatDuration(millis),
+    count: formatCountdown(millis),
     fraction: arcFraction(timer.state, timer.segments, timer.liveRemaining),
   }
 }

@@ -69,6 +69,11 @@ describe('TimerScreen — idle field kit composition', () => {
     // sits above the settings form, so it must claim neither.
     expect(screen.queryByTestId('player-progress-arc')).toBeNull()
     expect(Object.hasOwn(screen.getByTestId('timer-count').dataset, 'arcDigits')).toBe(false)
+    // It does take the player's format, though: the preview writes the ready
+    // countdown (5s) the same way the running arc will, so the countdown
+    // reads the same way before a run as during it. `formatDuration` would
+    // write this "0:05".
+    expect(screen.getByTestId('timer-count').textContent).toBe('5')
   })
 
   it('composes work / rest / rounds from the ui/ Field kit (Field + kit Input, numeric inputMode) — no raw hand-styled native number rows', () => {
@@ -120,14 +125,14 @@ describe('TimerScreen — inputs and the domain-driven run', () => {
 
     // ready segment: Get ready, 5s, the settings summary as context.
     expect(screen.getByTestId('timer-phase').textContent).toBe('Get ready')
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:05')
+    expect(screen.getByTestId('timer-count').textContent).toBe('5')
     expect(screen.getByTestId('timer-context').textContent).toBe('2 rounds · 5″/0″')
 
     // ready → first work.
     await advance(5000)
     expect(screen.getByTestId('timer-phase').textContent).toBe('Work')
     expect(screen.getByTestId('timer-context').textContent).toBe('Round 1 of 2')
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:05')
+    expect(screen.getByTestId('timer-count').textContent).toBe('5')
 
     // rest is 0, so work advances straight into the second work.
     await advance(5000)
@@ -137,7 +142,7 @@ describe('TimerScreen — inputs and the domain-driven run', () => {
     // second work → Done.
     await advance(5000)
     expect(screen.getByTestId('timer-phase').textContent).toBe('Done')
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:00')
+    expect(screen.getByTestId('timer-count').textContent).toBe('0')
     expect(screen.getByTestId('timer-context').textContent).toBe('Nice work')
   })
 
@@ -154,12 +159,12 @@ describe('TimerScreen — inputs and the domain-driven run', () => {
     await advance(2000)
 
     fireEvent.click(screen.getByTestId('pause-button'))
-    // Frozen at the domain-exact remaining (5000 − 2000 = 3000ms → "0:03").
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:03')
+    // Frozen at the domain-exact remaining (5000 − 2000 = 3000ms → "3").
+    expect(screen.getByTestId('timer-count').textContent).toBe('3')
 
     // Time passing while paused never moves the count.
     await advance(4000)
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:03')
+    expect(screen.getByTestId('timer-count').textContent).toBe('3')
 
     fireEvent.click(screen.getByTestId('resume-button'))
     expect(screen.getByTestId('timer-phase').textContent).toBe('Work')
@@ -192,7 +197,7 @@ describe('TimerScreen — immersive running layout', () => {
 
     // Phase + digits inside the arc, context line below it; preserved testids.
     expect(screen.getByTestId('timer-phase').textContent).toBe('Get ready')
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:05')
+    expect(screen.getByTestId('timer-count').textContent).toBe('5')
     expect(screen.getByTestId('timer-context').textContent).toBe('2 rounds · 5″/0″')
     // The arc's glass proxy repaints the count, so it carries the marker the
     // arc measures — the same contract the live session's countdown keeps.
@@ -224,21 +229,21 @@ describe('TimerScreen — immersive running layout', () => {
 
     // Paused freezes count and arc, and desaturates the backdrop.
     const frozenOffset = arcDashOffset()
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:03')
+    expect(screen.getByTestId('timer-count').textContent).toBe('3')
     expect(screen.getByTestId('player-phase-backdrop').dataset.paused).toBe('true')
     await advance(3000)
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:03')
+    expect(screen.getByTestId('timer-count').textContent).toBe('3')
     expect(arcDashOffset()).toBe(frozenOffset)
 
     fireEvent.click(screen.getByTestId('resume-button'))
     expect(screen.getByTestId('player-phase-backdrop').dataset.paused).toBe('false')
     expect(screen.getByTestId('pause-button')).toBeTruthy()
 
-    // Through to Done: orange done phase, 0:00, Nice work; arc empty.
+    // Through to Done: orange done phase, 0, Nice work; arc empty.
     await advance(3000)
     await advance(5000)
     expect(screen.getByTestId('timer-phase').textContent).toBe('Done')
-    expect(screen.getByTestId('timer-count').textContent).toBe('0:00')
+    expect(screen.getByTestId('timer-count').textContent).toBe('0')
     expect(screen.getByTestId('timer-context').textContent).toBe('Nice work')
     expect(screen.getByTestId('player-phase-backdrop').dataset.phase).toBe('done')
     expect(arcDashOffset()).toBe(String(ARC_SWEEP_LENGTH))
