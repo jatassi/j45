@@ -190,7 +190,7 @@ describe('TimerScreen — immersive running layout', () => {
     expect(screen.getByTestId('player-progress-arc')).toBeTruthy()
     expect(screen.getByTestId('player-control-dock')).toBeTruthy()
 
-    // Digits + phase + context live inside the arc; preserved testids.
+    // Phase + digits inside the arc, context line below it; preserved testids.
     expect(screen.getByTestId('timer-phase').textContent).toBe('Get ready')
     expect(screen.getByTestId('timer-count').textContent).toBe('0:05')
     expect(screen.getByTestId('timer-context').textContent).toBe('2 rounds · 5″/0″')
@@ -246,6 +246,33 @@ describe('TimerScreen — immersive running layout', () => {
     expect(screen.queryByTestId('pause-button')).toBeNull()
     expect(screen.queryByTestId('resume-button')).toBeNull()
     expect(screen.getByTestId('reset-button')).toBeTruthy()
+  })
+})
+
+describe('TimerScreen — the arc children contract', () => {
+  it('hands the arc the same two children the live session does — phase label and countdown — and renders the round context line below it', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+
+    render(<TimerScreen />)
+    setInputs('5', '0', '2')
+    fireEvent.click(screen.getByTestId('start-button'))
+    await advance(5000)
+
+    // The arc holds the phase label and the countdown, and nothing else.
+    // A half circle has no room for a third line, so the manual timer passes
+    // the shape `CenterStack` already passes in `session-player-parts.tsx`.
+    const slot = screen.getByTestId('player-progress-arc-digits')
+    const children = [...slot.querySelectorAll<HTMLElement>(':scope > *')]
+    expect(children.map((el) => el.dataset.testid)).toEqual(['timer-phase', 'timer-count'])
+
+    // The context line keeps its test id and text, but sits outside the arc
+    // and after it — the place the live session gives the Station name.
+    const context = screen.getByTestId('timer-context')
+    expect(context.textContent).toBe('Round 1 of 2')
+    expect(context.closest('[data-testid="player-progress-arc"]')).toBeNull()
+    const order = screen.getByTestId('player-progress-arc').compareDocumentPosition(context)
+    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
   })
 })
 

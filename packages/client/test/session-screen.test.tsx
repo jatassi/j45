@@ -175,6 +175,16 @@ describe('SessionScreen — server-state render', () => {
     expect(screen.getByTestId('session-next-up').textContent).toContain('Burpee')
     expect(screen.getByTestId('session-participant-u-ann').textContent).toContain('Ann')
     expect(screen.getByTestId('session-participant-u-ben').textContent).toContain('Ben')
+
+    // The arc's children contract, shared with the manual timer: the phase
+    // label and the countdown, nothing else. The Station name and detail sit
+    // outside the arc, and the manual timer's context line now matches them.
+    const slot = screen.getByTestId('player-progress-arc-digits')
+    const children = [...slot.querySelectorAll<HTMLElement>(':scope > *')]
+    expect(children.map((el) => el.dataset.testid)).toEqual(['session-phase', 'session-count'])
+    expect(
+      screen.getByTestId('session-exercise-name').closest('[data-testid="player-progress-arc"]'),
+    ).toBeNull()
   })
 
   it('carries data-phase on the session root matching the current segment/timer state', async () => {

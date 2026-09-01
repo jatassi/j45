@@ -72,9 +72,11 @@ export type ProgressArcProps = {
    */
   dirtyValue?: string | number
   /**
-   * The centred content — typically the huge countdown digits. Mark the
-   * element that carries the countdown with `data-arc-digits` so the glass
-   * proxy repaints it at the size and place it actually renders at.
+   * The centred content: **two** elements, the phase label above the countdown
+   * digits. Both player screens pass that same shape — anything else a screen
+   * wants to say goes below the arc, not inside it. Mark the element that
+   * carries the countdown with `data-arc-digits` so the glass proxy repaints
+   * it at the size and place it actually renders at.
    */
   children?: ReactNode
 }
