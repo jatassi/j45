@@ -28,8 +28,8 @@ import {
   type TimerUrgency,
 } from '@/lib/session'
 import { cn } from '@/lib/utils'
-import { formatDuration } from '@/lib/workouts'
 import { audioState, unlockAudio } from '@/player/audio'
+import { formatCountdown } from '@/player/countdown-format'
 
 /** Fire a session command (pause/resume/prev/skip); any participant may drive. */
 export type Dispatch = (command: SessionCommand) => void
@@ -81,7 +81,7 @@ export function CenterStack({
   readonly ctx: WorkContext | undefined
   readonly count: number
 }) {
-  const digits = formatDuration(count)
+  const digits = formatCountdown(count)
   const fraction = arcFraction(state, count)
   const urgency = timerUrgency(phase, count)
   return (

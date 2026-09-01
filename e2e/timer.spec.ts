@@ -240,7 +240,8 @@ test.describe('timer (chromium + webkit)', () => {
       await expect(page.getByTestId('timer-context')).toHaveText('Round 2 of 2', { timeout: 8000 })
 
       await expect(page.getByTestId('timer-phase')).toHaveText('Done', { timeout: 8000 })
-      await expect(page.getByTestId('timer-count')).toHaveText('0:00')
+      // The player drops the leading zero minute: complete reads `0`, not `0:00`.
+      await expect(page.getByTestId('timer-count')).toHaveText('0')
       await expect(page.getByTestId('timer-context')).toHaveText('Nice work')
 
       await page.getByTestId('reset-button').click()
