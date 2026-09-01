@@ -33,11 +33,10 @@ Per-criterion observable behavior (all exercised by the e2e specs above):
    `workout-detail-screen`.
 2. `exercises.spec.ts` — `/library/exercises` lists 96 seed exercises; the
    `filter-muscle-calves` toggle-group chip narrows to a proper subset; domain
-   labels (Full body / Med ball / Jump rope) render and raw kebab literals do
-   not; create via `exercise-drawer` persists a reload; editing tags
-   (quads→chest) persists a reload; delete behind `delete-dialog`
-   (alert-dialog) removes the row; a forced `CreateExercise` WebSocket failure
-   surfaces a `[data-sonner-toast]`.
+   labels (Med ball / Jump rope) render and raw kebab literals do not; create
+   via `exercise-drawer` persists a reload; editing tags (quads→chest) persists
+   a reload; delete behind `delete-dialog` (alert-dialog) removes the row; a
+   forced `CreateExercise` WebSocket failure surfaces a `[data-sonner-toast]`.
 3. `library.spec.ts` + `flow-control.spec.ts` — detail shows `Start`
    (dominant, filled) plus `start-with-reflow-button`; the reflow launch flow
    is exercised; rename via `rename-dialog` persists a reload; `Duplicate`

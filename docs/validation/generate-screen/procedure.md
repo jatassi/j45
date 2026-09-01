@@ -56,9 +56,9 @@ Exercised by `e2e/generate.spec.ts` `assertDomainLabelsOnGenerateScreen` and
 `generate-screen.test.tsx`:
 
 - Focus toggles read Cardio/Strength/Hybrid; equipment chips read Med ball /
-  Jump rope / Dumbbells; emphasis options read Full body etc.
-- Raw literals `full-body`, `med-ball`, `jump-rope` and focus literals do not
-  appear as visible text.
+  Jump rope / Dumbbells; emphasis chips read Core / Hamstrings etc.
+- Raw literals `med-ball` and `jump-rope`, the emphasis ids `core` and
+  `hamstrings`, and the focus literals do not appear as visible text.
 
 ### Criterion 4 — no native `<select>` / bare `<input>` outside ui/
 
