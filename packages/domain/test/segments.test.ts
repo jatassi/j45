@@ -5,6 +5,7 @@ import { expect } from 'vitest'
 
 import {
   compile,
+  compiledEquals,
   CompiledWorkout,
   READY_SECONDS,
   ReadySegment,
@@ -15,7 +16,7 @@ import {
   type RestSegment,
   type WorkContext,
 } from '../src/segments.js'
-import { Flow, Pod, Round, Station, Workout } from '../src/workout.js'
+import { Flow, Pod, Round, Station, Workout, type FlowType } from '../src/workout.js'
 import {
   apexExpected,
   athleticaExpected,
@@ -77,6 +78,7 @@ const assertGolden = (
     workIndex++
   })
 
+  expect(compiled.flowType).toBe(workout.flow.type)
   expect(compiled.workTotal).toBe(expected.filter((e) => e.kind === 'work').length)
   expect(compiled.totalDurationMillis).toBe(totalSeconds * 1000)
 }
@@ -190,6 +192,54 @@ describe('Segment and CompiledWorkout schemas', () => {
       expect(decodedCompiled).toStrictEqual(compiled)
     }),
   )
+
+  // The round trip above runs `athletica`, which is a `laps` workout. Medusa
+  // is the `sets` half of the pair.
+  it.effect('a sets plan carries its flow type across the wire', () =>
+    Effect.gen(function* () {
+      const encoded = yield* Schema.encode(CompiledWorkout)(compile(medusa))
+      const decoded = yield* Schema.decodeUnknown(CompiledWorkout)(encoded)
+
+      expect(encoded.flowType).toBe('sets')
+      expect(decoded.flowType).toBe('sets')
+    }),
+  )
+})
+
+describe('compiledEquals — the flow type is part of the plan', () => {
+  // One pod over one round. Pod-major and station-major then reach the same
+  // stations in the same order, so both flows compile to the same segments.
+  const oneRound = (type: FlowType) =>
+    new Workout({
+      name: 'One Round',
+      focus: 'cardio',
+      pods: [
+        new Pod({
+          name: 'Pod 1',
+          stations: [new Station({ name: 'A' }), new Station({ name: 'B' })],
+        }),
+      ],
+      flow: new Flow({ type, rounds: [new Round({ workSeconds: 30, restSeconds: 10 })] }),
+    })
+
+  it('holds across a recompile of the same workout', () => {
+    expect(compiledEquals(compile(athletica), compile(athletica))).toBe(true)
+  })
+
+  it('fails when the flow type flips, although the segments are identical', () => {
+    const laps = compile(oneRound('laps'))
+    const sets = compile(oneRound('sets'))
+
+    // The segments are the same under both flows.
+    expect(sets.segments).toStrictEqual(laps.segments)
+    expect(sets.workTotal).toBe(laps.workTotal)
+    expect(sets.totalDurationMillis).toBe(laps.totalDurationMillis)
+
+    // The progress strip groups by the flow, so the participant's screen
+    // changes. The save is therefore a plan change. Do not remove the flow
+    // type from the equivalence to make this equality hold again.
+    expect(compiledEquals(laps, sets)).toBe(false)
+  })
 })
 
 describe('segmentsEqual', () => {

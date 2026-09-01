@@ -37,34 +37,46 @@ const segments = [
 
 const compiled = new CompiledWorkout({
   segments,
+  flowType: 'sets',
   workTotal: 2,
   totalDurationMillis: 30_000,
+})
+
+const host = new Participant({
+  userId: Schema.decodeSync(UserId)('user-1'),
+  displayName: 'Alex',
+})
+
+const snapshot = new SessionState({
+  id: Schema.decodeSync(SessionId)('session-1'),
+  host,
+  workoutName: 'Athletica',
+  compiled,
+  timer: new TimerRunning({ segmentIndex: 1, endsAtMillis: 12_345 }),
+  serverNow: 10_000,
+  participants: [host],
+  planRevision: 2,
+  planChangedBy: 'Alex',
+  ended: null,
 })
 
 describe('SessionState', () => {
   it.effect('round-trips through encode/decode', () =>
     Effect.gen(function* () {
-      const host = new Participant({
-        userId: Schema.decodeSync(UserId)('user-1'),
-        displayName: 'Alex',
-      })
-      const original = new SessionState({
-        id: Schema.decodeSync(SessionId)('session-1'),
-        host,
-        workoutName: 'Athletica',
-        compiled,
-        timer: new TimerRunning({ segmentIndex: 1, endsAtMillis: 12_345 }),
-        serverNow: 10_000,
-        participants: [host],
-        planRevision: 2,
-        planChangedBy: 'Alex',
-        ended: null,
-      })
-
-      const encoded = yield* Schema.encode(SessionState)(original)
+      const encoded = yield* Schema.encode(SessionState)(snapshot)
       const decoded = yield* Schema.decodeUnknown(SessionState)(encoded)
 
-      expect(decoded).toStrictEqual(original)
+      expect(decoded).toStrictEqual(snapshot)
+    }),
+  )
+
+  // The snapshot carries the compiled plan to a watching client. The flow
+  // type must go over the wire with it, or the client cannot group by it.
+  it.effect("carries the compiled plan's flow type through to the client", () =>
+    Effect.gen(function* () {
+      const encoded = yield* Schema.encode(SessionState)(snapshot)
+
+      expect(encoded.compiled.flowType).toBe('sets')
     }),
   )
 })
