@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ProgressRing, RING_RADIUS, RING_SWEEP_LENGTH } from '@/components/player/progress-ring'
+import { ARC_RADIUS, ARC_SWEEP_LENGTH, ProgressArc } from '@/components/player/progress-arc'
 import type { SceneProxy, SceneProxyHandle } from '@/glass/scene'
 import { sceneRegistry } from '@/glass/scene'
 
@@ -10,11 +10,11 @@ function handle(): SceneProxyHandle {
   return { update: vi.fn(), invalidate: vi.fn(), dispose: vi.fn() }
 }
 
-/** The 300×300 viewBox the ring is drawn on. */
+/** The 300×300 viewBox the arc is drawn on. */
 const BOX = 300
 const CENTER = BOX / 2
 
-/** Bearing of a point on the ring, in degrees clockwise from the box's top. */
+/** Bearing of a point on the circle, in degrees clockwise from the box's top. */
 function bearing(x: number, y: number): number {
   return ((Math.atan2(x - CENTER, CENTER - y) * 180) / Math.PI + 360) % 360
 }
@@ -25,7 +25,7 @@ type Arc = {
   radius: number
   largeArc: number
   clockwise: number
-  onRing: readonly number[]
+  onCircle: readonly number[]
 }
 
 /** Decode an `M x y A r r 0 large sweep x y` arc command into its geometry. */
@@ -39,24 +39,24 @@ function readArc(d: string): Arc {
     radius: n[2],
     largeArc: n[5],
     clockwise: n[6],
-    onRing: [Math.hypot(n[0] - CENTER, n[1] - CENTER), Math.hypot(n[7] - CENTER, n[8] - CENTER)],
+    onCircle: [Math.hypot(n[0] - CENTER, n[1] - CENTER), Math.hypot(n[7] - CENTER, n[8] - CENTER)],
   }
 }
 
-/** Every shape the ring's svg draws, in document order. */
+/** Every shape the arc's svg draws, in document order. */
 function shapes(): readonly Element[] {
-  const svg = screen.getByTestId('player-progress-ring').querySelector('svg')
+  const svg = screen.getByTestId('player-progress-arc').querySelector('svg')
   return [...(svg?.children ?? [])]
 }
 
 /** Render once and read the arc's dash state; unmounts before returning. */
 function dashAt(fraction: number): { dash: number; offset: number; pathLength: number } {
   const { unmount } = render(
-    <ProgressRing fraction={fraction} phase="work">
+    <ProgressArc fraction={fraction} phase="work">
       <span>12:00</span>
-    </ProgressRing>,
+    </ProgressArc>,
   )
-  const arc = screen.getByTestId('player-progress-ring-arc')
+  const arc = screen.getByTestId('player-progress-arc-sweep')
   const read = (name: string): number => Number(arc.getAttribute(name))
   const state = {
     dash: read('stroke-dasharray'),
@@ -72,23 +72,23 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('ProgressRing — the 270° sweep', () => {
+describe('ProgressArc — the 270° sweep', () => {
   it('sweeps 270° clockwise with the gap centred on the bottom', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     render(
-      <ProgressRing fraction={1} phase="work">
+      <ProgressArc fraction={1} phase="work">
         <span>12:00</span>
-      </ProgressRing>,
+      </ProgressArc>,
     )
 
-    const d = screen.getByTestId('player-progress-ring-arc').getAttribute('d') ?? ''
+    const d = screen.getByTestId('player-progress-arc-sweep').getAttribute('d') ?? ''
     const arc = readArc(d)
 
-    // Both ends sit on the ring the digits are inscribed in.
-    expect(arc.radius).toBe(RING_RADIUS)
-    for (const distance of arc.onRing) {
-      expect(distance).toBeCloseTo(RING_RADIUS, 2)
+    // Both ends sit on the circle the digits are inscribed in.
+    expect(arc.radius).toBe(ARC_RADIUS)
+    for (const distance of arc.onCircle) {
+      expect(distance).toBeCloseTo(ARC_RADIUS, 2)
     }
 
     // 270° of sweep, leaving a 90° gap whose midpoint is the bottom (180°).
@@ -105,13 +105,13 @@ describe('ProgressRing — the 270° sweep', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     render(
-      <ProgressRing fraction={0.5} phase="work">
+      <ProgressArc fraction={0.5} phase="work">
         <span>12:00</span>
-      </ProgressRing>,
+      </ProgressArc>,
     )
 
     const drawn = shapes()
-    const sweep = screen.getByTestId('player-progress-ring-arc').getAttribute('d')
+    const sweep = screen.getByTestId('player-progress-arc-sweep').getAttribute('d')
 
     // Exactly the track and the arc, both on the same 270° path. There is no
     // full circle behind the sweep, and no third shape to put in the gap.
@@ -126,9 +126,9 @@ describe('ProgressRing — the 270° sweep', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     render(
-      <ProgressRing fraction={0.5} phase="work">
+      <ProgressArc fraction={0.5} phase="work">
         <span>12:00</span>
-      </ProgressRing>,
+      </ProgressArc>,
     )
 
     for (const shape of shapes()) {
@@ -137,12 +137,12 @@ describe('ProgressRing — the 270° sweep', () => {
   })
 })
 
-describe('ProgressRing — depleting against the sweep length', () => {
+describe('ProgressArc — depleting against the sweep length', () => {
   it('measures the dash against three quarters of the circle, not the whole one', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
-    expect(RING_SWEEP_LENGTH).toBeCloseTo(2 * Math.PI * RING_RADIUS * 0.75, 9)
-    expect(dashAt(1).pathLength).toBeCloseTo(RING_SWEEP_LENGTH, 6)
+    expect(ARC_SWEEP_LENGTH).toBeCloseTo(2 * Math.PI * ARC_RADIUS * 0.75, 9)
+    expect(dashAt(1).pathLength).toBeCloseTo(ARC_SWEEP_LENGTH, 6)
   })
 
   it('starts at the sweep’s start and retracts its far end as the count falls', () => {
@@ -156,18 +156,18 @@ describe('ProgressRing — depleting against the sweep length', () => {
     // the painted run is [0, dash − offset]: it always begins where the sweep
     // begins, and only its far end moves.
     for (const state of [full, half, empty]) {
-      expect(state.dash).toBeCloseTo(RING_SWEEP_LENGTH, 6)
+      expect(state.dash).toBeCloseTo(ARC_SWEEP_LENGTH, 6)
     }
     expect(full.offset).toBe(0)
-    expect(half.offset).toBeCloseTo(RING_SWEEP_LENGTH / 2, 6)
-    expect(empty.offset).toBeCloseTo(RING_SWEEP_LENGTH, 6)
+    expect(half.offset).toBeCloseTo(ARC_SWEEP_LENGTH / 2, 6)
+    expect(empty.offset).toBeCloseTo(ARC_SWEEP_LENGTH, 6)
   })
 
   it('clamps a fraction outside 0..1 so the arc never overdraws the sweep', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     expect(dashAt(1.5).offset).toBe(0)
-    expect(dashAt(-1).offset).toBeCloseTo(RING_SWEEP_LENGTH, 6)
+    expect(dashAt(-1).offset).toBeCloseTo(ARC_SWEEP_LENGTH, 6)
   })
 })
 
@@ -196,31 +196,31 @@ function rect(box: Box): DOMRect {
 }
 
 /**
- * Lay the ring box out at 300×300 and the digits low and wide inside it, so a
+ * Lay the arc box out at 300×300 and the digits low and wide inside it, so a
  * paint centred on the box is told apart from one centred on the digits.
  */
 function stubLayout(): { center: readonly [number, number] } {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: Element,
   ): DOMRect {
-    return Object.hasOwn((this as HTMLElement).dataset, 'ringDigits')
+    return Object.hasOwn((this as HTMLElement).dataset, 'arcDigits')
       ? rect({ left: 140, top: 260, width: 200, height: 90 })
       : rect({ left: 40, top: 100, width: BOX, height: BOX })
   })
   return { center: [140 - 40 + 100, 260 - 100 + 45] }
 }
 
-describe('ProgressRing — centered children + dirty-region proxy', () => {
+describe('ProgressArc — centered children + dirty-region proxy', () => {
   it('centers arbitrary children and registers a dirty-region proxy for the digits', () => {
     const register = vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     render(
-      <ProgressRing fraction={0.5} phase="work" dirtyValue="12:00">
-        <span data-testid="ring-digits">12:00</span>
-      </ProgressRing>,
+      <ProgressArc fraction={0.5} phase="work" dirtyValue="12:00">
+        <span data-testid="arc-digits">12:00</span>
+      </ProgressArc>,
     )
 
-    expect(screen.getByTestId('ring-digits').textContent).toBe('12:00')
+    expect(screen.getByTestId('arc-digits').textContent).toBe('12:00')
     expect(register).toHaveBeenCalledTimes(1)
   })
 
@@ -229,16 +229,16 @@ describe('ProgressRing — centered children + dirty-region proxy', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(h)
 
     const { rerender } = render(
-      <ProgressRing fraction={0.5} phase="work" dirtyValue="12:00">
+      <ProgressArc fraction={0.5} phase="work" dirtyValue="12:00">
         <span>12:00</span>
-      </ProgressRing>,
+      </ProgressArc>,
     )
     expect(h.invalidate).not.toHaveBeenCalled()
 
     rerender(
-      <ProgressRing fraction={0.49} phase="work" dirtyValue="11:59">
+      <ProgressArc fraction={0.49} phase="work" dirtyValue="11:59">
         <span>11:59</span>
-      </ProgressRing>,
+      </ProgressArc>,
     )
     expect(h.invalidate).toHaveBeenCalledTimes(1)
   })
@@ -252,11 +252,11 @@ describe('ProgressRing — centered children + dirty-region proxy', () => {
     })
 
     render(
-      <ProgressRing fraction={0.5} phase="work" dirtyValue="12:00">
-        <span data-ring-digits="" style={{ fontSize: '90px', fontWeight: 600 }}>
+      <ProgressArc fraction={0.5} phase="work" dirtyValue="12:00">
+        <span data-arc-digits="" style={{ fontSize: '90px', fontWeight: 600 }}>
           12:00
         </span>
-      </ProgressRing>,
+      </ProgressArc>,
     )
 
     const ctx = recordingContext()
@@ -271,7 +271,7 @@ describe('ProgressRing — centered children + dirty-region proxy', () => {
     expect(ctx.fillText).toHaveBeenCalledWith('12:00', center[0], center[1])
   })
 
-  it('falls back to the ring box and its centre when no digits are marked', () => {
+  it('falls back to the arc box and its centre when no digits are marked', () => {
     stubLayout()
     let proxy: SceneProxy | null = null
     vi.spyOn(sceneRegistry, 'register').mockImplementation((next) => {
@@ -280,9 +280,9 @@ describe('ProgressRing — centered children + dirty-region proxy', () => {
     })
 
     render(
-      <ProgressRing fraction={0.5} phase="work" dirtyValue="12:00">
+      <ProgressArc fraction={0.5} phase="work" dirtyValue="12:00">
         <span>12:00</span>
-      </ProgressRing>,
+      </ProgressArc>,
     )
 
     const ctx = recordingContext()

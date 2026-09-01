@@ -8,43 +8,44 @@ import { cn } from '@/lib/utils'
 import type { PlayerPhase } from './phase'
 import { PHASE_HUE } from './phase'
 
-/** Ring geometry — a thin arc on a 300×300 viewBox (the /proto reference). */
-export const RING_RADIUS = 132
-const RING_CENTER = 150
+/** Arc geometry — a thin arc on a 300×300 viewBox (the /proto reference). */
+export const ARC_RADIUS = 132
+const ARC_CENTER = 150
 
 /**
- * The gap in the ring: 90°, centred on the bottom. Nothing is drawn there. The
- * gap is the room the countdown digits grow into.
+ * The gap the arc leaves: 90°, centred on the bottom. Nothing is drawn there.
+ * The gap is the room the countdown digits grow into.
  */
-const RING_GAP_DEGREES = 90
-/** What the arc and its track occupy: all the ring the gap leaves. */
-const RING_SWEEP_DEGREES = 360 - RING_GAP_DEGREES
+const ARC_GAP_DEGREES = 90
+/** What the arc and its track occupy: everything the gap leaves. */
+const ARC_SWEEP_DEGREES = 360 - ARC_GAP_DEGREES
 
 /**
  * The arc length of the sweep. All dash measurements use this length, not the
  * circumference. A whole arc is therefore a whole 270°, and no part of the
  * dash is left over to draw in the gap.
  */
-export const RING_SWEEP_LENGTH = 2 * Math.PI * RING_RADIUS * (RING_SWEEP_DEGREES / 360)
+export const ARC_SWEEP_LENGTH = 2 * Math.PI * ARC_RADIUS * (ARC_SWEEP_DEGREES / 360)
 
-/** A point on the ring, `degrees` clockwise from the top of the box. */
-function ringPoint(degrees: number): string {
+/** A point on the arc's circle, `degrees` clockwise from the top of the box. */
+function arcPoint(degrees: number): string {
   const radians = (degrees * Math.PI) / 180
-  const x = RING_CENTER + RING_RADIUS * Math.sin(radians)
-  const y = RING_CENTER - RING_RADIUS * Math.cos(radians)
+  const x = ARC_CENTER + ARC_RADIUS * Math.sin(radians)
+  const y = ARC_CENTER - ARC_RADIUS * Math.cos(radians)
   return `${x.toFixed(3)} ${y.toFixed(3)}`
 }
 
 /**
  * The sweep, as one arc command. It starts at the gap's trailing edge. It runs
- * clockwise, the direction the full ring depleted in, over the top and down to
- * the gap's leading edge. The track and the arc both use this path. A track
- * behind the full circle would make the sweep look like a broken ring.
+ * clockwise, the direction the countdown has always depleted in, over the top
+ * and down to the gap's leading edge. The track and the arc both use this path.
+ * A track drawn as a closed circle behind the sweep would make the sweep look
+ * broken.
  */
-const RING_SWEEP_PATH = [
-  `M ${ringPoint(180 + RING_GAP_DEGREES / 2)}`,
-  `A ${RING_RADIUS} ${RING_RADIUS} 0 ${RING_SWEEP_DEGREES > 180 ? 1 : 0} 1`,
-  ringPoint(180 - RING_GAP_DEGREES / 2),
+const ARC_SWEEP_PATH = [
+  `M ${arcPoint(180 + ARC_GAP_DEGREES / 2)}`,
+  `A ${ARC_RADIUS} ${ARC_RADIUS} 0 ${ARC_SWEEP_DEGREES > 180 ? 1 : 0} 1`,
+  arcPoint(180 - ARC_GAP_DEGREES / 2),
 ].join(' ')
 
 /**
@@ -54,12 +55,12 @@ const RING_SWEEP_PATH = [
  * the sweep starts. Only its far end moves. The fraction is clamped, so
  * out-of-range interpolation cannot overdraw.
  */
-function ringDashOffset(fraction: number): number {
+function arcDashOffset(fraction: number): number {
   const clamped = Math.max(0, Math.min(1, fraction))
-  return RING_SWEEP_LENGTH * (1 - clamped)
+  return ARC_SWEEP_LENGTH * (1 - clamped)
 }
 
-export type ProgressRingProps = {
+export type ProgressArcProps = {
   /** Remaining fraction of the current segment, 0..1 — drives the arc. */
   fraction: number
   /** Current phase — tints the progress stroke from the hue map. */
@@ -72,7 +73,7 @@ export type ProgressRingProps = {
   dirtyValue?: string | number
   /**
    * The centred content — typically the huge countdown digits. Mark the
-   * element that carries the countdown with `data-ring-digits` so the glass
+   * element that carries the countdown with `data-arc-digits` so the glass
    * proxy repaints it at the size and place it actually renders at.
    */
   children?: ReactNode
@@ -98,8 +99,8 @@ type RenderedDigits = { font: string; centerX: number; centerY: number }
 const UNMEASURED: RenderedDigits = { font: 'bold 16px sans-serif', centerX: 0, centerY: 0 }
 
 /**
- * Measure the countdown the ring draws. The caller marks that element with
- * `data-ring-digits`. Without the mark, the whole box is measured, as before.
+ * Measure the countdown the arc draws. The caller marks that element with
+ * `data-arc-digits`. Without the mark, the whole box is measured, as before.
  *
  * The refraction repaints these digits, so it must use the size they render
  * at. A fixed share of the box's height cannot give that size. The box and the
@@ -107,7 +108,7 @@ const UNMEASURED: RenderedDigits = { font: 'bold 16px sans-serif', centerX: 0, c
  * with the screen, and drifts again each time the type scale changes.
  */
 function readRenderedDigits(container: HTMLElement): RenderedDigits {
-  const el = container.querySelector<HTMLElement>('[data-ring-digits]') ?? container
+  const el = container.querySelector<HTMLElement>('[data-arc-digits]') ?? container
   const box = el.getBoundingClientRect()
   const host = container.getBoundingClientRect()
   const style = getComputedStyle(el)
@@ -185,16 +186,16 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
  * no timers of its own), with arbitrary `children` (the countdown digits)
  * centred inside. The arc sweeps 270° and leaves a gap on the bottom. The
  * digits may overflow the circle into that gap. The digits region registers a
- * dirty-region scene proxy keyed on {@link ProgressRingProps.dirtyValue}.
+ * dirty-region scene proxy keyed on {@link ProgressArcProps.dirtyValue}.
  */
-export function ProgressRing(props: ProgressRingProps): JSX.Element {
+export function ProgressArc(props: ProgressArcProps): JSX.Element {
   const { fraction, phase, dirtyValue, children } = props
   const digitsRef = useRef<HTMLDivElement>(null)
   useDigitProxy(digitsRef, dirtyValue === undefined ? '' : String(dirtyValue))
 
   return (
     <div
-      data-testid="player-progress-ring"
+      data-testid="player-progress-arc"
       className={cn('relative flex items-center justify-center')}
     >
       {/*
@@ -204,28 +205,28 @@ export function ProgressRing(props: ProgressRingProps): JSX.Element {
       */}
       <svg viewBox="0 0 300 300" className="size-full" aria-hidden="true">
         <path
-          d={RING_SWEEP_PATH}
+          d={ARC_SWEEP_PATH}
           fill="none"
           stroke="rgb(255 255 255 / 0.08)"
           strokeWidth="8"
           strokeLinecap="round"
-          pathLength={RING_SWEEP_LENGTH}
+          pathLength={ARC_SWEEP_LENGTH}
         />
         <path
-          data-testid="player-progress-ring-arc"
-          d={RING_SWEEP_PATH}
+          data-testid="player-progress-arc-sweep"
+          d={ARC_SWEEP_PATH}
           fill="none"
           stroke={PHASE_HUE[phase]}
           strokeWidth="8"
           strokeLinecap="round"
-          pathLength={RING_SWEEP_LENGTH}
-          strokeDasharray={RING_SWEEP_LENGTH}
-          strokeDashoffset={ringDashOffset(fraction)}
+          pathLength={ARC_SWEEP_LENGTH}
+          strokeDasharray={ARC_SWEEP_LENGTH}
+          strokeDashoffset={arcDashOffset(fraction)}
         />
       </svg>
       <div
         ref={digitsRef}
-        data-testid="player-progress-ring-digits"
+        data-testid="player-progress-arc-digits"
         className="absolute inset-0 flex flex-col items-center justify-center"
       >
         {children}
