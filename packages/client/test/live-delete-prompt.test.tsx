@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
-import * as Duration from 'effect/Duration'
 import * as Effect from 'effect/Effect'
-import * as Stream from 'effect/Stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -13,7 +11,7 @@ import {
   renderApp,
   type Handlers,
 } from './live-workout-harness'
-import { staticLobby } from './lobby-feed'
+import { makeLobby, staticLobby } from './lobby-feed'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn() },
@@ -91,22 +89,23 @@ describe('deleting a workout that live sessions run', () => {
   })
 
   it('strengthens the wording when the lobby answers after the prompt is open', async () => {
+    // The feed says nothing until this test publishes, exactly as a fresh
+    // subscription says nothing before its first snapshot arrives. The test
+    // drives that answer rather than timing it, so the prompt cannot read a
+    // count the assertion below expects it not to have.
+    const lobby = makeLobby()
     const dialog = await openDelete(
       detailHandlers({
-        // The feed says nothing for a moment, exactly as a fresh
-        // subscription does before its first snapshot arrives.
-        WatchActiveSessions: () =>
-          Stream.fromEffect(
-            Effect.succeed([liveSessionOf('session-abc', athleticaId)]).pipe(
-              Effect.delay(Duration.millis(40)),
-            ),
-          ).pipe(Stream.concat(Stream.never)),
+        WatchActiveSessions: lobby.handler,
         DeleteWorkout: () => Effect.succeed(undefined),
       }),
     )
 
     // The prompt opens before the lobby has answered, so it starts weak.
     expect(dialog.textContent).not.toContain('live session')
+
+    await lobby.publish([liveSessionOf('session-abc', athleticaId)])
+
     await waitFor(() => {
       expect(dialog.textContent).toContain('1 live session')
     })
