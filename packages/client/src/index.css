@@ -252,6 +252,61 @@
   }
 }
 
+/* Immersive player: a label too long for its slot scrolls instead of losing its
+   tail to an ellipsis — the marquee Apple uses for overflowing UI strings. It
+   rests at each end, then travels back the way it came (`alternate`), so the
+   string never jumps back to the start. The travel distance and the duration
+   are measured per string and arrive as custom properties, which keeps the
+   scroll speed constant however far the text overruns.
+
+   The lead ramp is drawn over `padding-left`, not over the text: standing at
+   the start the ramp covers empty padding and the first glyph is crisp, and
+   glyphs only meet it once they have travelled into it. The tail ramp sits at
+   the far edge and is the mark that says the string continues, so the travel
+   overshoots by its width to leave the last glyph clear of it.
+
+   Only a label that actually scrolls is padded. Were the padding always on it
+   would take 12px off every label's readable width, so a name that fits today
+   would clip and scroll tomorrow for no reader benefit. The measurement reads
+   the slot's padding box, which the flex row fixes, so adding the padding here
+   cannot feed back into the decision to add it. */
+.player-marquee {
+  overflow: hidden;
+}
+.player-marquee-scrolls {
+  padding-left: var(--marquee-fade);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black var(--marquee-fade),
+    black calc(100% - var(--marquee-tail)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black var(--marquee-fade),
+    black calc(100% - var(--marquee-tail)),
+    transparent 100%
+  );
+}
+.player-marquee-track {
+  will-change: transform;
+  animation: player-marquee-shift var(--marquee-duration) ease-in-out infinite alternate;
+}
+/* The plateau at each end reads as a rest on the way out and again on the way
+   back, so the reversal has no visible corner. */
+@keyframes player-marquee-shift {
+  0%,
+  20% {
+    transform: translateX(0);
+  }
+  80%,
+  100% {
+    transform: translateX(var(--marquee-shift));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .player-phase-backdrop,
   .player-digit-in,
@@ -263,6 +318,10 @@
   .player-digit-out {
     animation: none;
     display: none;
+  }
+  .player-marquee-track {
+    animation: none;
+    will-change: auto;
   }
 }
 

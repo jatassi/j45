@@ -5,6 +5,7 @@ import { LogOut, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lu
 
 import { ArcBox } from '@/components/player/arc-box'
 import { ControlDock } from '@/components/player/control-dock'
+import { MarqueeText } from '@/components/player/marquee-text'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PHASE_HUE } from '@/components/player/phase'
 import { ARC_INNER_SHARE, ProgressArc } from '@/components/player/progress-arc'
@@ -394,12 +395,12 @@ export function SessionDock({
       info={
         <>
           <span className={cn(EYEBROW, 'shrink-0')}>Next up</span>
-          <span
-            className="ml-3 min-w-0 truncate text-sm font-semibold text-foreground/85"
+          <MarqueeText
+            className="ml-3 text-sm font-semibold text-foreground/85"
             data-testid="session-next-up"
           >
             {nextWorkStationName(state) ?? '—'}
-          </span>
+          </MarqueeText>
         </>
       }
     >
