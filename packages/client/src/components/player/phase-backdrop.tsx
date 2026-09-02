@@ -29,7 +29,8 @@ export type PhaseBackdropProps = {
  * breathing pulse and its `prefers-reduced-motion` suppression live in
  * `index.css` on `.player-phase-backdrop`. The element also registers as a
  * scene proxy (via {@link useSceneSurface}), so glass surfaces stacked above it
- * refract the current phase tint. `paused` desaturates the tint in place.
+ * refract the current phase tint. `paused` desaturates the tint in place, over
+ * `--duration-enter`.
  */
 export function PhaseBackdrop(props: PhaseBackdropProps): JSX.Element {
   const { phase, paused = false } = props
@@ -42,9 +43,12 @@ export function PhaseBackdrop(props: PhaseBackdropProps): JSX.Element {
   // instead of the muted tint actually on screen.
   useSceneSurface(ref, { color: withAlpha(resolvePhaseHue(phase), 0.25), z: -50 })
 
+  // Always a filter, never an omitted one: `saturate(0.35)` → `saturate(1)`
+  // interpolates as a matching filter list, where a value → `none`
+  // transition depends on the browser substituting identity functions.
   const style: CSSProperties & Record<'--phase-hue', string> = {
     '--phase-hue': PHASE_HUE[phase],
-    ...(paused ? { filter: 'saturate(0.35)' } : {}),
+    filter: paused ? 'saturate(0.35)' : 'saturate(1)',
   }
 
   return (

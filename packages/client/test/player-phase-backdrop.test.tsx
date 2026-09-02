@@ -61,12 +61,12 @@ describe('PhaseBackdrop — paused modifier', () => {
     const { rerender } = render(<PhaseBackdrop phase="work" />)
     const running = screen.getByTestId('player-phase-backdrop')
     expect(running.dataset.paused).toBe('false')
-    expect(running.style.filter).not.toContain('saturate')
+    expect(running.style.filter).toBe('saturate(1)')
 
     rerender(<PhaseBackdrop phase="work" paused />)
     const paused = screen.getByTestId('player-phase-backdrop')
     expect(paused.dataset.paused).toBe('true')
-    expect(paused.style.filter).toContain('saturate')
+    expect(paused.style.filter).toBe('saturate(0.35)')
   })
 })
 

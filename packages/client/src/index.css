@@ -158,6 +158,9 @@
       color-mix(in oklab, var(--phase-hue) 5%, transparent)
     );
   animation: player-phase-pulse 5s ease-in-out infinite alternate;
+  /* Pause desaturates the whole screen. Without this it cuts in one
+     frame — the only whole-screen change a pause makes. */
+  transition: filter var(--duration-enter) var(--ease-player);
 }
 @keyframes player-phase-pulse {
   from {
