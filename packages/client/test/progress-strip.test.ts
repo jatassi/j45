@@ -247,8 +247,24 @@ const SWEEP_SHAPES = (['laps', 'sets'] as const).flatMap((flow) =>
   ).flat(),
 )
 
-/** The default budget with every gap taken out, so one gap can be added back alone. */
-const NO_GAPS: StripBudget = { ...STRIP_BUDGET, barGapPx: 0, podRunGapPx: 0, cellGapPx: 0 }
+/**
+ * The width the gap tests below are tuned to. Every shape they author sits a
+ * fraction of a pixel either side of the 4px floor at this width, which is
+ * what lets one gap be the whole difference between kept cells and dropped
+ * ones.
+ *
+ * It is named here rather than read from `STRIP_BUDGET`, because these tests
+ * are about the gap accounting and not about how wide the live strip draws.
+ * The live width follows the **Progress arc**, and a change to the arc must
+ * not silently retune these boundaries into testing nothing.
+ */
+const GAP_TEST_WIDTH_PX = 280
+
+/** The tuned budget: the live gaps, at the width the shapes below are cut for. */
+const GAP_BUDGET: StripBudget = { ...STRIP_BUDGET, stripWidthPx: GAP_TEST_WIDTH_PX }
+
+/** That budget with every gap taken out, so one gap can be added back alone. */
+const NO_GAPS: StripBudget = { ...GAP_BUDGET, barGapPx: 0, podRunGapPx: 0, cellGapPx: 0 }
 
 describe('progressStrip — cell collapse', () => {
   it('drops the cells of a bar whose share is too narrow, and keeps its neighbour’s', () => {
@@ -302,10 +318,10 @@ describe('progressStrip — cell collapse counts the renderer’s gaps', () => {
     // the cell to 3.5px, under the floor.
     const pods = Array.from({ length: 7 }, (_, pod) => names(8, `P${pod}`))
     const plan = planOf('laps', pods, 1)
-    const kept = progressStrip(plan, 0, { ...NO_GAPS, cellGapPx: STRIP_BUDGET.cellGapPx })
+    const kept = progressStrip(plan, 0, { ...NO_GAPS, cellGapPx: GAP_BUDGET.cellGapPx })
     expect(kept.bars.every((bar) => bar.cells.length === 8)).toBe(true)
 
-    const dropped = progressStrip(plan, 0)
+    const dropped = progressStrip(plan, 0, GAP_BUDGET)
     expect(dropped.bars.every((bar) => bar.cells.length === 0)).toBe(true)
   })
 
@@ -317,7 +333,7 @@ describe('progressStrip — cell collapse counts the renderer’s gaps', () => {
     const kept = progressStrip(plan, 0, NO_GAPS)
     expect(kept.bars.every((bar) => bar.cells.length === 30)).toBe(true)
 
-    const dropped = progressStrip(plan, 0, { ...NO_GAPS, cellGapPx: STRIP_BUDGET.cellGapPx })
+    const dropped = progressStrip(plan, 0, { ...NO_GAPS, cellGapPx: GAP_BUDGET.cellGapPx })
     expect(dropped.bars.every((bar) => bar.cells.length === 0)).toBe(true)
   })
 
@@ -327,11 +343,11 @@ describe('progressStrip — cell collapse counts the renderer’s gaps', () => {
     // 4.2px, so the cells stay. That one bar's extra 8px takes every share to
     // 3.9px, under the floor — the boundary of one bar collapses all 28.
     const plan = planOf('sets', [names(14, 'A'), names(14, 'B')], 1)
-    const kept = progressStrip(plan, 0, { ...STRIP_BUDGET, podRunGapPx: 0 })
+    const kept = progressStrip(plan, 0, { ...GAP_BUDGET, podRunGapPx: 0 })
     expect(kept.bars).toHaveLength(28)
     expect(kept.bars.every((bar) => bar.cells.length === 1)).toBe(true)
 
-    const dropped = progressStrip(plan, 0)
+    const dropped = progressStrip(plan, 0, GAP_BUDGET)
     expect(dropped.bars.every((bar) => bar.cells.length === 0)).toBe(true)
   })
 
@@ -340,10 +356,10 @@ describe('progressStrip — cell collapse counts the renderer’s gaps', () => {
     // which a budget blind to the gaps reports as kept. The strip draws six
     // 6px gaps and nine 1px gaps per bar, so the cell is really 2.6px.
     const pods = Array.from({ length: 7 }, (_, pod) => names(10, `P${pod}`))
-    const strip = progressStrip(planOf('laps', pods, 1), 0)
+    const strip = progressStrip(planOf('laps', pods, 1), 0, GAP_BUDGET)
     expect(strip.bars).toHaveLength(7)
     expect(strip.bars.every((bar) => bar.cells.length === 0)).toBe(true)
-    expect(renderedCellWidthPx(strip, STRIP_BUDGET, 10)).toBeLessThan(STRIP_BUDGET.minCellWidthPx)
+    expect(renderedCellWidthPx(strip, GAP_BUDGET, 10)).toBeLessThan(GAP_BUDGET.minCellWidthPx)
   })
 
   it('gives every bar up when the gaps alone would spend the whole strip', () => {

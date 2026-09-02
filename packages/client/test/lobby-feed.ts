@@ -25,10 +25,21 @@ export const silentLobby = (): Stream.Stream<readonly SessionSummary[]> => Strea
 /** A feed with no live sessions in it. */
 export const emptyLobby = staticLobby([])
 
-/** A feed a test drives: the handler to install, plus the next snapshot to publish. */
-export const makeLobby = (opening: readonly SessionSummary[]) => {
+/**
+ * A feed a test drives: the handler to install, plus the next snapshot to
+ * publish.
+ *
+ * With no `opening` the feed has answered nothing at all — the state a fresh
+ * subscription is in before its first snapshot arrives — and it stays that
+ * way until the test publishes one. A test that needs the client to read the
+ * feed before and after its first answer drives it that way, so the two
+ * readings cannot swap places under load.
+ */
+export const makeLobby = (opening?: readonly SessionSummary[]) => {
   const queue = Effect.runSync(Queue.unbounded<readonly SessionSummary[]>())
-  Effect.runSync(Queue.offer(queue, opening))
+  if (opening !== undefined) {
+    Effect.runSync(Queue.offer(queue, opening))
+  }
   return {
     handler: (): Stream.Stream<readonly SessionSummary[]> => Stream.fromQueue(queue),
     /** The next whole snapshot the server publishes — a start, an end, a join. */

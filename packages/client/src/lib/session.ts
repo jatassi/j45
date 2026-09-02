@@ -241,7 +241,7 @@ export const phaseLabel = (state: SessionState): string => {
 
 /**
  * The immersive player's phase for `data-phase`, the backdrop tint, and the
- * ring hue: `ready | work | rest | done`, read from the current segment (both
+ * arc hue: `ready | work | rest | done`, read from the current segment (both
  * running and paused expose `segmentIndex`) so a pause keeps the segment's
  * identity while `phaseLabel` reads `Paused`.
  */
@@ -256,19 +256,19 @@ export const sessionPhase = (state: SessionState): PlayerPhase => {
 }
 
 /**
- * Full duration of the segment the timer sits in, for the progress ring's
- * depletion fraction. `0` when idle/done (no segment in focus), which the ring
- * reads as an empty arc.
+ * Full duration of the segment the timer sits in, for the Progress arc's
+ * depletion fraction. `0` when idle/done (no segment in focus), which the arc
+ * draws as empty.
  */
 export const currentSegmentDurationMillis = (state: SessionState): number =>
   currentSegment(state)?.durationMillis ?? 0
 
 /**
- * The remaining fraction (0..1) of the current segment for the progress ring's
+ * The remaining fraction (0..1) of the current segment for the Progress arc's
  * depletion — `remainingMillis` over the segment's full duration, clamped. `0`
  * when there is no segment in focus (idle/done), an empty arc.
  */
-export const ringFraction = (state: SessionState, remainingMillis: number): number => {
+export const arcFraction = (state: SessionState, remainingMillis: number): number => {
   const durationMillis = currentSegmentDurationMillis(state)
   if (durationMillis <= 0) return 0
   return Math.max(0, Math.min(1, remainingMillis / durationMillis))
@@ -369,9 +369,14 @@ export type StripBudget = {
 
 /**
  * The default budget: the strip's width on the narrowest supported phone
- * (320px, less the 20px of padding on each side that `session-screen.tsx`
- * gives the live screen), a cell of 4px, which is about the smallest mark
- * that reads from arm's length, and the three gaps the live strip draws.
+ * (320px), a cell of 4px, which is about the smallest mark that reads from
+ * arm's length, and the three gaps the live strip draws.
+ *
+ * The width is the bars' own, not the screen's. The bars are drawn to the
+ * inner span of the **Progress arc** — `min(92vw, 420px)` less one stroke on
+ * each side — so on a 320px phone they measure about 264px. The screen's
+ * padding no longer decides it: the arc is narrower than the padded column
+ * there, so the arc is the binding one.
  *
  * The gaps are the renderer's own measurements, and `progress-strip.tsx`
  * reads them from here instead of naming them again. One source keeps the two
@@ -379,7 +384,7 @@ export type StripBudget = {
  * to be obeyed for the floor to stay true.
  */
 export const STRIP_BUDGET: StripBudget = {
-  stripWidthPx: 280,
+  stripWidthPx: 264,
   minCellWidthPx: 4,
   barGapPx: 6,
   podRunGapPx: 8,

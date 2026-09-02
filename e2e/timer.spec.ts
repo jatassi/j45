@@ -2,6 +2,7 @@
 import type { Page, TestInfo } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
+import { expectNoGlassOverlapsTheCountdown } from './support/countdown-glass.js'
 import type { E2eProjectName } from './support/state.js'
 import { readE2eEnv } from './support/state.js'
 
@@ -93,6 +94,113 @@ function instrumentAudioBeeps(): void {
   }
 }
 
+/**
+ * The countdown, measured where it renders. The digits are sized as a share of
+ * the arc's width, chosen by the character count, and the share is CSS: jsdom
+ * resolves none of it, so this is the only seam that can say the digits
+ * actually grew.
+ *
+ * Two things are asserted, and they pull against each other. The digits must
+ * clear a floor, or the change did not happen — a Participant reads them from
+ * several metres away, and the screen they replaced rendered them at about
+ * 80px. They must also stay inside the arc's clear inner width, which is 90%
+ * of the arc's own width: the arc's stroke takes 15 units of its 300-unit box
+ * at each end.
+ *
+ * `floorPx` is the caller's, because the floor depends on which bucket is on
+ * screen. A five-character countdown is deliberately smaller than a
+ * two-character one.
+ */
+async function expectCountFillsTheArc(page: Page, floorPx: number): Promise<void> {
+  const count = page.getByTestId('timer-count')
+  const box = await count.boundingBox()
+  const arc = await page.getByTestId('player-progress-arc').boundingBox()
+  if (box === null || arc === null) {
+    throw new Error('the countdown did not lay out')
+  }
+  const fontPx = await count.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize))
+  expect(fontPx).toBeGreaterThanOrEqual(floorPx)
+  expect(box.width).toBeLessThanOrEqual(arc.width * 0.9)
+}
+
+/**
+ * The phase label stays inside the arc, above the countdown. It is the first
+ * thing the countdown pushes out when it grows: the label sits on top of the
+ * countdown in the same column, so a countdown that took its whole height in
+ * layout would carry the label past the arc's top. At the sizes the type scale
+ * now reaches, that is a real failure and not a near miss.
+ */
+async function expectPhaseLabelStaysInsideTheArc(page: Page): Promise<void> {
+  const label = await page.getByTestId('timer-phase').boundingBox()
+  const count = await page.getByTestId('timer-count').boundingBox()
+  const arc = await page.getByTestId('player-progress-arc').boundingBox()
+  if (label === null || count === null || arc === null) {
+    throw new Error('the phase label did not lay out')
+  }
+  expect(label.y).toBeGreaterThanOrEqual(arc.y)
+  expect(label.y + label.height).toBeLessThanOrEqual(arc.y + arc.height)
+  expect(label.y + label.height).toBeLessThanOrEqual(count.y)
+}
+
+/**
+ * The Progress arc is meant to span nearly the whole width of a phone, and
+ * only a real browser can say whether it does: the size is CSS — an aspect
+ * ratio, a viewport-width clamp and a pixel ceiling — and jsdom computes none
+ * of it. Without this, an arc that silently rendered at 200px would still pass
+ * every other assertion in the suite.
+ *
+ * Measured on a phone viewport rather than the project's desktop default,
+ * because the pixel ceiling is what binds on a wide window, by design.
+ *
+ * The arc is also checked against its own box, so a wide box holding a small
+ * arc cannot pass: the drawn path must fill the box it was given.
+ *
+ * The countdown and the phase label ride with it. They are sized and placed
+ * off the arc, so the phone viewport this sets up is the one place they can be
+ * measured, and a change to the arc that broke either of them belongs in the
+ * same failure.
+ */
+async function expectArcAndItsContentFillThePhone(page: Page): Promise<void> {
+  const before = page.viewportSize()
+  const phone = { width: 390, height: 844 }
+  await page.setViewportSize(phone)
+  try {
+    const arc = page.getByTestId('player-progress-arc')
+    await expect(arc).toBeVisible()
+
+    const box = await arc.boundingBox()
+    const sweep = await page.getByTestId('player-progress-arc-sweep').boundingBox()
+    if (box === null || sweep === null) {
+      throw new Error('the progress arc did not lay out')
+    }
+    expect(box.width / phone.width).toBeGreaterThan(0.85)
+    // Half as tall as it is wide: the box is the half circle's letterbox.
+    expect(box.height).toBeCloseTo(box.width / 2, 0)
+    // The drawn path fills the box it was given, so a wide box holding a
+    // small arc cannot pass this.
+    expect(sweep.width / box.width).toBeGreaterThan(0.9)
+
+    // The count reads `5` here — the Get ready segment — so this is the
+    // one- and two-character bucket, the size a Session shows for most of
+    // its length. It is the whole point of the change, and only a browser
+    // can say what it renders at.
+    await expectCountFillsTheArc(page, 160)
+    await expectPhaseLabelStaysInsideTheArc(page)
+
+    // The one- and two-character bucket sets the largest type, so it reaches
+    // lowest, and the dock is nearest it. Both phones are checked. The
+    // clearance falls as the screen becomes smaller, so a check on the larger
+    // phone alone would still pass after a regression ate most of it.
+    await expectNoGlassOverlapsTheCountdown(page)
+    await page.setViewportSize({ width: 360, height: 640 })
+    await expectNoGlassOverlapsTheCountdown(page)
+  } finally {
+    if (before !== null) {
+      await page.setViewportSize(before)
+    }
+  }
+}
+
 type FakeWakeLockSentinel = {
   release(): Promise<void>
   addEventListener(type: string, listener: () => void): void
@@ -143,7 +251,7 @@ function instrumentWakeLock(): void {
  * Exercises the `/timer` screen (`timer-screen.tsx`) against the real built
  * client + server `global-setup.ts` boots: nav reachability from Home via
  * `home-timer-link`, idle composition from the ui/ field kit, a full short run
- * to Done with pause/resume/reset on the immersive ring + dock, and Web Audio
+ * to Done with pause/resume/reset on the immersive arc + dock, and Web Audio
  * + `navigator.wakeLock` instrumentation via init scripts. Each test registers
  * its own per-project account from `timer.spec.ts`'s own pre-minted invite pair
  * (`readE2eEnv().timerInvitesByProject`) so `fullyParallel` chromium+webkit
@@ -155,9 +263,11 @@ test.describe('timer (chromium + webkit)', () => {
       'logged in; idle composes work/rest/rounds from ui/ fields; with short inputs ' +
       '(5s work, 0s rest, 2 rounds) Start runs ready → work → work → Done with the round ' +
       'indicator advancing; Pause freezes the displayed count, Resume continues, Reset ' +
-      'returns to the idle input state.',
+      'returns to the idle input state; and on a 390px phone the countdown clears its size ' +
+      'floor, stays inside the arc, and no glass surface overlaps it, in both the short and ' +
+      'the five-character bucket.',
     async ({ page }, testInfo) => {
-      test.setTimeout(60_000)
+      test.setTimeout(75_000)
 
       const env = readE2eEnv()
       const projectName = projectNameFrom(testInfo)
@@ -188,8 +298,10 @@ test.describe('timer (chromium + webkit)', () => {
       await expect(page.getByTestId('timer-phase')).toHaveText('Get ready')
       // Immersive kit mounts on start.
       await expect(page.getByTestId('player-phase-backdrop')).toBeVisible()
-      await expect(page.getByTestId('player-progress-ring')).toBeVisible()
+      await expect(page.getByTestId('player-progress-arc')).toBeVisible()
       await expect(page.getByTestId('player-control-dock')).toBeVisible()
+
+      await expectArcAndItsContentFillThePhone(page)
 
       await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 8000 })
       await expect(page.getByTestId('timer-context')).toHaveText('Round 1 of 2')
@@ -199,7 +311,8 @@ test.describe('timer (chromium + webkit)', () => {
       await expect(page.getByTestId('timer-context')).toHaveText('Round 2 of 2', { timeout: 8000 })
 
       await expect(page.getByTestId('timer-phase')).toHaveText('Done', { timeout: 8000 })
-      await expect(page.getByTestId('timer-count')).toHaveText('0:00')
+      // The player drops the leading zero minute: complete reads `0`, not `0:00`.
+      await expect(page.getByTestId('timer-count')).toHaveText('0')
       await expect(page.getByTestId('timer-context')).toHaveText('Nice work')
 
       await page.getByTestId('reset-button').click()
@@ -228,6 +341,24 @@ test.describe('timer (chromium + webkit)', () => {
       await expect(page.getByTestId('start-button')).toBeVisible()
       await expect(page.getByTestId('pause-button')).toHaveCount(0)
       await expect(page.getByTestId('resume-button')).toHaveCount(0)
+
+      // Third run — a fifteen-minute work segment — reaches the
+      // five-character bucket, the longest one the type scale names. A
+      // `Segment`'s duration has no upper bound, so this is what a long
+      // finisher renders as, and it has to stay inside the arc on the
+      // narrowest phone. Fifteen minutes, not ten, so the count holds five
+      // characters for minutes rather than for the one second `10:00` lasts.
+      await page.getByTestId('work-input').fill('900')
+      await page.getByTestId('rounds-input').fill('1')
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.getByTestId('start-button').click()
+      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 10_000 })
+      await expect(page.getByTestId('timer-count')).toHaveText(/^\d\d:\d\d$/)
+      // Smaller than the two-character bucket above, by design, but still
+      // well past the ~80px the screen rendered before this change.
+      await expectCountFillsTheArc(page, 90)
+      await expectPhaseLabelStaysInsideTheArc(page)
+      await expectNoGlassOverlapsTheCountdown(page)
     },
   )
 

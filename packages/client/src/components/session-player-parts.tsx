@@ -3,10 +3,11 @@ import { useReducer } from 'react'
 import type { Participant, SessionCommand, SessionState, WorkContext } from '@j45/domain'
 import { LogOut, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react'
 
+import { ArcBox } from '@/components/player/arc-box'
 import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PHASE_HUE } from '@/components/player/phase'
-import { ProgressRing } from '@/components/player/progress-ring'
+import { ARC_INNER_SHARE, ProgressArc } from '@/components/player/progress-arc'
 import { RollingDigits } from '@/components/player/rolling-digits'
 import {
   AlertDialog,
@@ -19,16 +20,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  nextWorkStationName,
-  phaseLabel,
-  ringFraction,
-  timerUrgency,
-  type TimerUrgency,
-} from '@/lib/session'
+import { arcFraction, nextWorkStationName, timerUrgency, type TimerUrgency } from '@/lib/session'
 import { cn } from '@/lib/utils'
-import { formatDuration } from '@/lib/workouts'
 import { audioState, unlockAudio } from '@/player/audio'
+import { countdownTypeScale, formatCountdown } from '@/player/countdown-format'
 
 /** Fire a session command (pause/resume/prev/skip); any participant may drive. */
 export type Dispatch = (command: SessionCommand) => void
@@ -45,22 +40,27 @@ const URGENCY_DIGIT_COLOR: Record<TimerUrgency | 'none', string> = {
   critical: '[--digit-color:var(--timer-critical)]',
 }
 
+/** What the live session's arc takes when the centre column has the height for it. */
+const ARC_WIDTH = 'min(92vw, 420px)'
+
 /**
- * The immersive centrepiece: the phase-tinted progress ring wrapping the huge
- * tabular-nums countdown and its phase eyebrow, with the exercise name (plus
- * its optional `detail`, e.g. "10 cal") beneath. The ring depletes from the
- * same interpolated `remainingMillis` the digits show, so a pause freezes
- * both. The ring diameter is clamped by both viewport axes so the whole stack
- * fits on-screen without scrolling.
+ * The span between the inner edges of the arc's stroke. The **Progress strip**
+ * draws its bars to this, so the bars and the arc read as one column rather
+ * than two widths that nearly agree.
+ */
+export const ARC_INNER_WIDTH = `calc(${ARC_WIDTH} * ${ARC_INNER_SHARE})`
+
+/**
+ * The immersive centrepiece: the phase-tinted Progress arc with the huge
+ * tabular-nums countdown on the arc's chord, and the exercise name (plus its
+ * optional `detail`, e.g. "10 cal") beneath. The arc depletes from the same
+ * interpolated `remainingMillis` the digits show, so a pause freezes both.
  *
- * The digits take about 28% of the ring box. Each of their three clamp terms
- * is 28% of the box's matching term, so the digits stay clamped by both
- * viewport axes, as before. 28% is what the ring allows: the widest count the
- * formatter can make (`12:00`) still clears the arc, and 30% touches it. No
- * term falls below the old one, so no screen gets smaller digits. What rises
- * most is the ceiling, which held the digits at 20% of a large box.
+ * The phase word is not written here. It belongs to the {@link TopStrip},
+ * under the workout name: the two together say which workout is running and
+ * where in it, and the centrepiece is left to the count alone.
  *
- * Pod, round and station are not written here. The Progress strip below
+ * Pod, round and station are not written here either. The Progress strip below
  * carries them as marks, which a participant reads more quickly than words.
  */
 export function CenterStack({
@@ -74,38 +74,26 @@ export function CenterStack({
   readonly ctx: WorkContext | undefined
   readonly count: number
 }) {
-  const digits = formatDuration(count)
-  const fraction = ringFraction(state, count)
+  const digits = formatCountdown(count)
+  const fraction = arcFraction(state, count)
   const urgency = timerUrgency(phase, count)
   return (
-    <div className="flex w-full max-w-sm flex-col items-center gap-2">
-      <div className="size-[min(76vw,34svh,320px)] [&>*]:size-full">
-        <ProgressRing fraction={fraction} phase={phase} dirtyValue={digits}>
-          <span
-            data-testid="session-phase"
-            className="inline-flex items-center gap-2 text-xs font-medium tracking-wide uppercase"
-            style={{ color: PHASE_HUE[phase] }}
-          >
-            <span
-              className="size-2 rounded-full"
-              style={{ backgroundColor: PHASE_HUE[phase] }}
-              aria-hidden="true"
-            />
-            {phaseLabel(state)}
-          </span>
+    <div className="flex min-h-0 w-full max-w-sm flex-col items-center gap-2">
+      <ArcBox width={ARC_WIDTH} countSize={countdownTypeScale(digits)}>
+        <ProgressArc fraction={fraction} phase={phase} dirtyValue={digits}>
           <span
             data-testid="session-count"
-            data-ring-digits=""
+            data-arc-digits=""
             data-urgency={urgency}
             className={cn(
-              'player-digits mt-1 inline-flex text-[min(21.3vw,9.6svh,89px)] leading-none font-semibold tabular-nums',
+              'player-digits inline-flex text-[length:var(--count-size)] leading-none font-semibold tabular-nums',
               URGENCY_DIGIT_COLOR[urgency ?? 'none'],
             )}
           >
             <RollingDigits value={digits} />
           </span>
-        </ProgressRing>
-      </div>
+        </ProgressArc>
+      </ArcBox>
       <WorkMeta ctx={ctx} />
     </div>
   )
@@ -314,21 +302,31 @@ export function ReconnectingChip() {
 }
 
 /**
- * The top chrome: rose Leave (left), LIVE eyebrow + workout name (center),
- * audio (right).
+ * The top chrome: rose Leave (left), LIVE eyebrow + workout name + the phase
+ * word (center), audio (right).
  *
- * The eyebrow reads `Offline` while the connection is away, because a screen
- * that kept saying `Live` would be telling the participant something false.
- * It is too quiet to carry the news on its own, which is what the
+ * The connection eyebrow reads `Offline` while the connection is away, because
+ * a screen that kept saying `Live` would be telling the participant something
+ * false. It is too quiet to carry the news on its own, which is what the
  * {@link ReconnectingChip} is for.
+ *
+ * The phase word sits under the workout name because the two answer one
+ * question between them — which workout, and where in it. It carries no dot.
+ * The word is already tinted by phase, so a dot in the same hue repeated the
+ * only thing it could have said.
  */
 export function TopStrip({
   workoutName,
+  phase,
+  phaseText,
   offline,
   showLeave,
   onLeave,
 }: {
   readonly workoutName: string
+  readonly phase: PlayerPhase
+  /** The phase as a word — `Work`, `Rest`, `Paused`, `Done`. */
+  readonly phaseText: string
   readonly offline: boolean
   readonly showLeave: boolean
   readonly onLeave: Leave
@@ -345,6 +343,13 @@ export function TopStrip({
           {offline ? 'Offline' : 'Live'}
         </p>
         <p className="font-heading text-sm font-bold tracking-tight">{workoutName}</p>
+        <p
+          data-testid="session-phase"
+          className="text-xs font-medium tracking-wide uppercase"
+          style={{ color: PHASE_HUE[phase] }}
+        >
+          {phaseText}
+        </p>
       </div>
       <AudioIndicator />
     </div>

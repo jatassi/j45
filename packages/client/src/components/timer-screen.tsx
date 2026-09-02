@@ -3,16 +3,17 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import * as Domain from '@j45/domain'
 import * as Option from 'effect/Option'
 
+import { ArcBox } from '@/components/player/arc-box'
 import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PhaseBackdrop } from '@/components/player/phase-backdrop'
-import { ProgressRing } from '@/components/player/progress-ring'
+import { ProgressArc } from '@/components/player/progress-arc'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { buildManualWorkout } from '@/lib/manual-workout'
-import { formatDuration } from '@/lib/workouts'
 import * as Audio from '@/player/audio'
+import { countdownTypeScale, formatCountdown } from '@/player/countdown-format'
 import { useCountdown } from '@/player/use-countdown'
 import { useWakeLock } from '@/player/wake-lock'
 
@@ -24,8 +25,9 @@ type Settings = {
 type TimerState = Domain.TimerState
 type Segment = Domain.Segment
 type AudioProps = { audio: Audio.AudioState; onRetry: () => void }
-type DigitsProps = { phase: string; count: string; context: string }
-type ViewModel = DigitsProps & { fraction: number; playerPhase: PlayerPhase }
+/** Every string the screen shows. Only the countdown goes inside the arc. */
+type ViewText = { phase: string; count: string; context: string }
+type ViewModel = ViewText & { fraction: number; playerPhase: PlayerPhase }
 
 const WORK_MIN = 5
 const REST_MIN = 0
@@ -68,8 +70,8 @@ function displayMillis(state: TimerState, liveRemaining: number | null): number 
   return Domain.READY_SECONDS * 1000
 }
 
-/** Same remaining millis as the digits so pause freezes count and ring together. */
-function ringFraction(
+/** Same remaining millis as the digits so pause freezes count and arc together. */
+function arcFraction(
   state: TimerState,
   segments: readonly Segment[],
   liveRemaining: number | null,
@@ -80,12 +82,17 @@ function ringFraction(
   return Math.max(0, Math.min(1, displayMillis(state, liveRemaining) / duration))
 }
 
+/**
+ * What the screen draws, for whichever view is up. The idle preview and the
+ * running arc take their `count` from the same player format, so the
+ * countdown reads the same way before a run starts as it does during it.
+ */
 function viewModel(timer: ReturnType<typeof useManualTimer>, settings: Settings): ViewModel {
   const millis = displayMillis(timer.state, timer.liveRemaining)
   return {
     ...phaseInfo(timer.state, timer.segments, settings),
-    count: formatDuration(millis),
-    fraction: ringFraction(timer.state, timer.segments, timer.liveRemaining),
+    count: formatCountdown(millis),
+    fraction: arcFraction(timer.state, timer.segments, timer.liveRemaining),
   }
 }
 
@@ -200,31 +207,56 @@ function Header({ audio, onRetry, className }: AudioProps & { className: string 
   )
 }
 
-/** Where the countdown is drawn: above the idle form, or inside the ring. */
-type DigitsPlace = 'form' | 'ring'
+/** Where the countdown is drawn: above the idle form, or inside the arc. */
+type DigitsPlace = 'form' | 'arc'
 
 /**
- * The countdown's type scale. Inside the ring it is 28% of the ring box, the
- * share the live session's countdown also holds — see `CenterStack` in
- * `session-player-parts.tsx`. The idle preview has no ring around it and no
- * gap to grow into, so it keeps its own size.
+ * The countdown's type scale. Inside the arc it reads `--count-size`, which
+ * the running view sets on the arc box from {@link countdownTypeScale} — a
+ * share of the arc's own width, chosen by the character count. The idle
+ * preview has no arc around it and no gap to grow into, so it keeps its own
+ * size.
  *
- * `data-ring-digits` goes with the ring size. It tells the ring's glass proxy
- * which element to repaint, so only the count inside the ring carries it.
+ * `data-arc-digits` goes with the arc size. It marks the countdown as the
+ * element centred on the arc's chord, and it tells the arc's glass proxy which
+ * element to repaint. Only the count inside the arc carries it.
  */
 const COUNT_TYPE: Record<DigitsPlace, string> = {
   form: 'text-6xl',
-  ring: 'text-[min(22.4vw,81px)] leading-none',
+  arc: 'text-[length:var(--count-size)] leading-none',
+}
+
+/**
+ * What the manual timer's arc takes when the column has the height for it. The
+ * ceiling is lower than the live session's, so the live session stays the more
+ * prominent of the two. The countdown is a share of this, so it is smaller
+ * here as well, and the two screens stay in that order.
+ */
+const ARC_WIDTH = 'min(92vw, 350px)'
+
+/** The phase word (`Work`, `Rest`, `Get ready`, `Done`). Never an arc child. */
+// prettier-ignore
+function PhaseLine({ phase }: { phase: string }) {
+  return <p className="text-sm font-medium" data-testid="timer-phase">{phase}</p>
 }
 
 // prettier-ignore
-function Digits({ phase, count, context, place }: DigitsProps & { place: DigitsPlace }) {
+function Digits({ count, place }: { count: string; place: DigitsPlace }) {
+  return <p className={`${COUNT_TYPE[place]} font-semibold tabular-nums`} data-testid="timer-count" data-arc-digits={place === 'arc' ? '' : undefined}>{count}</p>
+}
+
+/**
+ * The round indicator while running, the settings summary while idle.
+ *
+ * This line is never a child of the arc. The arc takes the countdown only —
+ * see `ProgressArcProps.children`. While the timer runs, this line therefore
+ * sits below the arc.
+ */
+function ContextLine({ context }: { context: string }) {
   return (
-    <>
-      <p className="text-sm font-medium" data-testid="timer-phase">{phase}</p>
-      <p className={`${COUNT_TYPE[place]} font-semibold tabular-nums`} data-testid="timer-count" data-ring-digits={place === 'ring' ? '' : undefined}>{count}</p>
-      <p className="text-sm text-muted-foreground" data-testid="timer-context">{context}</p>
-    </>
+    <p className="text-sm text-muted-foreground" data-testid="timer-context">
+      {context}
+    </p>
   )
 }
 
@@ -256,7 +288,7 @@ function IdleForm({
 }
 
 function IdleView(
-  p: AudioProps & DigitsProps & { inputs: ReturnType<typeof useTimerInputs>; onStart: () => void },
+  p: AudioProps & ViewText & { inputs: ReturnType<typeof useTimerInputs>; onStart: () => void },
 ) {
   return (
     <>
@@ -266,7 +298,9 @@ function IdleView(
           audio={p.audio}
           onRetry={p.onRetry}
         />
-        <Digits phase={p.phase} count={p.count} context={p.context} place="form" />
+        <PhaseLine phase={p.phase} />
+        <Digits count={p.count} place="form" />
+        <ContextLine context={p.context} />
       </div>
       <IdleForm inputs={p.inputs} onStart={p.onStart} />
     </>
@@ -302,7 +336,7 @@ function RunControls(p: {
 
 // prettier-ignore
 function RunningView(
-  p: AudioProps & DigitsProps & {
+  p: AudioProps & ViewText & {
     state: TimerState
     fraction: number
     playerPhase: PlayerPhase
@@ -316,11 +350,17 @@ function RunningView(
       <PhaseBackdrop phase={p.playerPhase} paused={p.state._tag === 'paused'} />
       <Header className="relative z-10 flex items-center justify-between px-5 pt-6" audio={p.audio} onRetry={p.onRetry} />
       {/* pointer-events-none so the absolute ControlDock below receives taps */}
-      <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center px-5 pb-40">
-        <div className="size-[min(290px,80vw)]">
-          <ProgressRing fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
-            <Digits phase={p.phase} count={p.count} context={p.context} place="ring" />
-          </ProgressRing>
+      <div className="pointer-events-none relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-5 pb-40">
+        {/* Phase line, then the arc box, then the context line. The live
+            session stacks its phase eyebrow and Station name the same way. */}
+        <div className="flex min-h-0 flex-col items-center gap-2">
+          <PhaseLine phase={p.phase} />
+          <ArcBox width={ARC_WIDTH} countSize={countdownTypeScale(p.count)}>
+            <ProgressArc fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
+              <Digits count={p.count} place="arc" />
+            </ProgressArc>
+          </ArcBox>
+          <ContextLine context={p.context} />
         </div>
       </div>
       <div className="relative z-20">
@@ -330,7 +370,7 @@ function RunningView(
   )
 }
 
-/** `/timer` — Field-kit idle form; immersive backdrop + ring + dock while running. */
+/** `/timer` — Field-kit idle form; immersive backdrop + arc + dock while running. */
 export function TimerScreen() {
   const inputs = useTimerInputs()
   const timer = useManualTimer()
@@ -347,7 +387,12 @@ export function TimerScreen() {
     ? 'relative flex min-h-svh flex-col items-center gap-6 p-6'
     : // dvh, not svh: the immersive shell (and the dock anchored to its
       // bottom) must track iOS Safari's toolbar as it expands/collapses.
-      'relative flex min-h-dvh flex-col overflow-hidden'
+      //
+      // A height, not a minimum. The shell hides its overflow, so a column
+      // that grew past the viewport did not scroll — it was cut off, and the
+      // dock went with it. A fixed height instead makes the column shrink the
+      // arc, which is what keeps landscape on screen.
+      'relative flex h-dvh flex-col overflow-hidden'
   return (
     <div className={shell} data-testid="timer-screen">
       {isIdle ? (
