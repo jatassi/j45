@@ -9,7 +9,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import * as DateTime from 'effect/DateTime'
 import * as Effect from 'effect/Effect'
 import * as Runtime from 'effect/Runtime'
@@ -107,10 +107,19 @@ function renderScreen(
   )
 }
 
-/** Opens a base-ui Select by its trigger testid and picks the option with the given label. */
+/**
+ * Opens a base-ui Select by its trigger testid and picks the option with the
+ * given label.
+ *
+ * The press needs its `pointerdown`. Without one, base-ui reads the bare
+ * `click` as a virtual click and honours it only on the item it already
+ * highlights — the selected one — so a plain click can pick nothing but the
+ * value the select already holds.
+ */
 async function selectOption(testId: string, optionLabel: string): Promise<void> {
   fireEvent.click(screen.getByTestId(testId))
   const option = await screen.findByRole('option', { name: optionLabel })
+  fireEvent.pointerDown(option)
   fireEvent.click(option)
 }
 
@@ -293,8 +302,6 @@ describe('ExerciseLibraryScreen', () => {
     fireEvent.change(screen.getByTestId('exercise-form-name'), {
       target: { value: 'Wall ball' },
     })
-    await selectOption('exercise-form-modality', 'Strength')
-    await selectOption('exercise-form-intensity', 'Moderate')
     fireEvent.click(screen.getByTestId('exercise-form-muscle-quads'))
     fireEvent.click(screen.getByTestId('exercise-form-equipment-med-ball'))
 
@@ -302,6 +309,50 @@ describe('ExerciseLibraryScreen', () => {
 
     await screen.findByTestId('exercise-row-ex-new')
     expect(screen.getByTestId('exercise-name-ex-new').textContent).toBe('Wall ball')
+  })
+
+  it('carries the modality and intensity its selects picked into CreateExercise', async () => {
+    let created: Exercise | undefined
+
+    renderScreen({
+      ListExercises: () => Effect.succeed([rower]),
+      CreateExercise: (payload) => {
+        const { exercise } = payload as { exercise: Exercise }
+        created = exercise
+        return Effect.succeed(
+          new LibraryExercise({
+            id: Schema.decodeSync(ExerciseId)('ex-new'),
+            exercise,
+            createdAt: seededAt,
+            updatedAt: seededAt,
+          }),
+        )
+      },
+    })
+
+    await screen.findByTestId(`exercise-row-${rower.id}`)
+
+    fireEvent.click(screen.getByTestId('create-exercise-button'))
+    await screen.findByTestId('exercise-drawer')
+
+    fireEvent.change(screen.getByTestId('exercise-form-name'), {
+      target: { value: 'Assault bike' },
+    })
+    fireEvent.click(screen.getByTestId('exercise-form-muscle-quads'))
+
+    // Both picks differ from the draft the drawer opens with (strength,
+    // moderate), so the exercise below carries them only if the selects
+    // wrote them.
+    await selectOption('exercise-form-modality', 'Cardio')
+    await selectOption('exercise-form-intensity', 'High')
+
+    fireEvent.click(screen.getByTestId('exercise-form-submit'))
+
+    await waitFor(() => {
+      expect(created).toBeDefined()
+    })
+    expect(created?.modality).toBe('cardio')
+    expect(created?.intensity).toBe('high')
   })
 
   it('edits tags via the drawer', async () => {
