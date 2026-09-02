@@ -328,14 +328,71 @@ describe('ProgressArc — children on the chord + dirty-region proxy', () => {
         <span>12:00</span>
       </ProgressArc>,
     )
-    expect(h.invalidate).not.toHaveBeenCalled()
+    expect(h.update).not.toHaveBeenCalled()
 
     rerender(
       <ProgressArc fraction={0.49} phase="work" dirtyValue="11:59">
         <span>11:59</span>
       </ProgressArc>,
     )
-    expect(h.invalidate).toHaveBeenCalledTimes(1)
+
+    // `update` is the invalidation: it notifies the union of the rect before
+    // the change and the rect after it. A value change of the same size still
+    // costs exactly one notification, as it did when the rect was held.
+    expect(h.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-measures the digits when the type scale changes at a bucket boundary', () => {
+    // `1:00` is four characters; `59` is two, and takes the larger share of the
+    // arc. Both the font and the box therefore jump across that one tick.
+    let digits: Box = { left: 140, top: 260, width: 200, height: 90 }
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ): DOMRect {
+      return Object.hasOwn((this as HTMLElement).dataset, 'arcDigits')
+        ? rect(digits)
+        : rect({ left: 40, top: 100, width: BOX_WIDTH, height: BOX_HEIGHT })
+    })
+
+    const h = handle()
+    let proxy: SceneProxy | null = null
+    vi.spyOn(sceneRegistry, 'register').mockImplementation((next) => {
+      proxy = next
+      return h
+    })
+
+    const { rerender } = render(
+      <ProgressArc fraction={0.5} phase="work" dirtyValue="1:00">
+        <span data-arc-digits="" style={{ fontSize: '90px', fontWeight: 600 }}>
+          1:00
+        </span>
+      </ProgressArc>,
+    )
+
+    digits = { left: 100, top: 220, width: 280, height: 140 }
+    rerender(
+      <ProgressArc fraction={0.49} phase="work" dirtyValue="59">
+        <span data-arc-digits="" style={{ fontSize: '140px', fontWeight: 600 }}>
+          59
+        </span>
+      </ProgressArc>,
+    )
+
+    // The repaint uses the font the digits render at now, and their new
+    // centre — not the mount-time measurement.
+    const ctx = recordingContext()
+    const registered = proxy as SceneProxy | null
+    registered?.paint(ctx)
+    expect(ctx.font).toContain('140px')
+    expect(ctx.fillText).toHaveBeenCalledWith('59', 100 - 40 + 140, 220 - 100 + 70)
+
+    // The registered rect follows, so the paint origin and the clip do too.
+    // It unions the arc box with the digits' own box, which now hangs lower
+    // and wider than it did.
+    expect(h.update).toHaveBeenCalledTimes(1)
+    expect(h.update).toHaveBeenCalledWith({
+      rect: { left: 40, top: 100, width: 380 - 40, height: 360 - 100 },
+    })
   })
 
   it('paints the refraction at the rendered digits’ own size and place', () => {
