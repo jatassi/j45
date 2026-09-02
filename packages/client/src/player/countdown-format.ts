@@ -86,6 +86,12 @@ const COLON_EM = 0.306
  * `player-progress-arc.test.tsx` holds that geometry, and
  * `player-countdown-format.test.ts` checks these shares against it and against
  * their order; a change to the arc must bring the shares with it.
+ *
+ * `e2e/timer.spec.ts` holds these shares a second time, as pixel floors
+ * measured in a real browser. They are the only check that the scale resolves
+ * against the arc at all, and nothing about them is derived from this table,
+ * so a retune here must bring them along or they go stale in silence. They
+ * already did once: they were calibrated against shares of 0.57 and 0.29.
  */
 const SHARE_BY_CHARACTERS = new Map<number, number>([
   [1, 0.28],

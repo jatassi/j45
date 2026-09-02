@@ -97,19 +97,25 @@ function instrumentAudioBeeps(): void {
 /**
  * The countdown, measured where it renders. The digits are sized as a share of
  * the arc's width, chosen by the character count, and the share is CSS: jsdom
- * resolves none of it, so this is the only seam that can say the digits
- * actually grew.
+ * resolves none of it, so this is the only seam that can say what the digits
+ * set at.
  *
  * Two things are asserted, and they pull against each other. The digits must
- * clear a floor, or the change did not happen — a Participant reads them from
- * several metres away, and the screen they replaced rendered them at about
- * 80px. They must also stay inside the arc's clear inner width, which is 90%
- * of the arc's own width: the arc's stroke takes 15 units of its 300-unit box
- * at each end.
+ * clear a floor, or the type scale is not reading the arc: `--arc-width` is a
+ * `min()` of a viewport term and a pixel ceiling, and a countdown that lost
+ * the ceiling — or the arc — lands well under the floor. They must also stay
+ * inside the arc's clear inner width, which is 90% of the arc's own width: the
+ * arc's stroke takes 15 units of its 300-unit box at each end.
  *
  * `floorPx` is the caller's, because the floor depends on which bucket is on
  * screen. A five-character countdown is deliberately smaller than a
  * two-character one.
+ *
+ * The floors are pixels, so they are calibration and they go stale on their
+ * own. Each one is `countdown-format.ts`'s share for that bucket times this
+ * screen's own arc ceiling of 350px, less a little for engine rounding.
+ * Retuning either the shares or the ceiling must bring them along — that
+ * module's comment names this file for exactly that reason.
  */
 async function expectCountFillsTheArc(page: Page, floorPx: number): Promise<void> {
   const count = page.getByTestId('timer-count')
@@ -124,21 +130,28 @@ async function expectCountFillsTheArc(page: Page, floorPx: number): Promise<void
 }
 
 /**
- * The phase label stays inside the arc, above the countdown. It is the first
- * thing the countdown pushes out when it grows: the label sits on top of the
- * countdown in the same column, so a countdown that took its whole height in
- * layout would carry the label past the arc's top. At the sizes the type scale
- * now reaches, that is a real failure and not a near miss.
+ * The phase label sits above the arc, clear of the arc, of the countdown
+ * inside it, and of the header chrome above it.
+ *
+ * It used to sit inside the arc and this checked that a growing countdown did
+ * not carry it out through the arc's top. `timer-screen.tsx` moved it out:
+ * `PhaseLine` is a sibling above `ArcBox` and is documented "Never an arc
+ * child". What is left to hold is the column the two now share. The running
+ * shell is a fixed `h-dvh` with its overflow hidden, so a column that grew
+ * past it does not scroll — it is cut off at the top, and the label is the
+ * first thing to go.
  */
-async function expectPhaseLabelStaysInsideTheArc(page: Page): Promise<void> {
+async function expectPhaseLabelSitsAboveTheArc(page: Page): Promise<void> {
   const label = await page.getByTestId('timer-phase').boundingBox()
   const count = await page.getByTestId('timer-count').boundingBox()
   const arc = await page.getByTestId('player-progress-arc').boundingBox()
-  if (label === null || count === null || arc === null) {
+  // The header's own row, as the floor the column must not climb into.
+  const header = await page.getByTestId('audio-indicator').boundingBox()
+  if (label === null || count === null || arc === null || header === null) {
     throw new Error('the phase label did not lay out')
   }
-  expect(label.y).toBeGreaterThanOrEqual(arc.y)
-  expect(label.y + label.height).toBeLessThanOrEqual(arc.y + arc.height)
+  expect(label.y).toBeGreaterThanOrEqual(header.y + header.height)
+  expect(label.y + label.height).toBeLessThanOrEqual(arc.y)
   expect(label.y + label.height).toBeLessThanOrEqual(count.y)
 }
 
@@ -155,10 +168,10 @@ async function expectPhaseLabelStaysInsideTheArc(page: Page): Promise<void> {
  * The arc is also checked against its own box, so a wide box holding a small
  * arc cannot pass: the drawn path must fill the box it was given.
  *
- * The countdown and the phase label ride with it. They are sized and placed
- * off the arc, so the phone viewport this sets up is the one place they can be
- * measured, and a change to the arc that broke either of them belongs in the
- * same failure.
+ * The countdown and the phase label ride with it. The countdown is sized off
+ * the arc and the label is stacked against it, so the phone viewport this sets
+ * up is the one place either can be measured, and a change to the arc that
+ * broke one of them belongs in the same failure.
  */
 async function expectArcAndItsContentFillThePhone(page: Page): Promise<void> {
   const before = page.viewportSize()
@@ -184,8 +197,9 @@ async function expectArcAndItsContentFillThePhone(page: Page): Promise<void> {
     // one- and two-character bucket, the size a Session shows for most of
     // its length. It is the whole point of the change, and only a browser
     // can say what it renders at.
-    await expectCountFillsTheArc(page, 160)
-    await expectPhaseLabelStaysInsideTheArc(page)
+    // 0.28 of a 350px arc is 98px, so 95 is the floor with rounding allowed.
+    await expectCountFillsTheArc(page, 95)
+    await expectPhaseLabelSitsAboveTheArc(page)
 
     // The one- and two-character bucket sets the largest type, so it reaches
     // lowest, and the dock is nearest it. Both phones are checked. The
@@ -354,10 +368,10 @@ test.describe('timer (chromium + webkit)', () => {
       await page.getByTestId('start-button').click()
       await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 10_000 })
       await expect(page.getByTestId('timer-count')).toHaveText(/^\d\d:\d\d$/)
-      // Smaller than the two-character bucket above, by design, but still
-      // well past the ~80px the screen rendered before this change.
-      await expectCountFillsTheArc(page, 90)
-      await expectPhaseLabelStaysInsideTheArc(page)
+      // Smaller than the two-character bucket above, by design: 0.165 of the
+      // same 350px arc is 57.75px, so 55 is the floor with rounding allowed.
+      await expectCountFillsTheArc(page, 55)
+      await expectPhaseLabelSitsAboveTheArc(page)
       await expectNoGlassOverlapsTheCountdown(page)
     },
   )
