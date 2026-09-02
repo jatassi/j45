@@ -239,23 +239,18 @@ function paintDigits(ctx: CanvasRenderingContext2D, live: LiveDigits): void {
  * whenever `value` changes — the `glass-demo/ticking-digit.tsx` pattern applied
  * to the countdown. The initial value is not an invalidation.
  *
- * The rect and the rendered size are measured together, once, when the proxy
- * is registered, and they are then held.
+ * Every value change measures the region again, because the type scale is a
+ * share of the arc chosen by the character count: the countdown changes size
+ * at `1:00` and at `10:00` during an ordinary Session. A held measurement
+ * would repaint the digits at the mount-time size, and — because the rect is
+ * the paint origin and the clip both — in the wrong box as well.
  *
- * **The held measurement goes stale.** The type scale changes with the
- * character count, so the countdown changes size at `1:00` and at `10:00`
- * during an ordinary Session. The arc also moves and resizes when the viewport
- * does. The measurement was safe while the countdown kept one size. It is not
- * safe now. It is kept for the same reason {@link paintDigits} keeps flat
- * white: nothing refracts over this region, so nothing repaints from the held
- * values.
- *
- * The two shortcuts fall together, and the same two tests guard them.
- *
- * If those tests fail, repair this in two steps. Measure again whenever the
- * character count changes. Then invalidate the union of the old rect and the
- * new one, so that a countdown which became smaller clears the region the
- * larger one left.
+ * The new rect goes through `handle.update`, not `invalidate`. `update`
+ * notifies the union of the rect before the change and the rect after it, so a
+ * countdown which became smaller clears the pixels the larger one left, and it
+ * is what writes the rect the paint origin and the clip are taken from.
+ * Reassigning `live.rect` alone never reaches the registry. `live.digits` does
+ * reach the next repaint on its own, because `paint` closes over `live`.
  */
 function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void {
   const handleRef = useRef<SceneProxyHandle | null>(null)
@@ -293,8 +288,16 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
       return
     }
     prevRef.current = value
-    handleRef.current?.invalidate(liveRef.current.rect)
-  }, [value])
+    const el = ref.current
+    const handle = handleRef.current
+    if (!el || !handle) {
+      return
+    }
+    const region = readDigitsRegion(el)
+    liveRef.current.rect = region.rect
+    liveRef.current.digits = region.digits
+    handle.update({ rect: region.rect })
+  }, [ref, value])
 }
 
 /**
