@@ -8,7 +8,6 @@ import { dirtyToSubRect, intersectDocRects, paintOrder, sceneRegistry } from '@/
 afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
-  vi.unstubAllEnvs()
 })
 
 const d = (left: number, top: number, wh: readonly [number, number]): DocRect => ({
@@ -303,15 +302,12 @@ describe('no-glass-proxy guard', () => {
   }
 
   it.each([{ kind: 'self' as const }, { kind: 'child' as const }])(
-    'refuses $kind glass-surface: no-op + warn in DEV',
+    'refuses $kind glass-surface: a no-op handle that moves nothing and never paints',
     ({ kind }) => {
-      vi.stubEnv('DEV', true)
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       const paint = vi.fn()
       const h = sceneRegistry.register(
         px({ rect: d(0, 0, [10, 10]), z: 0, paint, source: glassEl(kind) }),
       )
-      expect(warn).toHaveBeenCalledTimes(1)
       const regions: DocRect[] = []
       const unsub = sceneRegistry.subscribe((r) => {
         regions.push(r)
@@ -330,19 +326,21 @@ describe('no-glass-proxy guard', () => {
       })
       expect(paint).not.toHaveBeenCalled()
       spy.mockRestore()
-      warn.mockRestore()
     },
   )
 
-  it('no warn when DEV=false; still refuses; warn once per register when DEV', () => {
-    vi.stubEnv('DEV', false)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const paint = vi.fn()
+  // The refusal says nothing, so every register of the same surface must be
+  // refused on its own: a guard that let the second one through would leave
+  // no trace anywhere else.
+  it('refuses each register of the same glass surface, and none of them paint', () => {
+    const el = glassEl('self')
+    const first = vi.fn()
+    const second = vi.fn()
     const h = sceneRegistry.register(
-      px({ rect: d(0, 0, [10, 10]), z: 0, paint, source: glassEl('self') }),
+      px({ rect: d(0, 0, [10, 10]), z: 0, paint: first, source: el }),
     )
-    expect(warn).not.toHaveBeenCalled()
     h.dispose()
+    sceneRegistry.register(px({ rect: d(0, 0, [1, 1]), z: 0, paint: second, source: el }))
     const spy = mock2d(stubCtx([]))
     sceneRegistry.compositeSlice({
       slice: slice({ bufferWidth: 50, bufferHeight: 50 }),
@@ -350,13 +348,8 @@ describe('no-glass-proxy guard', () => {
       documentWidth: 50,
       document,
     })
-    expect(paint).not.toHaveBeenCalled()
+    expect(first).not.toHaveBeenCalled()
+    expect(second).not.toHaveBeenCalled()
     spy.mockRestore()
-    vi.stubEnv('DEV', true)
-    const el = glassEl('self')
-    sceneRegistry.register(px({ rect: d(0, 0, [1, 1]), z: 0, source: el }))
-    sceneRegistry.register(px({ rect: d(0, 0, [1, 1]), z: 0, source: el }))
-    expect(warn).toHaveBeenCalledTimes(2)
-    warn.mockRestore()
   })
 })

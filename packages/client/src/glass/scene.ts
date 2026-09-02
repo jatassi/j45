@@ -194,12 +194,11 @@ export const sceneRegistry: {
 } = {
   register(proxy) {
     if (isGlassSurfaceSource(proxy.source)) {
-      // Vite's DEV flag; remains a runtime property under vitest for stubbing.
-      if (import.meta.env.DEV) {
-        console.warn(
-          '[glass/scene] refused to register a proxy whose source is inside .glass-surface (no glass-refracting-glass)',
-        )
-      }
+      // Glass does not refract glass. The refusal is silent: the caller gets a
+      // handle whose every method is a no-op, so a proxy registered by mistake
+      // costs nothing and draws nothing. `useSceneSurface` does not ask in the
+      // first place, and `glass-scene.test.ts` holds the refusal for the
+      // callers that register directly.
       return noopHandle
     }
 
