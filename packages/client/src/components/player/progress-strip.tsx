@@ -6,6 +6,10 @@ import { cn } from '@/lib/utils'
  * The three states as a fill, shared by the bars, their cells and the dots.
  * Nothing here fills part-way: a mark is done, now (`active`) or ahead
  * (`upcoming`), and never anything between.
+ *
+ * The change between two states eases over `--duration-state`, but the
+ * states themselves stay three: a mark is done, now or ahead, and the ease
+ * is a colour crossing, not a part-way fill.
  */
 const FILL: Record<CellState, string> = {
   done: 'bg-primary/50',
@@ -47,14 +51,22 @@ function Bar({ bar, index }: { readonly bar: ProgressBar; readonly index: number
       }}
     >
       {bar.cells.length === 0 ? (
-        <span className={cn('flex-1', FILL[bar.state])} />
+        <span
+          className={cn(
+            'flex-1 transition-colors duration-[var(--duration-state)] ease-[var(--ease-out)]',
+            FILL[bar.state],
+          )}
+        />
       ) : (
         Array.from(bar.cells, (state, cell) => (
           <span
             key={cell}
             data-testid={`session-strip-cell-${index}-${cell}`}
             data-state={state}
-            className={cn('min-w-0 flex-1', FILL[state])}
+            className={cn(
+              'min-w-0 flex-1 transition-colors duration-[var(--duration-state)] ease-[var(--ease-out)]',
+              FILL[state],
+            )}
           />
         ))
       )}
@@ -124,7 +136,7 @@ export function ProgressStrip({
             data-testid={`session-strip-dot-${round}`}
             data-state={state}
             className={cn(
-              'size-2.5 rounded-full',
+              'size-2.5 rounded-full transition-colors duration-[var(--duration-state)] ease-[var(--ease-out)]',
               state === 'active' && 'player-dot-pulse',
               FILL[state],
             )}
