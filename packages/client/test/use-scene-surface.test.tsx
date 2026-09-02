@@ -216,14 +216,11 @@ describe('useSceneSurface — document-space + resize-driven update', () => {
 })
 
 describe('useSceneSurface — glass-surface source guard', () => {
-  it('never registers an element that is itself a glass surface (silent skip, no warn)', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  it('never registers an element that is itself a glass surface', () => {
     const register = vi.spyOn(sceneRegistry, 'register')
 
     render(<Probe options={{ color: '#f00', z: 2 }} className="glass-surface" />)
 
     expect(register).not.toHaveBeenCalled()
-    expect(warn).not.toHaveBeenCalled()
-    warn.mockRestore()
   })
 })

@@ -91,6 +91,34 @@ export async function startApexSession(page: Page): Promise<string> {
 }
 
 /**
+ * Waits for `sessionId` to reach this Participant's lobby, then takes them
+ * into it.
+ *
+ * The wait is the lobby assertion: the row reaches a second account's home on
+ * its own, with no navigation. The entry is then by url rather than by a tap
+ * on that row, and the reason is the hero slot. Home gives the newest live
+ * session that slot, and React reuses the one link element for it: when a
+ * newer session takes the slot, the link keeps its dom node and is rewritten
+ * in place, `data-testid` and destination together. Live sessions are
+ * server-wide, so another scenario starting one is enough to rewrite it
+ * between the moment a tap resolves the row and the moment the router reads
+ * the destination — and the tap then opens that other session.
+ *
+ * The tap itself is covered where the lobby is the subject, in `home.spec.ts`.
+ * Here the join is setup, and these scenarios are about what two screens agree
+ * on once both are inside the same session.
+ */
+export async function joinSessionFromLobby(
+  page: Page,
+  baseUrl: string,
+  sessionId: string,
+): Promise<void> {
+  await expect(page.getByTestId(`session-card-${sessionId}`)).toBeVisible({ timeout: 10_000 })
+  await page.goto(`${baseUrl}/session/${sessionId}`)
+  await expect(page.getByTestId('session-screen')).toBeVisible()
+}
+
+/**
  * Click via the DOM node directly. Playwright's pointer click waits for
  * "stable" layout, but the live countdown re-renders RunControls every tick
  * so a normal/force click can hang or land on a detached node.

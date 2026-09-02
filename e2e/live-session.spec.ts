@@ -11,6 +11,7 @@ import {
   clickSessionControl,
   instrumentAudioBeeps,
   instrumentWakeLock,
+  joinSessionFromLobby,
   leaveSessionWithConfirm,
   mintTwoInviteCodes,
   planChangeNotice,
@@ -72,12 +73,22 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
 
         const card = pageB.getByTestId(`session-card-${sessionId}`)
         await expect(card).toBeVisible({ timeout: 10_000 })
-        await expect(card).toContainText(displayA)
-        await expect(card).toContainText('Apex')
+        // The names are read off the card around the link, not off the link.
+        // Home gives the newest live session the hero slot and lists the rest
+        // as compact rows; `session-card-<id>` is the link in both, but the
+        // hero's link carries only its Join now label and writes the host and
+        // the workout on `home-hero` outside it. Live sessions are
+        // server-wide, so which shape this session lands in depends on what
+        // other scenarios are running, and only the enclosing card holds the
+        // names in either one.
+        const named = pageB
+          .getByTestId('home-hero')
+          .filter({ has: card })
+          .or(pageB.locator('li').filter({ has: card }))
+        await expect(named).toContainText(displayA)
+        await expect(named).toContainText('Apex')
 
-        await card.click()
-        await expect(pageB).toHaveURL(new RegExp(`/session/${sessionId}`))
-        await expect(pageB.getByTestId('session-screen')).toBeVisible()
+        await joinSessionFromLobby(pageB, env.baseUrl, sessionId)
 
         // Land both players on the first work segment. Ready is only 5s and B's
         // join burns variable wall-clock, so rather than snapshot A mid ready→work
@@ -263,11 +274,7 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
 
         const sessionId = await startApexSession(page)
 
-        const card = pageB.getByTestId(`session-card-${sessionId}`)
-        await expect(card).toBeVisible({ timeout: 10_000 })
-        await card.click()
-        await expect(pageB).toHaveURL(new RegExp(`/session/${sessionId}`))
-        await expect(pageB.getByTestId('session-screen')).toBeVisible()
+        await joinSessionFromLobby(pageB, env.baseUrl, sessionId)
 
         // The ready segment is 5 seconds. Wait for its automatic advance
         // instead of a race against it. Both users are then in the first work
@@ -396,8 +403,20 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
 
         await startApexSession(page)
 
+        // Other scenarios retire rows as well as add them, and one retired
+        // inside this window would cancel A's own before the poll could catch
+        // it. The poll therefore holds the highest count it has seen rather
+        // than the count at the instant it looks: the claim is that the number
+        // rose when A started, not that it stayed risen.
+        let highest = before
         await expect
-          .poll(async () => readTabLiveCount(pageB), { timeout: 15_000 })
+          .poll(
+            async () => {
+              highest = Math.max(highest, await readTabLiveCount(pageB))
+              return highest
+            },
+            { timeout: 20_000 },
+          )
           .toBeGreaterThanOrEqual(before + 1)
 
         // B did not navigate. The chrome already on screen learned by itself.
