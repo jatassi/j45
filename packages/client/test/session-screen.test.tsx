@@ -176,12 +176,18 @@ describe('SessionScreen — server-state render', () => {
     expect(screen.getByTestId('session-participant-u-ann').textContent).toContain('Ann')
     expect(screen.getByTestId('session-participant-u-ben').textContent).toContain('Ben')
 
-    // The arc's children contract, shared with the manual timer: the phase
-    // label and the countdown, nothing else. This side of the contract must
-    // hold too, or the two screens go back to passing different shapes.
+    // The arc's children contract, shared with the manual timer: the
+    // countdown, and nothing else. This side of the contract must hold too, or
+    // the two screens go back to passing different shapes.
     const slot = screen.getByTestId('player-progress-arc-digits')
     const children = [...slot.querySelectorAll<HTMLElement>(':scope > *')]
-    expect(children.map((el) => el.dataset.testid)).toEqual(['session-phase', 'session-count'])
+    expect(children.map((el) => el.dataset.testid)).toEqual(['session-count'])
+
+    // The phase eyebrow is outside the arc and before it.
+    const eyebrow = screen.getByTestId('session-phase')
+    expect(eyebrow.closest('[data-testid="player-progress-arc"]')).toBeNull()
+    const arcPosition = screen.getByTestId('player-progress-arc').compareDocumentPosition(eyebrow)
+    expect(arcPosition & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
   })
 
   it('carries data-phase on the session root matching the current segment/timer state', async () => {

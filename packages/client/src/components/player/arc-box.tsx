@@ -17,11 +17,9 @@ import type { CSSProperties, JSX, ReactNode } from 'react'
  * below the second. A box sized by height is correct in both. A landscape
  * column gives the arc less height, and the arc becomes smaller.
  *
- * The box below the arc is the room the countdown overflows into. The
- * countdown's centre is on the arc's chord, so half of its height falls below
- * the arc. That box keeps its full height while the arc becomes smaller,
- * because a countdown that overflowed into less room would print on top of
- * what the screen writes below the arc.
+ * No room is kept below the arc. The countdown stands on the chord rather than
+ * across it, so nothing overflows the arc's own box, and what the screen writes
+ * below the arc follows the arc directly.
  */
 export function ArcBox({
   width,
@@ -46,7 +44,6 @@ export function ArcBox({
       style={{ '--arc-width': width, '--count-size': countSize } as CSSProperties}
     >
       <div className="aspect-[2/1] h-[calc(var(--arc-width)/2)] min-h-0">{children}</div>
-      <div className="h-[calc(var(--count-size)/2)] shrink-0" aria-hidden="true" />
     </div>
   )
 }

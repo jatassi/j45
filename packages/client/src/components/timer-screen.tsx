@@ -25,10 +25,8 @@ type Settings = {
 type TimerState = Domain.TimerState
 type Segment = Domain.Segment
 type AudioProps = { audio: Audio.AudioState; onRetry: () => void }
-/** The phase label and the countdown: the arc's two-element children shape. */
-type DigitsProps = { phase: string; count: string }
-/** Every string the screen shows: those two, plus the context line. */
-type ViewText = DigitsProps & { context: string }
+/** Every string the screen shows. Only the countdown goes inside the arc. */
+type ViewText = { phase: string; count: string; context: string }
 type ViewModel = ViewText & { fraction: number; playerPhase: PlayerPhase }
 
 const WORK_MIN = 5
@@ -236,20 +234,21 @@ const COUNT_TYPE: Record<DigitsPlace, string> = {
  */
 const ARC_WIDTH = 'min(92vw, 350px)'
 
+/** The phase word (`Work`, `Rest`, `Get ready`, `Done`). Never an arc child. */
 // prettier-ignore
-function Digits({ phase, count, place }: DigitsProps & { place: DigitsPlace }) {
-  return (
-    <>
-      <p className="text-sm font-medium" data-testid="timer-phase">{phase}</p>
-      <p className={`${COUNT_TYPE[place]} font-semibold tabular-nums`} data-testid="timer-count" data-arc-digits={place === 'arc' ? '' : undefined}>{count}</p>
-    </>
-  )
+function PhaseLine({ phase }: { phase: string }) {
+  return <p className="text-sm font-medium" data-testid="timer-phase">{phase}</p>
+}
+
+// prettier-ignore
+function Digits({ count, place }: { count: string; place: DigitsPlace }) {
+  return <p className={`${COUNT_TYPE[place]} font-semibold tabular-nums`} data-testid="timer-count" data-arc-digits={place === 'arc' ? '' : undefined}>{count}</p>
 }
 
 /**
  * The round indicator while running, the settings summary while idle.
  *
- * This line is never a child of the arc. The arc takes two children only —
+ * This line is never a child of the arc. The arc takes the countdown only —
  * see `ProgressArcProps.children`. While the timer runs, this line therefore
  * sits below the arc.
  */
@@ -299,7 +298,8 @@ function IdleView(
           audio={p.audio}
           onRetry={p.onRetry}
         />
-        <Digits phase={p.phase} count={p.count} place="form" />
+        <PhaseLine phase={p.phase} />
+        <Digits count={p.count} place="form" />
         <ContextLine context={p.context} />
       </div>
       <IdleForm inputs={p.inputs} onStart={p.onStart} />
@@ -351,12 +351,13 @@ function RunningView(
       <Header className="relative z-10 flex items-center justify-between px-5 pt-6" audio={p.audio} onRetry={p.onRetry} />
       {/* pointer-events-none so the absolute ControlDock below receives taps */}
       <div className="pointer-events-none relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-5 pb-40">
-        {/* Arc box, then the context line below it. The live session stacks
-            the Station name below its arc the same way. */}
+        {/* Phase line, then the arc box, then the context line. The live
+            session stacks its phase eyebrow and Station name the same way. */}
         <div className="flex min-h-0 flex-col items-center gap-2">
+          <PhaseLine phase={p.phase} />
           <ArcBox width={ARC_WIDTH} countSize={countdownTypeScale(p.count)}>
             <ProgressArc fraction={p.fraction} phase={p.playerPhase} dirtyValue={p.count}>
-              <Digits phase={p.phase} count={p.count} place="arc" />
+              <Digits count={p.count} place="arc" />
             </ProgressArc>
           </ArcBox>
           <ContextLine context={p.context} />

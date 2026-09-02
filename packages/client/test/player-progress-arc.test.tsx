@@ -17,6 +17,17 @@ const BOX_HEIGHT = 150
 const CENTER_X = BOX_WIDTH / 2
 const CENTER_Y = BOX_HEIGHT
 
+/**
+ * How far a round cap reaches past the path's last point, in degrees of this
+ * circle. A round cap is a half disc of the stroke's radius, so it covers half
+ * a stroke of arc length. The path gives one up at each end so both caps draw
+ * whole inside the box, and the caps put that length back — which is why the
+ * assertions below add them in before checking the 180°.
+ */
+function capDegrees(stroke: number): number {
+  return ((stroke / 2 / ARC_RADIUS) * 180) / Math.PI
+}
+
 /** Bearing of a point on the circle, in degrees clockwise from the box's top. */
 function bearing(x: number, y: number): number {
   return ((Math.atan2(x - CENTER_X, CENTER_Y - y) * 180) / Math.PI + 360) % 360
@@ -79,7 +90,7 @@ afterEach(() => {
 })
 
 describe('ProgressArc — the 180° sweep', () => {
-  it('sweeps 180° clockwise on a half-height box, with the gap across the bottom', () => {
+  it('sweeps 180° anticlockwise on a half-height box, with the gap across the bottom', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
     render(
@@ -102,15 +113,55 @@ describe('ProgressArc — the 180° sweep', () => {
       expect(distance).toBeCloseTo(ARC_RADIUS, 2)
     }
 
-    // 180° of sweep, leaving a 180° gap whose midpoint is the bottom (180°).
-    const swept = (arc.to - arc.from + 360) % 360
-    expect(swept).toBeCloseTo(180, 6)
-    expect((arc.to + (360 - swept) / 2) % 360).toBeCloseTo(180, 6)
+    // The path stops one cap short of the chord at each end, and the round cap
+    // covers the rest. That inset is the whole reason the ends draw round
+    // instead of clipped, and it must not move where the ink lands.
+    //
+    // Three decimals, not six: the path writes its coordinates to three, so a
+    // bearing read back off them carries that rounding. The endpoints used to
+    // land on whole numbers, which is the only reason six ever held here.
+    const cap = capDegrees(Number(shapes()[0].getAttribute('stroke-width')))
+    expect(cap).toBeGreaterThan(0)
+    expect(arc.from).toBeCloseTo(90 - cap, 3)
+    expect(arc.to).toBeCloseTo(270 + cap, 3)
 
-    // A half circle is never the long way round, and it keeps the clockwise
-    // direction the countdown has always depleted in.
+    // 180° of ink, from one end of the chord to the other, leaving a 180° gap
+    // whose midpoint is the bottom (180°). The sweep runs anticlockwise, so
+    // its bearing falls as it is drawn, and the gap runs on from its far end
+    // in that same direction.
+    const inkFrom = arc.from + cap
+    const inkTo = arc.to - cap
+    const inkSwept = (inkFrom - inkTo + 360) % 360
+    expect(inkSwept).toBeCloseTo(180, 3)
+    expect((inkTo - (360 - inkSwept) / 2 + 360) % 360).toBeCloseTo(180, 3)
+
+    // A half circle is never the long way round. The sweep runs anticlockwise
+    // from the right end of the chord. The dash retracts towards the end it
+    // starts at, so the countdown empties from the left and what is left
+    // gathers on the right.
     expect(arc.largeArc).toBe(0)
-    expect(arc.clockwise).toBe(1)
+    expect(arc.clockwise).toBe(0)
+  })
+
+  it('holds both caps inside the box, so neither end is clipped square', () => {
+    vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
+
+    render(
+      <ProgressArc fraction={1} phase="work">
+        <span>12:00</span>
+      </ProgressArc>,
+    )
+
+    const stroke = Number(shapes()[0].getAttribute('stroke-width'))
+    const d = screen.getByTestId('player-progress-arc-sweep').getAttribute('d') ?? ''
+    const n = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
+
+    // The cap is a half disc of the stroke's radius around the path's last
+    // point. Its lowest edge is what the svg would clip, and it has to land on
+    // the chord — the box's bottom edge — and not past it.
+    for (const y of [n[1], n[8]]) {
+      expect(y + stroke / 2).toBeCloseTo(BOX_HEIGHT, 2)
+    }
   })
 
   it('meets the box on all three sides with the stroke it scales by', () => {
@@ -169,10 +220,23 @@ describe('ProgressArc — the 180° sweep', () => {
 })
 
 describe('ProgressArc — depleting against the sweep length', () => {
-  it('measures the dash against half the circle, not the whole one', () => {
+  it('measures the dash against the path it is drawn on, not the whole circle', () => {
     vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
 
-    expect(ARC_SWEEP_LENGTH).toBeCloseTo(2 * Math.PI * ARC_RADIUS * 0.5, 9)
+    render(
+      <ProgressArc fraction={1} phase="work">
+        <span>12:00</span>
+      </ProgressArc>,
+    )
+    const stroke = Number(shapes()[0].getAttribute('stroke-width'))
+    cleanup()
+
+    // Half the circle, less the cap the path gives up at each end. Measuring
+    // against the bare half circle would leave the dash a cap's worth long,
+    // and the arc would read full while a sliver was already gone.
+    const pathDegrees = 180 - 2 * capDegrees(stroke)
+    expect(ARC_SWEEP_LENGTH).toBeCloseTo(2 * Math.PI * ARC_RADIUS * (pathDegrees / 360), 9)
+    expect(ARC_SWEEP_LENGTH).toBeLessThan(2 * Math.PI * ARC_RADIUS * 0.5)
     expect(dashAt(1).pathLength).toBeCloseTo(ARC_SWEEP_LENGTH, 6)
   })
 

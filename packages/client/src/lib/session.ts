@@ -369,9 +369,14 @@ export type StripBudget = {
 
 /**
  * The default budget: the strip's width on the narrowest supported phone
- * (320px, less the 20px of padding on each side that `session-screen.tsx`
- * gives the live screen), a cell of 4px, which is about the smallest mark
- * that reads from arm's length, and the three gaps the live strip draws.
+ * (320px), a cell of 4px, which is about the smallest mark that reads from
+ * arm's length, and the three gaps the live strip draws.
+ *
+ * The width is the bars' own, not the screen's. The bars are drawn to the
+ * inner span of the **Progress arc** — `min(92vw, 420px)` less one stroke on
+ * each side — so on a 320px phone they measure about 264px. The screen's
+ * padding no longer decides it: the arc is narrower than the padded column
+ * there, so the arc is the binding one.
  *
  * The gaps are the renderer's own measurements, and `progress-strip.tsx`
  * reads them from here instead of naming them again. One source keeps the two
@@ -379,7 +384,7 @@ export type StripBudget = {
  * to be obeyed for the floor to stay true.
  */
 export const STRIP_BUDGET: StripBudget = {
-  stripWidthPx: 280,
+  stripWidthPx: 264,
   minCellWidthPx: 4,
   barGapPx: 6,
   podRunGapPx: 8,

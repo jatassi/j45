@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { PhaseBackdrop } from '@/components/player/phase-backdrop'
 import { ProgressStrip } from '@/components/player/progress-strip'
 import {
+  ARC_INNER_WIDTH,
   CenterStack,
   Participants,
   ReconnectingChip,
@@ -23,6 +24,7 @@ import {
   currentWorkContext,
   displayMillis,
   leaveSessionAtom,
+  phaseLabel,
   progressStrip,
   sendSessionCommandAtom,
   sessionFeedFamily,
@@ -188,7 +190,12 @@ function SessionView({
 
   return (
     <div
-      className="relative flex h-dvh flex-col items-center gap-3 overflow-hidden px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[calc(7.5rem+max(2rem,env(safe-area-inset-bottom)+0.75rem))]"
+      // The bottom reserve is the dock's own height (7.5rem) plus its inset,
+      // plus one `gap-3` on top of both. The gap is what keeps the last thing
+      // in the column — the participants — off the dock: without it the
+      // content box ends exactly where the dock's surface starts, and the
+      // chips sit against it.
+      className="relative flex h-dvh flex-col items-center gap-3 overflow-hidden px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[calc(7.5rem+0.75rem+max(2rem,env(safe-area-inset-bottom)+0.75rem))]"
       style={viewportHeight === undefined ? undefined : { height: viewportHeight }}
       data-testid="session-screen"
       data-phase={phase}
@@ -196,6 +203,8 @@ function SessionView({
       <PhaseBackdrop phase={phase} paused={state.timer._tag === 'paused'} />
       <TopStrip
         workoutName={state.workoutName}
+        phase={phase}
+        phaseText={phaseLabel(state)}
         offline={offline}
         showLeave={state.timer._tag !== 'done'}
         onLeave={onLeave}
@@ -203,9 +212,15 @@ function SessionView({
       {offline && <ReconnectingChip />}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
         <CenterStack state={state} phase={phase} ctx={ctx} count={count} />
-        <ProgressStrip strip={strip} />
-        <Participants participants={state.participants} />
+        <ProgressStrip strip={strip} barsWidth={ARC_INNER_WIDTH} />
       </div>
+      {/*
+        The participants sit at the foot of the column, against the dock,
+        rather than under the strip. They are the one part of the screen a
+        participant reads before the workout starts and hardly again during
+        it, so they give the centre back to the count and the strip.
+      */}
+      <Participants participants={state.participants} />
       <SessionDock state={state} offline={offline} dispatch={dispatch} onLeave={onLeave} />
     </div>
   )

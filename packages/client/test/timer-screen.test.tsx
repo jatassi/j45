@@ -255,7 +255,7 @@ describe('TimerScreen — immersive running layout', () => {
 })
 
 describe('TimerScreen — the arc children contract', () => {
-  it('hands the arc the same two children the live session does — phase label and countdown — and renders the round context line below it', async () => {
+  it('hands the arc the one child the live session does — the countdown — with the phase word above it and the round context line below', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
 
@@ -264,12 +264,19 @@ describe('TimerScreen — the arc children contract', () => {
     fireEvent.click(screen.getByTestId('start-button'))
     await advance(5000)
 
-    // The arc holds the phase label and the countdown, and nothing else —
-    // the same two children the live session passes. The arc opens to a half
-    // circle in later work, and a half circle has no room for a third line.
+    // The arc holds the countdown and nothing else — the same one child the
+    // live session passes. The countdown stands on the chord, where the dome is
+    // widest, so nothing else may take room inside the arc.
     const slot = screen.getByTestId('player-progress-arc-digits')
     const children = [...slot.querySelectorAll<HTMLElement>(':scope > *')]
-    expect(children.map((el) => el.dataset.testid)).toEqual(['timer-phase', 'timer-count'])
+    expect(children.map((el) => el.dataset.testid)).toEqual(['timer-count'])
+
+    // The phase word is outside the arc and before it, as the live session's
+    // eyebrow is.
+    const phase = screen.getByTestId('timer-phase')
+    expect(phase.closest('[data-testid="player-progress-arc"]')).toBeNull()
+    const phaseOrder = screen.getByTestId('player-progress-arc').compareDocumentPosition(phase)
+    expect(phaseOrder & Node.DOCUMENT_POSITION_PRECEDING).not.toBe(0)
 
     // The context line keeps its test id and text. It now sits outside the
     // arc and after it, where the live session puts the Station name.

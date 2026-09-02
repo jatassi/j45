@@ -77,7 +77,25 @@ function Bar({ bar, index }: { readonly bar: ProgressBar; readonly index: number
  * Every rule behind the states lives in `progressStrip`. This draws what it
  * is given and decides nothing.
  */
-export function ProgressStrip({ strip }: { readonly strip: StripModel }) {
+export function ProgressStrip({
+  strip,
+  barsWidth,
+}: {
+  readonly strip: StripModel
+  /**
+   * What the bar row is drawn to, as a CSS length. The live screen passes the
+   * inner span of the **Progress arc**, so the bars start and end under the
+   * inside of the arc's stroke and the two read as one column.
+   *
+   * The dots are not held to it. They wrap, and a round count that needed a
+   * second line would take one sooner in a narrower row for no reading gain.
+   *
+   * Left out, the row takes the whole strip. `STRIP_BUDGET.stripWidthPx` is
+   * the floor the cell collapse divides, and it follows the live screen's
+   * width: a caller that draws the bars narrower than that must move it too.
+   */
+  readonly barsWidth?: string
+}) {
   return (
     <div
       // `max-w-sm` is the width the top strip and the centre stack already
@@ -89,7 +107,7 @@ export function ProgressStrip({ strip }: { readonly strip: StripModel }) {
         // The gap between the bars is the budget's, for the same reason the
         // gaps inside a bar are: the collapse spends it before it divides.
         className="flex w-full flex-nowrap items-center"
-        style={{ gap: `${STRIP_BUDGET.barGapPx}px` }}
+        style={{ gap: `${STRIP_BUDGET.barGapPx}px`, width: barsWidth, maxWidth: '100%' }}
         data-testid="session-strip-bars"
       >
         {strip.bars.map((bar, index) => (

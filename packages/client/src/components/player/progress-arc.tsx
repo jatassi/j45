@@ -27,6 +27,18 @@ const ARC_VIEW_BOX = `0 0 ${ARC_BOX_WIDTH} ${ARC_BOX_HEIGHT}`
 const ARC_STROKE = 15
 
 /**
+ * The share of the arc's width that lies between the inner edges of its
+ * stroke. Half the stroke sits outside the radius, so the stroke's outer edges
+ * fall on the box's own left and right edges, and the inner span is the box
+ * less one whole stroke on each side.
+ *
+ * This is published because the **Progress strip** lines its bars up with it:
+ * the bars are the same reading as the arc, so they read as one column. A
+ * change to the stroke moves them with it.
+ */
+export const ARC_INNER_SHARE = (ARC_BOX_WIDTH - 2 * ARC_STROKE) / ARC_BOX_WIDTH
+
+/**
  * The circle the arc is cut from. Its centre is the middle of the box's bottom
  * edge, so the arc's chord *is* that edge.
  *
@@ -47,11 +59,30 @@ const ARC_GAP_DEGREES = 180
 const ARC_SWEEP_DEGREES = 360 - ARC_GAP_DEGREES
 
 /**
- * The arc length of the sweep. All dash measurements use this length, not the
- * circumference. A whole arc is therefore a whole 180°, and no part of the
+ * How far a round cap reaches past the end of the path it caps, in degrees of
+ * this circle. A round cap is a half disc of the stroke's own radius, so it
+ * covers half a stroke of arc length beyond the path's last point.
+ */
+const ARC_CAP_DEGREES = ((ARC_STROKE / 2 / ARC_RADIUS) * 180) / Math.PI
+
+/**
+ * What the path itself runs: the sweep, less one cap at each end.
+ *
+ * The caps are the arc's ends, and they must be drawn to be round. A path that
+ * ran the whole sweep would put its last point on the chord, and the cap past
+ * it would hang below the box and be clipped square — which is what the ends
+ * used to look like. Giving a cap back at each end lets both draw whole, and
+ * the ink still meets the chord exactly, so the arc spans the same half circle
+ * it did before.
+ */
+const ARC_PATH_DEGREES = ARC_SWEEP_DEGREES - 2 * ARC_CAP_DEGREES
+
+/**
+ * The arc length of the path. All dash measurements use this length, not the
+ * circumference. A whole arc is therefore the whole path, and no part of the
  * dash is left over to draw in the gap.
  */
-export const ARC_SWEEP_LENGTH = 2 * Math.PI * ARC_RADIUS * (ARC_SWEEP_DEGREES / 360)
+export const ARC_SWEEP_LENGTH = 2 * Math.PI * ARC_RADIUS * (ARC_PATH_DEGREES / 360)
 
 /** A point on the arc's circle, `degrees` clockwise from the top of the box. */
 function arcPoint(degrees: number): string {
@@ -62,16 +93,23 @@ function arcPoint(degrees: number): string {
 }
 
 /**
- * The sweep, as one arc command. It starts at the left end of the chord. It
- * runs clockwise, the direction the countdown has always depleted in, over the
- * top and down to the right end of the chord. The track and the arc both use
- * this path. A track drawn as a closed circle behind the sweep would make the
- * sweep look broken.
+ * The sweep, as one arc command. It starts near the right end of the chord and
+ * runs anticlockwise, over the top and down to the left end. The track and the
+ * arc both use this path. A track drawn as a closed circle behind the sweep
+ * would make the sweep look broken.
+ *
+ * Each end stops one cap short of the chord, and the round cap covers the rest
+ * — see {@link ARC_PATH_DEGREES}. Both ends of the sweep are therefore round at
+ * the stroke's own radius, which is the radius the retracting end already had.
+ *
+ * The start of the path is the end the sweep holds on to. The dash retracts
+ * towards it, so the countdown empties from the left and the ink that is left
+ * gathers on the right.
  */
 const ARC_SWEEP_PATH = [
-  `M ${arcPoint(180 + ARC_GAP_DEGREES / 2)}`,
-  `A ${ARC_RADIUS} ${ARC_RADIUS} 0 ${ARC_SWEEP_DEGREES > 180 ? 1 : 0} 1`,
-  arcPoint(180 - ARC_GAP_DEGREES / 2),
+  `M ${arcPoint(180 - ARC_GAP_DEGREES / 2 - ARC_CAP_DEGREES)}`,
+  `A ${ARC_RADIUS} ${ARC_RADIUS} 0 ${ARC_PATH_DEGREES > 180 ? 1 : 0} 0`,
+  arcPoint(180 + ARC_GAP_DEGREES / 2 + ARC_CAP_DEGREES),
 ].join(' ')
 
 /**
@@ -98,9 +136,10 @@ export type ProgressArcProps = {
    */
   dirtyValue?: string | number
   /**
-   * The content on the arc's chord. Pass **two** elements: the phase label,
-   * then the countdown digits. Both player screens pass this same shape.
-   * Anything else a screen must say goes below the arc, not inside it.
+   * The content on the arc's chord: the countdown digits, and nothing else.
+   * Both player screens pass this same shape. Everything else a screen says —
+   * the phase word above, the Station name or round below — sits outside the
+   * arc, so the arc holds one thing and the chord carries only the count.
    *
    * Mark the element that carries the countdown with `data-arc-digits`. That
    * mark does two things: the countdown is the element centred on the chord,
@@ -261,28 +300,18 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
 /**
  * The immersive centrepiece: a phase-tinted SVG half circle that depletes
  * across the current segment via `stroke-dashoffset` (driven purely from
- * `fraction` — no timers of its own), with the `children` two-element contract
- * (the phase label and the countdown digits) sitting on its chord. The arc
- * sweeps 180° and leaves the whole bottom half open, so the digits overflow
- * below the chord into space nothing encloses.
+ * `fraction` — no timers of its own), with `children` — the countdown digits —
+ * standing on its chord. The arc sweeps 180° and leaves the whole bottom half
+ * open.
  *
- * The children sit in a column whose bottom edge is the chord. The countdown
- * takes half its own height off its bottom margin, so its box hangs half a
- * height past that edge: half of it is inside the arc and half is below, in
- * the open, with its centre on the chord.
+ * The countdown sits **inside** the arc, not across it. The column's bottom
+ * edge is the chord, and the countdown takes no offset off that edge, so the
+ * countdown's foot rests on the chord and the whole of it is under the dome.
  *
- * A margin, not a transform. Both put the countdown in the same place, but a
- * transform leaves the layout behind: the column would still be a whole
- * countdown tall, and the label above it would sit a whole countdown clear of
- * the chord. At the sizes the type scale now reaches, that puts the label
- * outside the arc altogether. The margin moves the layout with it, so the
- * label stays where it belongs — inside the arc, above the countdown's head,
- * and clear of the stroke — at every size the buckets give.
- *
- * The countdown is the element that carries the margin, not the whole column.
- * A column pulled up by half its own height would carry the label's height
- * into the offset, and the countdown would land below the chord by half of
- * that.
+ * It hung half past the chord before. That put half the count outside the arc
+ * and pushed everything the screen writes below it further down, for no gain:
+ * the dome is at its widest on the chord, so a count that stands on the chord
+ * already has the most room the arc can give it.
  *
  * The digits region registers a dirty-region scene proxy keyed on
  * {@link ProgressArcProps.dirtyValue}.
@@ -323,7 +352,7 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
       <div
         ref={digitsRef}
         data-testid="player-progress-arc-digits"
-        className="absolute inset-x-0 bottom-0 flex flex-col items-center [&>[data-arc-digits]]:mb-[-0.5em]"
+        className="absolute inset-x-0 bottom-0 flex flex-col items-center"
       >
         {children}
       </div>

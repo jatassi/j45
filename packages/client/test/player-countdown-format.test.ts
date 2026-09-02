@@ -64,9 +64,20 @@ describe('countdownArcShare', () => {
   })
 
   it('takes the share of the arc each bucket is given', () => {
-    expect(countdownArcShare('45')).toBe(0.57)
-    expect(countdownArcShare('1:30')).toBe(0.37)
-    expect(countdownArcShare('10:00')).toBe(0.29)
+    expect(countdownArcShare('45')).toBe(0.28)
+    expect(countdownArcShare('1:30')).toBe(0.21)
+    expect(countdownArcShare('10:00')).toBe(0.165)
+  })
+
+  it('never gives a longer countdown a larger share, so the count only grows as time runs out', () => {
+    const ladder = ['9', '45', '1:30', '10:00', '100:00']
+    const shares = ladder.map(countdownArcShare)
+    for (let i = 1; i < shares.length; i++) {
+      expect(shares[i]).toBeLessThanOrEqual(shares[i - 1])
+    }
+    // The one- and two-character bucket is the largest of all of them, which
+    // is what makes the 1:00 boundary a swell rather than a drop.
+    expect(Math.max(...shares)).toBe(countdownArcShare('45'))
   })
 
   // The arc's geometry, which the module does not hold. Its stroke is 15 units
@@ -95,8 +106,10 @@ describe('countdownArcShare', () => {
   it('keeps every bucket inside the arc, with room to breathe', () => {
     for (const countdown of ['9', '45', '1:30', '10:00']) {
       expect(cornerShare(countdown)).toBeLessThanOrEqual(INNER_RADIUS_SHARE)
-      // At least 4% of the radius is left clear, so no bucket grazes the stroke.
-      expect(cornerShare(countdown)).toBeLessThan(INNER_RADIUS_SHARE * 0.96)
+      // Well inside, not merely inside: no bucket reaches even 0.6 of the
+      // radius. The count was pulled back from the stroke on purpose, and a
+      // share that crept out towards it again would fail here.
+      expect(cornerShare(countdown)).toBeLessThan(INNER_RADIUS_SHARE * 0.6)
     }
   })
 
@@ -119,18 +132,19 @@ describe('formatCountdown into countdownArcShare', () => {
   it('swells across 1:00 to 59, and that step is intended', () => {
     expect(formatCountdown(59_001)).toBe('1:00')
     expect(formatCountdown(59_000)).toBe('59')
-    expect(shareAt(59_001)).toBe(0.37)
-    expect(shareAt(59_000)).toBe(0.57)
-    // About 57% taller on entering the last minute — the one step the scale
-    // takes on purpose.
-    expect(shareAt(59_000) / shareAt(59_001)).toBeCloseTo(1.54, 2)
+    expect(shareAt(59_001)).toBe(0.21)
+    expect(shareAt(59_000)).toBe(0.28)
+    // About a third taller on entering the last minute — the one step the
+    // scale takes on purpose, and it must stay a swell.
+    expect(shareAt(59_000) / shareAt(59_001)).toBeCloseTo(1.33, 2)
+    expect(shareAt(59_000)).toBeGreaterThan(shareAt(59_001))
   })
 
   it('shrinks across 9:59 to 10:00, so a long finisher still fits', () => {
     expect(formatCountdown(599_000)).toBe('9:59')
     expect(formatCountdown(600_000)).toBe('10:00')
-    expect(shareAt(599_000)).toBe(0.37)
-    expect(shareAt(600_000)).toBe(0.29)
+    expect(shareAt(599_000)).toBe(0.21)
+    expect(shareAt(600_000)).toBe(0.165)
   })
 
   it('holds one size across 1:00 down to the completion value', () => {
@@ -140,13 +154,13 @@ describe('formatCountdown into countdownArcShare', () => {
     for (let seconds = 0; seconds <= 59; seconds++) {
       shares.add(shareAt(seconds * 1000))
     }
-    expect([...shares]).toEqual([0.57])
+    expect([...shares]).toEqual([0.28])
   })
 })
 
 describe('countdownTypeScale', () => {
   it('writes the share as a length off the arc, never off the viewport', () => {
-    expect(countdownTypeScale('45')).toBe('calc(var(--arc-width) * 0.57)')
+    expect(countdownTypeScale('45')).toBe('calc(var(--arc-width) * 0.28)')
     for (const countdown of ['9', '45', '1:30', '10:00', '100:00']) {
       expect(countdownTypeScale(countdown)).toContain('var(--arc-width)')
       expect(countdownTypeScale(countdown)).not.toMatch(/vw|vh|svh|dvh|lvh/)

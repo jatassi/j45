@@ -48,11 +48,11 @@ export function formatCountdown(remainingMillis: number): string {
  * app. A colon is narrower than a figure: tabular figures make the *figures*
  * one width, and leave the colon its own.
  *
- * These measurements are what make the buckets below necessary. At the size
- * that gives the common case its target on a 390px phone, `12:00` would set
- * about 454px — about 116% of the phone, off both edges. One size for every
- * reachable value would therefore reach only about 1.46 times the old
- * countdown, which misses the point of the change.
+ * These measurements are what make the buckets below necessary. A `Segment`
+ * has no upper bound, so one size for every reachable value would have to be
+ * the size the longest one fits at, and the two-character case — which a
+ * Session shows for most of its running time — would be set far below what its
+ * own arc has room for. The buckets let the common case take the room it has.
  */
 const FIGURE_EM = 0.624
 const COLON_EM = 0.306
@@ -65,32 +65,39 @@ const COLON_EM = 0.306
  * interval, at the moment a Participant watches most, with no phase change
  * behind it. That reads as a fault in the layout.
  *
- * The `1:00` → `59` step *does* change size, by about 57% taller. That is
- * accepted. The block barely changes width, so it reads as the countdown
- * swelling to fill the arc as the last minute starts, and it lands on a
- * boundary the Participant already feels.
+ * **The order of the buckets is the rule they must not break.** The countdown
+ * grows as the time runs out and never the other way, so the two-character
+ * bucket is the largest and the five-character bucket the smallest. A step
+ * that shrank the count on entering the last minute would say the wrong thing
+ * at the moment it is read hardest.
  *
- * Each bucket sits 5% to 8% under what the geometry allows its own widest
- * member. A figure carries 0.742em of ink, and the countdown's centre is on
- * the arc's chord, so the ink reaches 0.371em above the chord and the top
- * corner of it is the point nearest the stroke. That corner must stay inside a
- * circle of radius 135 on the arc's 300-unit box — 0.45 of the arc's width —
- * which is the arc's radius (142.5) less half its stroke (15).
+ * The `1:00` → `59` step is therefore a swell, by about a third. It used to be
+ * about 57%, which set the two-character case so large that it crowded the arc
+ * it sits in. A third is still plainly a swell, and it lands on a boundary the
+ * Participant already feels.
+ *
+ * The shares are set by eye against the arc, and the geometry only bounds
+ * them. A figure carries 0.742em of ink, and the countdown's centre is on the
+ * arc's chord, so the ink reaches 0.371em above the chord and the top corner of
+ * it is the point nearest the stroke. That corner must stay inside a circle of
+ * radius 135 on the arc's 300-unit box — 0.45 of the arc's width — which is the
+ * arc's radius (142.5) less half its stroke (15). Every bucket here sits at
+ * about half of that, which is the room the count was asked to give back.
  * `player-progress-arc.test.tsx` holds that geometry, and
- * `player-countdown-format.test.ts` checks these shares against it; a change
- * to the arc must bring the shares with it.
+ * `player-countdown-format.test.ts` checks these shares against it and against
+ * their order; a change to the arc must bring the shares with it.
  */
 const SHARE_BY_CHARACTERS = new Map<number, number>([
-  [1, 0.57],
-  [2, 0.57],
-  [4, 0.37],
-  [5, 0.29],
+  [1, 0.28],
+  [2, 0.28],
+  [4, 0.21],
+  [5, 0.165],
 ])
 
 /** The largest share the table gives: the one- and two-character bucket. */
-const LARGEST_SHARE = 0.57
+const LARGEST_SHARE = 0.28
 /** The longest countdown the table holds, and the share it takes. */
-const LONGEST_IN_TABLE = { countdown: '10:00', share: 0.29 }
+const LONGEST_IN_TABLE = { countdown: '10:00', share: 0.165 }
 
 /** How wide `countdown` sets, in em, at whatever size it is given. */
 function widthEm(countdown: string): number {

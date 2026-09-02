@@ -7,7 +7,7 @@ import { ArcBox } from '@/components/player/arc-box'
 import { ControlDock } from '@/components/player/control-dock'
 import type { PlayerPhase } from '@/components/player/phase'
 import { PHASE_HUE } from '@/components/player/phase'
-import { ProgressArc } from '@/components/player/progress-arc'
+import { ARC_INNER_SHARE, ProgressArc } from '@/components/player/progress-arc'
 import { RollingDigits } from '@/components/player/rolling-digits'
 import {
   AlertDialog,
@@ -20,13 +20,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  arcFraction,
-  nextWorkStationName,
-  phaseLabel,
-  timerUrgency,
-  type TimerUrgency,
-} from '@/lib/session'
+import { arcFraction, nextWorkStationName, timerUrgency, type TimerUrgency } from '@/lib/session'
 import { cn } from '@/lib/utils'
 import { audioState, unlockAudio } from '@/player/audio'
 import { countdownTypeScale, formatCountdown } from '@/player/countdown-format'
@@ -50,13 +44,23 @@ const URGENCY_DIGIT_COLOR: Record<TimerUrgency | 'none', string> = {
 const ARC_WIDTH = 'min(92vw, 420px)'
 
 /**
+ * The span between the inner edges of the arc's stroke. The **Progress strip**
+ * draws its bars to this, so the bars and the arc read as one column rather
+ * than two widths that nearly agree.
+ */
+export const ARC_INNER_WIDTH = `calc(${ARC_WIDTH} * ${ARC_INNER_SHARE})`
+
+/**
  * The immersive centrepiece: the phase-tinted Progress arc with the huge
- * tabular-nums countdown on the arc's chord and its phase eyebrow above, and
- * the exercise name (plus its optional `detail`, e.g. "10 cal") beneath. The
- * arc depletes from the same interpolated `remainingMillis` the digits show,
- * so a pause freezes both.
+ * tabular-nums countdown on the arc's chord, and the exercise name (plus its
+ * optional `detail`, e.g. "10 cal") beneath. The arc depletes from the same
+ * interpolated `remainingMillis` the digits show, so a pause freezes both.
  *
- * Pod, round and station are not written here. The Progress strip below
+ * The phase word is not written here. It belongs to the {@link TopStrip},
+ * under the workout name: the two together say which workout is running and
+ * where in it, and the centrepiece is left to the count alone.
+ *
+ * Pod, round and station are not written here either. The Progress strip below
  * carries them as marks, which a participant reads more quickly than words.
  */
 export function CenterStack({
@@ -78,23 +82,11 @@ export function CenterStack({
       <ArcBox width={ARC_WIDTH} countSize={countdownTypeScale(digits)}>
         <ProgressArc fraction={fraction} phase={phase} dirtyValue={digits}>
           <span
-            data-testid="session-phase"
-            className="inline-flex items-center gap-2 text-xs font-medium tracking-wide uppercase"
-            style={{ color: PHASE_HUE[phase] }}
-          >
-            <span
-              className="size-2 rounded-full"
-              style={{ backgroundColor: PHASE_HUE[phase] }}
-              aria-hidden="true"
-            />
-            {phaseLabel(state)}
-          </span>
-          <span
             data-testid="session-count"
             data-arc-digits=""
             data-urgency={urgency}
             className={cn(
-              'player-digits mt-1 inline-flex text-[length:var(--count-size)] leading-none font-semibold tabular-nums',
+              'player-digits inline-flex text-[length:var(--count-size)] leading-none font-semibold tabular-nums',
               URGENCY_DIGIT_COLOR[urgency ?? 'none'],
             )}
           >
@@ -310,21 +302,31 @@ export function ReconnectingChip() {
 }
 
 /**
- * The top chrome: rose Leave (left), LIVE eyebrow + workout name (center),
- * audio (right).
+ * The top chrome: rose Leave (left), LIVE eyebrow + workout name + the phase
+ * word (center), audio (right).
  *
- * The eyebrow reads `Offline` while the connection is away, because a screen
- * that kept saying `Live` would be telling the participant something false.
- * It is too quiet to carry the news on its own, which is what the
+ * The connection eyebrow reads `Offline` while the connection is away, because
+ * a screen that kept saying `Live` would be telling the participant something
+ * false. It is too quiet to carry the news on its own, which is what the
  * {@link ReconnectingChip} is for.
+ *
+ * The phase word sits under the workout name because the two answer one
+ * question between them — which workout, and where in it. It carries no dot.
+ * The word is already tinted by phase, so a dot in the same hue repeated the
+ * only thing it could have said.
  */
 export function TopStrip({
   workoutName,
+  phase,
+  phaseText,
   offline,
   showLeave,
   onLeave,
 }: {
   readonly workoutName: string
+  readonly phase: PlayerPhase
+  /** The phase as a word — `Work`, `Rest`, `Paused`, `Done`. */
+  readonly phaseText: string
   readonly offline: boolean
   readonly showLeave: boolean
   readonly onLeave: Leave
@@ -341,6 +343,13 @@ export function TopStrip({
           {offline ? 'Offline' : 'Live'}
         </p>
         <p className="font-heading text-sm font-bold tracking-tight">{workoutName}</p>
+        <p
+          data-testid="session-phase"
+          className="text-xs font-medium tracking-wide uppercase"
+          style={{ color: PHASE_HUE[phase] }}
+        >
+          {phaseText}
+        </p>
       </div>
       <AudioIndicator />
     </div>
