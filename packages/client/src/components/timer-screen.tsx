@@ -363,7 +363,13 @@ function RunningView(
           <ContextLine context={p.context} />
         </div>
       </div>
-      <div className="relative z-20">
+      {/* Static, not `relative`: the dock inside is `absolute bottom-0`, and it
+          must anchor to the shell — the viewport the header leaves — not to
+          this wrapper. A positioned wrapper only lands the dock on the
+          viewport's bottom edge while the content above it happens to fit,
+          and a short landscape screen is where it stops fitting. `z-20` needs
+          no `position`: it applies to a flex item as it stands. */}
+      <div className="z-20">
         <RunControls state={p.state} onPause={p.onPause} onResume={p.onResume} onReset={p.onReset} />
       </div>
     </>
@@ -383,16 +389,26 @@ export function TimerScreen() {
     refreshAudio()
   }
   const vm = viewModel(timer, isIdle ? inputs.readSettings() : timer.session)
+  // Both shells take `flex-1` of the push viewport layout's `h-dvh` column
+  // (`router.tsx`), so each one is the viewport less the `PushHeader` above
+  // it — the browser subtracts that height, and neither shell has to know
+  // it. Without this the shell started a header's height down the page and
+  // ran a header's height past the fold, which left the dock out of reach.
+  // The layout unit is dvh, not svh: the immersive shell (and the dock
+  // anchored to its bottom) must track iOS Safari's toolbar as it
+  // expands/collapses.
+  //
+  // A definite height, not a minimum. The immersive shell hides its
+  // overflow, so a column that grew past the viewport did not scroll — it
+  // was cut off, and the dock went with it. `flex-1` of a fixed column is
+  // definite, so the column shrinks the arc instead, which is what keeps
+  // landscape on screen.
+  //
+  // Each shell owns what does not fit: the immersive shell clips, the idle
+  // form scrolls to keep every field and Start reachable.
   const shell = isIdle
-    ? 'relative flex min-h-svh flex-col items-center gap-6 p-6'
-    : // dvh, not svh: the immersive shell (and the dock anchored to its
-      // bottom) must track iOS Safari's toolbar as it expands/collapses.
-      //
-      // A height, not a minimum. The shell hides its overflow, so a column
-      // that grew past the viewport did not scroll — it was cut off, and the
-      // dock went with it. A fixed height instead makes the column shrink the
-      // arc, which is what keeps landscape on screen.
-      'relative flex h-dvh flex-col overflow-hidden'
+    ? 'relative flex flex-1 flex-col items-center gap-6 overflow-y-auto p-6'
+    : 'relative flex flex-1 flex-col overflow-hidden'
   return (
     <div className={shell} data-testid="timer-screen">
       {isIdle ? (

@@ -248,6 +248,58 @@ function instrumentWakeLock(): void {
 }
 
 /**
+ * Asserts the immersive run view fits the viewport at `size`: the shell ends
+ * on the viewport's bottom edge, and the control dock anchored to that edge
+ * ends above the fold.
+ *
+ * `/timer` is a push route (`router.tsx`), so a `PushHeader` sits above the
+ * run shell. The shell must therefore be the viewport *less* that header —
+ * when it took a whole viewport height of its own it started a header's height
+ * down the page and ran a header's height past the fold, and Pause / Reset came
+ * to rest below it. Both orientations, because the header height is constant
+ * and the short side is where it hurts.
+ *
+ * The shell's own box is the measurement, not `document.scrollHeight`: the
+ * glass backdrop (`glass/backdrop.ts`) is an absolutely positioned element
+ * sized *from* `scrollHeight`, so that number latches at the largest viewport
+ * the page has seen and says nothing about this one.
+ *
+ * Restores the caller's viewport, the same way
+ * {@link expectArcAndItsContentFillThePhone} does.
+ */
+async function expectRunViewFitsViewport(
+  page: Page,
+  size: { readonly width: number; readonly height: number },
+): Promise<void> {
+  const where = `at ${size.width}x${size.height}`
+  const before = page.viewportSize()
+  await page.setViewportSize(size)
+  try {
+    await page.evaluate(() => {
+      globalThis.scrollTo(0, 0)
+    })
+
+    const shell = await page.getByTestId('timer-screen').boundingBox()
+    const dock = await page.getByTestId('player-control-dock-surface').boundingBox()
+    if (shell === null || dock === null) {
+      throw new Error(`the run shell or its control dock has no layout box ${where}`)
+    }
+
+    // Below the header…
+    expect(shell.y, `run shell top ${where}`).toBeGreaterThan(0)
+    // …and still ending on the viewport's bottom edge, not past it. Sub-pixel
+    // tolerance: box geometry is fractional under a device pixel ratio.
+    expect(shell.y + shell.height, `run shell bottom ${where}`).toBeCloseTo(size.height, 0)
+    // So the dock anchored to that edge needs no scroll to reach.
+    expect(dock.y + dock.height, `dock bottom ${where}`).toBeLessThanOrEqual(size.height)
+  } finally {
+    if (before !== null) {
+      await page.setViewportSize(before)
+    }
+  }
+}
+
+/**
  * Exercises the `/timer` screen (`timer-screen.tsx`) against the real built
  * client + server `global-setup.ts` boots: nav reachability from Home via
  * `home-timer-link`, idle composition from the ui/ field kit, a full short run
@@ -301,6 +353,10 @@ test.describe('timer (chromium + webkit)', () => {
       await expect(page.getByTestId('player-progress-arc')).toBeVisible()
       await expect(page.getByTestId('player-control-dock')).toBeVisible()
 
+      // Pause / Reset must be reachable without a scroll on a phone. Before
+      // the arc checks below, so a failure in those never hides this one.
+      await expectRunViewFitsViewport(page, { width: 390, height: 844 })
+      await expectRunViewFitsViewport(page, { width: 844, height: 390 })
       await expectArcAndItsContentFillThePhone(page)
 
       await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 8000 })
