@@ -293,6 +293,40 @@
   }
 }
 
+/* Immersive player: the arc draws itself closed when the workout ends. At
+   `done` the depleting sweep is empty, so the centrepiece would otherwise
+   be a bare track — the one rare, terminal moment on this screen where the
+   delight budget is worth spending. The fill grows from the right end of
+   the chord over the top to the left, the direction the depleting ink
+   gathers, and a short bright dash rides its growing tip and leaves at the
+   far end. Both lengths arrive as custom properties from the component, so
+   the geometry stays in one place. 700ms is past the UI budget on purpose:
+   nothing waits on this. */
+.player-arc-complete {
+  stroke-dasharray: var(--arc-sweep-length);
+  animation: player-arc-complete 700ms var(--ease-player) forwards;
+}
+.player-arc-sheen {
+  stroke-dasharray: 40 var(--arc-sweep-length);
+  animation: player-arc-sheen 700ms var(--ease-player) forwards;
+}
+@keyframes player-arc-complete {
+  from {
+    stroke-dashoffset: var(--arc-sweep-length);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes player-arc-sheen {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: var(--arc-sweep-length-negative);
+  }
+}
+
 /* Immersive player: a label too long for its slot scrolls instead of losing its
    tail to an ellipsis — the marquee Apple uses for overflowing UI strings. It
    rests at each end, then travels back the way it came (`alternate`), so the
@@ -368,6 +402,17 @@
   .player-press:active,
   .player-press-lg:active {
     transform: scale(0.98);
+  }
+  /* The completion mark stays; only its travel goes. */
+  .player-arc-complete {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  /* Hidden, not merely frozen: a stalled highlight would sit on the finished
+     arc as a bright wedge. */
+  .player-arc-sheen {
+    animation: none;
+    display: none;
   }
 }
 

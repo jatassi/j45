@@ -217,6 +217,35 @@ describe('ProgressArc — the 180° sweep', () => {
       expect(shape.getAttribute('stroke-linecap')).toBe('round')
     }
   })
+
+  it('draws the closing arc and its sheen only when the workout is done', () => {
+    vi.spyOn(sceneRegistry, 'register').mockReturnValue(handle())
+
+    render(
+      <ProgressArc fraction={0} phase="work">
+        <span>0:00</span>
+      </ProgressArc>,
+    )
+    expect(screen.queryByTestId('player-progress-arc-complete')).toBeNull()
+    cleanup()
+
+    render(
+      <ProgressArc fraction={0} phase="done">
+        <span>0:00</span>
+      </ProgressArc>,
+    )
+    // The track, the (empty) sweep, the closing fill and its sheen — all
+    // on the one path, so the geometry has a single source.
+    const drawn = shapes()
+    expect(drawn).toHaveLength(4)
+    const sweep = screen.getByTestId('player-progress-arc-sweep').getAttribute('d')
+    for (const shape of drawn) {
+      expect(shape.getAttribute('d')).toBe(sweep)
+      expect(Number(shape.getAttribute('stroke-width'))).toBe(
+        Number(screen.getByTestId('player-progress-arc-sweep').getAttribute('stroke-width')),
+      )
+    }
+  })
 })
 
 describe('ProgressArc — depleting against the sweep length', () => {
