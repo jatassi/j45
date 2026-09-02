@@ -140,7 +140,10 @@
    what made every Work→Rest boundary cut in one frame. Same device as
    `--digit-color` below. The initial value is the literal of `--hue-cardio`
    — the `ready` phase the player starts in — because `initial-value` may
-   not contain `var()`; keep the two in step. */
+   not contain `var()`. `player-phase-backdrop.test.tsx` compares the two as
+   text and fails if they drift: nothing at runtime can catch it, because
+   jsdom does not implement `@property`, and drift shows only as a one-frame
+   flash of a stale colour on the first paint of a workout. */
 @property --phase-hue {
   syntax: '<color>';
   inherits: true;
