@@ -29,7 +29,8 @@ export type PhaseBackdropProps = {
  * breathing pulse and its `prefers-reduced-motion` suppression live in
  * `index.css` on `.player-phase-backdrop`. The element also registers as a
  * scene proxy (via {@link useSceneSurface}), so glass surfaces stacked above it
- * refract the current phase tint. `paused` desaturates the tint in place.
+ * refract the current phase tint. `paused` desaturates the tint in place, over
+ * `--duration-enter`.
  */
 export function PhaseBackdrop(props: PhaseBackdropProps): JSX.Element {
   const { phase, paused = false } = props
@@ -42,6 +43,12 @@ export function PhaseBackdrop(props: PhaseBackdropProps): JSX.Element {
   // instead of the muted tint actually on screen.
   useSceneSurface(ref, { color: withAlpha(resolvePhaseHue(phase), 0.25), z: -50 })
 
+  // No filter while running. `none` ↔ `saturate(0.35)` interpolates on its
+  // own — Filter Effects 1 replaces a `none` list with the identity function
+  // of the other list, so the pause transition needs no identity filter to
+  // hold on to. Writing `saturate(1)` here instead would put a filter on the
+  // largest layer of the one screen that re-renders every frame, for the
+  // whole of a workout, to buy nothing.
   const style: CSSProperties & Record<'--phase-hue', string> = {
     '--phase-hue': PHASE_HUE[phase],
     ...(paused ? { filter: 'saturate(0.35)' } : {}),

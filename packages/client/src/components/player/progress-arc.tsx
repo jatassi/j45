@@ -1,4 +1,4 @@
-import type { JSX, ReactNode, RefObject } from 'react'
+import type { CSSProperties, JSX, ReactNode, RefObject } from 'react'
 import { useEffect, useRef } from 'react'
 
 import type { DocRect, SceneProxyHandle } from '@/glass/scene'
@@ -301,6 +301,42 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
 }
 
 /**
+ * The two done-only paths: a one-shot fill that draws the arc closed in the
+ * done hue, and a bright dash that rides its growing tip. Both reuse the same
+ * geometry as the sweep and track — see {@link ARC_SWEEP_PATH} — so a single
+ * `d` still describes every shape in the svg. Renders nothing outside `done`.
+ */
+function ArcCompletion({ phase }: { phase: PlayerPhase }): JSX.Element | null {
+  if (phase !== 'done') {
+    return null
+  }
+  return (
+    <>
+      <path
+        data-testid="player-progress-arc-complete"
+        className="player-arc-complete"
+        d={ARC_SWEEP_PATH}
+        fill="none"
+        stroke={PHASE_HUE.done}
+        strokeWidth={ARC_STROKE}
+        strokeLinecap="round"
+        pathLength={ARC_SWEEP_LENGTH}
+      />
+      <path
+        data-testid="player-progress-arc-sheen"
+        className="player-arc-sheen"
+        d={ARC_SWEEP_PATH}
+        fill="none"
+        stroke="rgb(255 255 255 / 0.55)"
+        strokeWidth={ARC_STROKE}
+        strokeLinecap="round"
+        pathLength={ARC_SWEEP_LENGTH}
+      />
+    </>
+  )
+}
+
+/**
  * The immersive centrepiece: a phase-tinted SVG half circle that depletes
  * across the current segment via `stroke-dashoffset` (driven purely from
  * `fraction` — no timers of its own), with `children` — the countdown digits —
@@ -318,6 +354,10 @@ function useDigitProxy(ref: RefObject<HTMLElement | null>, value: string): void 
  *
  * The digits region registers a dirty-region scene proxy keyed on
  * {@link ProgressArcProps.dirtyValue}.
+ *
+ * At `done` the sweep is empty, so the arc draws itself closed instead: a
+ * one-shot fill in the done hue with a bright dash riding its growing tip.
+ * Both player screens share it — the manual timer ends the same way.
  */
 export function ProgressArc(props: ProgressArcProps): JSX.Element {
   const { fraction, phase, dirtyValue, children } = props
@@ -331,7 +371,17 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
         flattening it, and gets 447.740 where the geometry gives 447.677.
         Declaring the length makes the dash values exact instead of near.
       */}
-      <svg viewBox={ARC_VIEW_BOX} className="size-full" aria-hidden="true">
+      <svg
+        viewBox={ARC_VIEW_BOX}
+        className="size-full"
+        aria-hidden="true"
+        style={
+          {
+            '--arc-sweep-length': String(ARC_SWEEP_LENGTH),
+            '--arc-sweep-length-negative': String(-ARC_SWEEP_LENGTH),
+          } as CSSProperties
+        }
+      >
         <path
           d={ARC_SWEEP_PATH}
           fill="none"
@@ -351,6 +401,7 @@ export function ProgressArc(props: ProgressArcProps): JSX.Element {
           strokeDasharray={ARC_SWEEP_LENGTH}
           strokeDashoffset={arcDashOffset(fraction)}
         />
+        <ArcCompletion phase={phase} />
       </svg>
       <div
         ref={digitsRef}

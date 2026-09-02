@@ -56,6 +56,9 @@
   --duration-state: 150ms;
   --duration-enter: 250ms;
   --ease-out: ease-out;
+  /* The player's strong ease-out, already hand-written at .player-digit-in
+     and in ui/drawer.tsx. Tokenised so the curve has one definition. */
+  --ease-player: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root {
@@ -114,6 +117,9 @@
   --duration-state: 150ms;
   --duration-enter: 250ms;
   --ease-out: ease-out;
+  /* The player's strong ease-out, already hand-written at .player-digit-in
+     and in ui/drawer.tsx. Tokenised so the curve has one definition. */
+  --ease-player: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Eyebrow caps — uppercase, wide tracking, bold (the .proto-eyebrow idiom). */
@@ -127,6 +133,21 @@
 @utility text-display {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+}
+
+/* `--phase-hue` is registered so the tint can interpolate. Unregistered it
+   is a token stream and a transition on it is silently dropped, which is
+   what made every Work→Rest boundary cut in one frame. Same device as
+   `--digit-color` below. The initial value is the literal of `--hue-cardio`
+   — the `ready` phase the player starts in — because `initial-value` may
+   not contain `var()`. `player-phase-backdrop.test.tsx` compares the two as
+   text and fails if they drift: nothing at runtime can catch it, because
+   jsdom does not implement `@property`, and drift shows only as a one-frame
+   flash of a stale colour on the first paint of a workout. */
+@property --phase-hue {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: oklch(0.754 0.139 232.661);
 }
 
 /* Immersive player: full-bleed radial phase tint that breathes slowly. The
@@ -152,6 +173,13 @@
       color-mix(in oklab, var(--phase-hue) 5%, transparent)
     );
   animation: player-phase-pulse 5s ease-in-out infinite alternate;
+  /* Pause desaturates the whole screen. Without this it cuts in one
+     frame — the only whole-screen change a pause makes. The hue is
+     registered above so it can cross-fade too — otherwise every
+     Work→Rest boundary cuts the tint in one frame. */
+  transition:
+    filter var(--duration-enter) var(--ease-player),
+    --phase-hue var(--duration-enter) var(--ease-player);
 }
 @keyframes player-phase-pulse {
   from {
@@ -198,10 +226,10 @@
    direction of a countdown. Kept subtle: partial travel with a crossfade,
    not a full-height mechanical roll. */
 .player-digit-in {
-  animation: player-digit-in 450ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: player-digit-in 450ms var(--ease-player);
 }
 .player-digit-out {
-  animation: player-digit-out 450ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: player-digit-out 450ms var(--ease-player) forwards;
 }
 @keyframes player-digit-in {
   from {
@@ -214,6 +242,22 @@
     transform: translateY(45%);
     opacity: 0;
   }
+}
+
+/* Immersive player: the hand-rolled round controls (Prev, Pause·Resume,
+   Skip, Leave, Audio) depress on touch. A session command travels to the
+   server and back before the screen changes, so without this the tap has
+   no acknowledgement at all. `-lg` is the >=64px primary, which carries a
+   little more travel because the target is bigger. */
+.player-press,
+.player-press-lg {
+  transition: transform var(--duration-state) var(--ease-player);
+}
+.player-press:active {
+  transform: scale(0.97);
+}
+.player-press-lg:active {
+  transform: scale(0.95);
 }
 
 /* Immersive player: the active progress dot pings — an expanding, fading
@@ -249,6 +293,40 @@
   }
   50% {
     background-color: var(--dot-peak);
+  }
+}
+
+/* Immersive player: the arc draws itself closed when the workout ends. At
+   `done` the depleting sweep is empty, so the centrepiece would otherwise
+   be a bare track — the one rare, terminal moment on this screen where the
+   delight budget is worth spending. The fill grows from the right end of
+   the chord over the top to the left, the direction the depleting ink
+   gathers, and a short bright dash rides its growing tip and leaves at the
+   far end. Both lengths arrive as custom properties from the component, so
+   the geometry stays in one place. 700ms is past the UI budget on purpose:
+   nothing waits on this. */
+.player-arc-complete {
+  stroke-dasharray: var(--arc-sweep-length);
+  animation: player-arc-complete 700ms var(--ease-player) forwards;
+}
+.player-arc-sheen {
+  stroke-dasharray: 40 var(--arc-sweep-length);
+  animation: player-arc-sheen 700ms var(--ease-player) forwards;
+}
+@keyframes player-arc-complete {
+  from {
+    stroke-dashoffset: var(--arc-sweep-length);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes player-arc-sheen {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: var(--arc-sweep-length-negative);
   }
 }
 
@@ -322,6 +400,22 @@
   .player-marquee-track {
     animation: none;
     will-change: auto;
+  }
+  /* Kept, not removed: this is touch acknowledgement, not decoration. */
+  .player-press:active,
+  .player-press-lg:active {
+    transform: scale(0.98);
+  }
+  /* The completion mark stays; only its travel goes. */
+  .player-arc-complete {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  /* Hidden, not merely frozen: a stalled highlight would sit on the finished
+     arc as a bright wedge. */
+  .player-arc-sheen {
+    animation: none;
+    display: none;
   }
 }
 

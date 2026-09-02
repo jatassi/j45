@@ -170,8 +170,8 @@ function RoundButton({
       className={cn(
         'flex items-center justify-center rounded-full disabled:opacity-40',
         primary
-          ? 'size-16 bg-primary text-primary-foreground shadow-[0_10px_40px_-8px_var(--primary)]'
-          : 'size-12 bg-foreground/5 text-foreground/70 ring-1 ring-border',
+          ? 'player-press-lg size-16 bg-primary text-primary-foreground shadow-[0_10px_40px_-8px_var(--primary)]'
+          : 'player-press size-12 bg-foreground/5 text-foreground/70 ring-1 ring-border',
       )}
     >
       <Icon className={primary ? 'size-7' : 'size-5'} />
@@ -229,7 +229,7 @@ function LeaveDialog({ onLeave }: { readonly onLeave: Leave }) {
       <AlertDialogTrigger
         data-testid="session-leave"
         aria-label="Leave workout"
-        className="flex size-11 items-center justify-center rounded-full bg-destructive/15 text-destructive ring-1 ring-destructive/30"
+        className="player-press flex size-11 items-center justify-center rounded-full bg-destructive/15 text-destructive ring-1 ring-destructive/30"
       >
         <LogOut className="size-5" />
       </AlertDialogTrigger>
@@ -269,7 +269,7 @@ function AudioIndicator() {
         unlockAudio()
         refresh()
       }}
-      className="flex size-11 items-center justify-center rounded-full text-muted-foreground"
+      className="player-press flex size-11 items-center justify-center rounded-full text-muted-foreground"
     >
       {audio === 'on' ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
     </button>
