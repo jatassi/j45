@@ -88,7 +88,8 @@ let pushTitle = ''
 
 /**
  * Pathless push-layout group: sticky `PushHeader` + page `Outlet`, no
- * `TabBar`. Full-screen / account surfaces that leave the tab IA.
+ * `TabBar`. Account surfaces that leave the tab IA and simply flow — the
+ * document scrolls under a header that sticks to the top of it.
  * Editor leaves live under `pushHeaderlessRoute` so they can own their
  * own header (or stay interim-headerless) without the shared chrome.
  */
@@ -100,6 +101,36 @@ const pushLayoutRoute = createRoute({
       <PushHeader title={pushTitle} />
       <Outlet />
     </>
+  ),
+})
+
+/**
+ * Pathless push layout for a leaf that owns exactly one viewport: the same
+ * `PushHeader` over an `h-dvh` flex column. The header is real layout, so a
+ * leaf that takes `flex-1` gets the viewport *less* the header — the browser
+ * subtracts that height and no screen has to know it — and the leaf's bottom
+ * edge is the viewport's. That is what a bottom-anchored control needs: the
+ * dock on `/timer`'s run view is `absolute bottom-0` inside the leaf.
+ *
+ * `h-dvh`, not `min-h-dvh`: a minimum is only a floor, so a leaf whose
+ * content is taller than the viewport would grow the column and push its own
+ * bottom edge back below the fold (a landscape phone does exactly this).
+ * `dvh`, not `svh` or `lvh`, so the column — and anything anchored to the
+ * leaf's bottom edge — tracks iOS Safari's toolbar as it expands and
+ * collapses. The leaf owns what happens to content that does not fit: the
+ * run view clips it, the idle form scrolls it.
+ *
+ * `pushLayoutRoute` above keeps the plain flowing layout, so `/account` is
+ * untouched by this and the document stays its scroll container.
+ */
+const pushViewportRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'push-viewport',
+  component: () => (
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <PushHeader title={pushTitle} />
+      <Outlet />
+    </div>
   ),
 })
 
@@ -203,9 +234,14 @@ const sessionRoute = createRoute({
   component: SessionScreen,
 })
 
-/** `/timer` — the manual interval timer, run entirely client-side. */
+/**
+ * `/timer` — the manual interval timer, run entirely client-side. Under
+ * `pushViewportRoute`, not `pushLayoutRoute`: the run view's `ControlDock`
+ * is anchored to the bottom of the screen, so the screen has to be exactly
+ * the viewport the header leaves.
+ */
 const timerRoute = createRoute({
-  getParentRoute: () => pushLayoutRoute,
+  getParentRoute: () => pushViewportRoute,
   path: '/timer',
   beforeLoad: () => {
     setPushTitle('Timer')
@@ -320,7 +356,8 @@ const routeTree = rootRoute.addChildren([
     // higher, so `new` is never captured as a `$workoutId`.
     workoutDetailRoute,
   ]),
-  pushLayoutRoute.addChildren([timerRoute, accountRoute]),
+  pushLayoutRoute.addChildren([accountRoute]),
+  pushViewportRoute.addChildren([timerRoute]),
   pushHeaderlessRoute.addChildren([
     sessionRoute,
     workoutNewRoute,

@@ -143,8 +143,8 @@ function grandparentLayoutId(fullPath: string): string | undefined {
 /**
  * The editor leaves own their header in a later task, and the live session
  * player is a chrome-free immersive screen — both parent under the headerless
- * pathless group, never the push layout with `PushHeader`. Other push leaves
- * stay under `/push`.
+ * pathless group, never a push layout with `PushHeader`. Other push leaves
+ * stay under one of the two headed groups.
  */
 describe('router.tsx headerless editor group', () => {
   const headerlessFullPaths = [
@@ -154,22 +154,35 @@ describe('router.tsx headerless editor group', () => {
     '/session/$sessionId',
   ] as const
 
-  const headedPushFullPaths = ['/timer', '/account'] as const
+  /** Both pathless groups that render `PushHeader` above their leaf. */
+  const headedPushLayoutIds = ['/push', '/push-viewport'] as const
 
-  it('parents editor and session leaves under a headerless group, not the push layout with PushHeader', () => {
+  /**
+   * `/timer` parents under the viewport-sized group: its run view anchors the
+   * `ControlDock` to the bottom of the screen, so the screen has to be exactly
+   * the viewport the header leaves. `/account` only flows, so it keeps the
+   * plain headed group and the document as its scroll container.
+   */
+  const headedPushParents = [
+    ['/timer', '/push-viewport'],
+    ['/account', '/push'],
+  ] as const
+
+  it('parents editor and session leaves under a headerless group, not a push layout with PushHeader', () => {
     for (const fullPath of headerlessFullPaths) {
       const parentId = parentLayoutId(fullPath)
       expect(parentId, `missing route for ${fullPath}`).toBeDefined()
-      // Must not sit under the pathless push layout that renders PushHeader.
-      expect(parentId).not.toBe('/push')
+      // Must not sit under either pathless push layout that renders PushHeader.
+      expect(headedPushLayoutIds).not.toContain(parentId)
       // Still a pathless group under root (no tab layout either).
       expect(grandparentLayoutId(fullPath)).toBe('__root__')
     }
   })
 
-  it('keeps other push leaves under the headed push layout', () => {
-    for (const fullPath of headedPushFullPaths) {
-      expect(parentLayoutId(fullPath), `missing route for ${fullPath}`).toBe('/push')
+  it('keeps other push leaves under the headed push layout that suits them', () => {
+    for (const [fullPath, layoutId] of headedPushParents) {
+      expect(parentLayoutId(fullPath), `missing route for ${fullPath}`).toBe(layoutId)
+      expect(grandparentLayoutId(fullPath)).toBe('__root__')
     }
   })
 })
