@@ -135,6 +135,18 @@
   letter-spacing: -0.02em;
 }
 
+/* `--phase-hue` is registered so the tint can interpolate. Unregistered it
+   is a token stream and a transition on it is silently dropped, which is
+   what made every Work→Rest boundary cut in one frame. Same device as
+   `--digit-color` below. The initial value is the literal of `--hue-cardio`
+   — the `ready` phase the player starts in — because `initial-value` may
+   not contain `var()`; keep the two in step. */
+@property --phase-hue {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: oklch(0.754 0.139 232.661);
+}
+
 /* Immersive player: full-bleed radial phase tint that breathes slowly. The
    phase hue arrives as `--phase-hue` (set per-render from the PlayerPhase map),
    so this stays palette-agnostic. CSS-only, GPU-cheap, and silenced under
@@ -159,8 +171,12 @@
     );
   animation: player-phase-pulse 5s ease-in-out infinite alternate;
   /* Pause desaturates the whole screen. Without this it cuts in one
-     frame — the only whole-screen change a pause makes. */
-  transition: filter var(--duration-enter) var(--ease-player);
+     frame — the only whole-screen change a pause makes. The hue is
+     registered above so it can cross-fade too — otherwise every
+     Work→Rest boundary cuts the tint in one frame. */
+  transition:
+    filter var(--duration-enter) var(--ease-player),
+    --phase-hue var(--duration-enter) var(--ease-player);
 }
 @keyframes player-phase-pulse {
   from {
