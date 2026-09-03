@@ -1,48 +1,24 @@
 import { describe, expect, it } from '@effect/vitest'
 import { Equipment, Exercise, MuscleGroup } from '@j45/domain'
-import * as Arr from 'effect/Array'
 import * as Effect from 'effect/Effect'
-import * as Order from 'effect/Order'
 import * as Schema from 'effect/Schema'
 
 import { seedExercises } from '../../src/library/seed-exercises.js'
-import { preMigrationSeed, type PreMigrationExercise } from './fixtures/seed-exercises-pre-0008.js'
-
-/** `Arr.sort`, because `Array#toSorted` needs `lib: es2023`. */
-const sorted = (names: Iterable<string>) => Arr.sort([...names], Order.string)
 
 /**
- * For each muscle group, the names of the strength exercises that have it.
- *
- * The function skips a group that is not in the vocabulary. That group is the
- * one permitted difference between the two catalogs. The function reads the
- * current literal, and not a list of removed values. Thus it does not name a
- * value that has left the vocabulary.
+ * The smallest station count any template asks for
+ * (`packages/domain/src/templates.ts`). A strength Emphasis on one group must
+ * clear it with every implement allowed, or the request is infeasible at
+ * every duration.
  */
-const strengthNamesByGroup = (catalog: readonly PreMigrationExercise[]) => {
-  const vocabulary = new Set<string>(MuscleGroup.literals)
-  const byGroup = new Map<string, ReadonlySet<string>>()
-  for (const seed of catalog) {
-    if (seed.modality !== 'strength') {
-      continue
-    }
-    for (const group of seed.muscleGroups) {
-      if (!vocabulary.has(group)) {
-        continue
-      }
-      byGroup.set(group, new Set([...(byGroup.get(group) ?? []), seed.name]))
-    }
-  }
-  return byGroup
-}
+const SMALLEST_TEMPLATE_STATIONS = 4
 
 /**
- * The curation goldens from `docs/designs/exercise-library/design.md`: the
- * frozen seed catalog — derived from the 12 seed workouts' 104 station texts
- * under the split/collapse/alternative rules — must decode as `Exercise`,
- * carry unique case-insensitive names, number at least 80, and exercise every
- * `MuscleGroup` and `Equipment` literal so the closed vocabularies earn their
- * members.
+ * The curation goldens for the catalog adopted by ADR-0004 and documented in
+ * `docs/research/exercise-catalog.md`: the frozen seed must decode as
+ * `Exercise`, carry unique case-insensitive names, hold one movement per
+ * entry, exercise every `MuscleGroup` and `Equipment` literal, and leave no
+ * single-group strength Emphasis below the smallest template.
  */
 describe('seed exercises', () => {
   it.effect('every entry decodes as an Exercise', () =>
@@ -54,13 +30,36 @@ describe('seed exercises', () => {
     }),
   )
 
+  it('no entry carries a field the schema does not declare', () => {
+    const declared = new Set(['name', 'detail', 'modality', 'muscleGroups', 'equipment'])
+    for (const seed of seedExercises) {
+      for (const key of Object.keys(seed)) {
+        expect(declared, `'${seed.name}' carries '${key}'`).toContain(key)
+      }
+    }
+  })
+
   it('names are unique case-insensitively', () => {
     const lowered = seedExercises.map((seed) => seed.name.toLowerCase())
     expect(new Set(lowered).size).toBe(seedExercises.length)
   })
 
-  it('the catalog has at least 80 entries', () => {
-    expect(seedExercises.length).toBeGreaterThanOrEqual(80)
+  it('the catalog has at least 100 entries', () => {
+    expect(seedExercises.length).toBeGreaterThanOrEqual(100)
+  })
+
+  it('every entry is one movement, not a combo station or an alternative', () => {
+    for (const seed of seedExercises) {
+      expect(seed.name, `'${seed.name}' is a combo`).not.toMatch(/\+/)
+      expect(seed.name, `'${seed.name}' names an alternative`).not.toMatch(/\bor\b|\//)
+      expect(seed.name, `'${seed.name}' carries a cue`).not.toMatch(/pulse|—|\(\d/i)
+    }
+  })
+
+  it('no entry carries more than three muscle groups', () => {
+    for (const seed of seedExercises) {
+      expect(seed.muscleGroups.length, `'${seed.name}'`).toBeLessThanOrEqual(3)
+    }
   })
 
   it('every MuscleGroup literal is used by at least one entry', () => {
@@ -70,33 +69,26 @@ describe('seed exercises', () => {
     }
   })
 
-  /**
-   * The main promise of ADR-0003: the removal of `full-body` changes the
-   * vocabulary, and it does not change behaviour. Every strength exercise that
-   * carried the value also carried a real group, and the two fallback rows are
-   * cardio. No group that stays therefore gains or loses a strength exercise.
-   * Generation reads these pools, so a user who selected `Chest` before the
-   * change gets the same exercises after it.
-   *
-   * The comparison is against the frozen pre-removal catalog, and it is by
-   * exercise name. Equal counts alone cannot pass this test.
-   */
-  it('every surviving muscle group keeps exactly its strength exercises', () => {
-    const before = strengthNamesByGroup(preMigrationSeed)
-    const after = strengthNamesByGroup(seedExercises)
-
-    expect(sorted(after.keys())).toStrictEqual(sorted(before.keys()))
-    for (const [group, names] of before) {
-      expect(sorted(after.get(group) ?? []), `strength pool for '${group}'`).toStrictEqual(
-        sorted(names),
-      )
-    }
-  })
-
   it('every Equipment literal is used by at least one entry', () => {
     const used = new Set(seedExercises.flatMap((seed) => seed.equipment))
     for (const item of Equipment.literals) {
       expect(used, `Equipment '${item}' is unused`).toContain(item)
+    }
+  })
+
+  /**
+   * Emphasis reads strength entries only, and a single-group Emphasis is the
+   * narrowest legal request. The previous catalog had one strength entry for
+   * `calves`, which made that request infeasible at every duration.
+   */
+  it('every muscle group has enough strength entries for the smallest template', () => {
+    for (const group of MuscleGroup.literals) {
+      const pool = seedExercises.filter(
+        (seed) => seed.modality === 'strength' && seed.muscleGroups.includes(group),
+      )
+      expect(pool.length, `strength pool for '${group}'`).toBeGreaterThanOrEqual(
+        SMALLEST_TEMPLATE_STATIONS,
+      )
     }
   })
 
@@ -115,5 +107,9 @@ describe('seed exercises', () => {
     const burpee = byName('Burpee')
     expect(burpee).toBeDefined()
     expect(burpee?.equipment).toStrictEqual([])
+
+    // The row that the previous catalog tagged as a dumbbell movement.
+    const landmine = byName('Barbell landmine rotation')
+    expect(landmine?.equipment).toStrictEqual(['barbell'])
   })
 })

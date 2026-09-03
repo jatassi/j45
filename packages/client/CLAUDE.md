@@ -5,14 +5,13 @@ changing screens and components.
 
 ## Domain labels — never render literals raw
 
-Vocabulary values (`Modality`, `Intensity`, `MuscleGroup`, `Equipment`,
+Vocabulary values (`Modality`, `MuscleGroup`, `Equipment`,
 `Focus`, `FlowType`) are `Schema.Literal` strings. Never put those raw ids in
 the UI.
 
 Import the exhaustive label maps from `@j45/domain` and render the label:
 
 - `modalityLabel`
-- `intensityLabel`
 - `muscleGroupLabel`
 - `equipmentLabel`
 - `focusLabel`

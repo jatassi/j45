@@ -9,8 +9,6 @@ import {
   equipmentLabel,
   Exercise,
   ExerciseId,
-  Intensity,
-  intensityLabel,
   LibraryExercise,
   Modality,
   modalityLabel,
@@ -23,12 +21,6 @@ describe('vocabulary labels', () => {
   it('maps every modality literal to a non-empty label', () => {
     for (const literal of Modality.literals) {
       expect(modalityLabel[literal].length).toBeGreaterThan(0)
-    }
-  })
-
-  it('maps every intensity literal to a non-empty label', () => {
-    for (const literal of Intensity.literals) {
-      expect(intensityLabel[literal].length).toBeGreaterThan(0)
     }
   })
 
@@ -74,7 +66,6 @@ describe('LibraryExercise', () => {
           modality: 'strength',
           muscleGroups: ['quads', 'glutes'],
           equipment: ['dumbbell'],
-          intensity: 'moderate',
         }),
         createdAt: now,
         updatedAt: now,

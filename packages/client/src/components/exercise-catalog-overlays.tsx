@@ -4,8 +4,6 @@ import {
   Equipment,
   equipmentLabel,
   Exercise,
-  Intensity,
-  intensityLabel,
   Modality,
   modalityLabel,
   MuscleGroup,
@@ -44,7 +42,6 @@ import {
 } from '@/components/ui/select'
 
 const MODALITIES = Modality.literals
-const INTENSITIES = Intensity.literals
 const MUSCLE_GROUPS = MuscleGroup.literals
 const EQUIPMENT = Equipment.literals
 
@@ -52,7 +49,6 @@ type Draft = {
   readonly name: string
   readonly detail: string
   readonly modality: Modality
-  readonly intensity: Intensity
   readonly muscleGroups: readonly MuscleGroup[]
   readonly equipment: readonly Equipment[]
 }
@@ -61,7 +57,6 @@ const emptyDraft: Draft = {
   name: '',
   detail: '',
   modality: 'strength',
-  intensity: 'moderate',
   muscleGroups: [],
   equipment: [],
 }
@@ -74,7 +69,6 @@ function draftFrom(exercise: Exercise | undefined): Draft {
     name: exercise.name,
     detail: exercise.detail ?? '',
     modality: exercise.modality,
-    intensity: exercise.intensity,
     muscleGroups: [...exercise.muscleGroups],
     equipment: [...exercise.equipment],
   }
@@ -91,7 +85,6 @@ function draftToExercise(draft: Draft): Exercise | undefined {
     name,
     ...(detail.length > 0 ? { detail } : {}),
     modality: draft.modality,
-    intensity: draft.intensity,
     muscleGroups: [first, ...rest],
     equipment: [...draft.equipment],
   })
@@ -208,14 +201,6 @@ function ExerciseForm(props: {
           labels={modalityLabel}
           testId="exercise-form-modality"
           onChange={(modality) => patch({ modality })}
-        />
-        <FormSelect
-          label="Intensity"
-          value={draft.intensity}
-          options={INTENSITIES}
-          labels={intensityLabel}
-          testId="exercise-form-intensity"
-          onChange={(intensity) => patch({ intensity })}
         />
         <TagFields draft={draft} patch={patch} />
       </FieldGroup>

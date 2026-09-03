@@ -78,7 +78,6 @@ const strengthExercise = (name: string, group: MuscleGroup): Exercise =>
     modality: 'strength',
     muscleGroups: [group],
     equipment: [],
-    intensity: 'moderate',
   })
 
 /** The seed-catalog strength generation that the emphasis cases repeat. */
@@ -324,14 +323,12 @@ describe('generate — infeasibility, never a throw', () => {
         modality: 'strength',
         muscleGroups: ['chest'],
         equipment: ['dumbbell'],
-        intensity: 'moderate',
       }),
       new Exercise({
         name: 'KB Swing',
         modality: 'strength',
         muscleGroups: ['glutes'],
         equipment: ['kettlebell'],
-        intensity: 'moderate',
       }),
     ]
     const result = generate(
