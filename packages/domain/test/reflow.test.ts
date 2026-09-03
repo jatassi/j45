@@ -3,7 +3,7 @@ import * as Either from 'effect/Either'
 import { expect } from 'vitest'
 
 import { applyReflow, Reflow, ReflowInvalid, ReflowPod } from '../src/reflow.js'
-import { compile } from '../src/segments.js'
+import { compile, READY_SECONDS } from '../src/segments.js'
 import { Flow, Pod, Round, Station, Workout } from '../src/workout.js'
 
 const defined = <A>(value: A | undefined, message: string): A => {
@@ -68,7 +68,7 @@ describe('applyReflow — golden regroup to laps', () => {
 
     const compiled = compile(workout)
     const expected = [
-      { _tag: 'ready' as const, durationMillis: 5000 },
+      { _tag: 'ready' as const, durationMillis: READY_SECONDS * 1000 },
       // round 1 — pod-major: all stations of the pod in order
       {
         _tag: 'work' as const,

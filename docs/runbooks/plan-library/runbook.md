@@ -39,7 +39,7 @@ libraries, 12 legacy seeds copied per account). Binding: the
 - `bun run test:e2e` — Playwright, chromium + webkit, 27 passed / 1 skipped
   (the webkit passkey case is chromium-only by design). Covers criteria 5–8:
   - `e2e/library.spec.ts` — after PIN login `/` lists the 12 seeds; Athletica
-    detail shows 3 pods, 9 stations, duration `26:45`; Duplicate creates
+    detail shows 3 pods, 9 stations, duration `27:10`; Duplicate creates
     `Athletica (copy)`; rename persists across reload; Delete removes it
     (criterion 5). A logged-out `/workouts/<seed id>` shows the login screen,
     PIN login renders that detail without further navigation, `/account`
@@ -60,7 +60,7 @@ libraries, 12 legacy seeds copied per account). Binding: the
 
 - `bun run check`, `bun run test`, `bun run test:e2e`, `bun run lint` each
   exit 0.
-- Athletica compiles to 27 works / 1605 s (displayed `26:45`), 3 pods, 9
+- Athletica compiles to 27 works / 1630 s (displayed `27:10`), 3 pods, 9
   stations — matching both the golden table and the rendered detail.
 - Registration and the 0003 backfill each produce exactly 12 named seeds
   (Athletica, Romans, Miami Nights, Panthers, Docklands, Red Diamond,

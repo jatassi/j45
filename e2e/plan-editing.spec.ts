@@ -218,7 +218,7 @@ test.describe('plan-editing (chromium + webkit)', () => {
       await page.getByTestId('edit-button').click()
 
       await expect(page.getByTestId('workout-editor-screen')).toBeVisible()
-      await expect(page.getByTestId('editor-summary')).toHaveText('27 works · 26:45')
+      await expect(page.getByTestId('editor-summary')).toHaveText('27 works · 27:10')
 
       await page.getByTestId('editor-flow-sets').click()
 

@@ -58,12 +58,12 @@ Compiling each transcribed seed with the domain `compile` must yield:
 
 | Seed | Works | Total | | Seed | Works | Total |
 |---|---|---|---|---|---|---|
-| Athletica | 27 | 1605s | | Crossfire | 40 | 2235s |
-| Romans | 24 | 2120s | | Hammer | 18 | 1110s |
-| Miami Nights | 24 | 1425s | | Pipeline | 36 | 2145s |
-| Panthers | 27 | 1470s | | Medusa | 27 | 2180s |
-| Docklands | 36 | 1710s | | SoCal | 36 | 2155s |
-| Red Diamond | 36 | 2135s | | Apex | 8 | 2135s |
+| Athletica | 27 | 1630s | | Crossfire | 40 | 2260s |
+| Romans | 24 | 2145s | | Hammer | 18 | 1135s |
+| Miami Nights | 24 | 1450s | | Pipeline | 36 | 2170s |
+| Panthers | 27 | 1495s | | Medusa | 27 | 2205s |
+| Docklands | 36 | 1735s | | SoCal | 36 | 2180s |
+| Red Diamond | 36 | 2160s | | Apex | 8 | 2160s |
 
 ## Data model — migration 0003_library
 
@@ -216,7 +216,7 @@ the list atom on success.
   never returns another owner's rows.
 - **e2e (existing Playwright harness, chromium + webkit):** login lands on
   the library home listing the 12 seeds; Athletica detail shows 3 pods /
-  9 stations / 26:45; duplicate → rename → reload persists → delete;
+  9 stations / 27:10; duplicate → rename → reload persists → delete;
   deep-link to a workout URL renders it after PIN login; `/account`
   reachable via nav; registration lands on the library home (the catch-all
   redirect, exercised via `/register?invite=…`).

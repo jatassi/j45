@@ -58,7 +58,7 @@ export function makeFakeRuntime(handlers: Handlers) {
 
 export const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
 
-/** Athletica: 3 pods × 3 stations, uniform laps 40″/20″ × 3 — domain golden 27 works · 26:45. */
+/** Athletica: 3 pods × 3 stations, uniform laps 40″/20″ × 3 — domain golden 27 works · 27:10. */
 export const athleticaWorkout = new Workout({
   name: 'Iron Falcon',
   focus: 'hybrid',

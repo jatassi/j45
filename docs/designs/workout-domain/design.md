@@ -98,7 +98,7 @@ legacy repo), all of which plan-library's seed migration absorbs later:
 
 ```ts
 // packages/domain/src/segments.ts
-export const READY_SECONDS = 5
+export const READY_SECONDS = 30
 
 export class WorkContext extends Schema.Class<WorkContext>("WorkContext")({
   station: Station,
@@ -152,7 +152,7 @@ below is observable in the golden fixtures and none may be "fixed":
    the rest bridging lap N → lap N+1 uses lap N's rest, and the rest bridging
    pod → pod uses the finished pod's **final round's** rest. (Docklands' pod
    bridges are 5s, its lap-4 rest, not 30s.)
-6. **Ready:** exactly one leading `ready` segment of `READY_SECONDS = 5`,
+6. **Ready:** exactly one leading `ready` segment of `READY_SECONDS = 30`,
    before the first work only. No per-lap or per-pod countdowns. After the
    last work the sequence just ends (the timer, not the compiler, represents
    "done").
@@ -163,10 +163,10 @@ totals derived by hand from the legacy algorithm:
 
 | Fixture | Legacy shape | Works | Rests | Total |
 |---|---|---|---|---|
-| Athletica | laps ×3, uniform 40/20, 3 pods × 3 | 27 | 26 × 20s | **1605s** |
-| Docklands | laps ×4, ladder 60/30·30/15·20/10·20/5, 3 pods × 3 | 36 | 35 (pod bridges = 5s) | **1710s** |
-| Medusa | sets ×3, ladder 60/15·60/20·60/30, 1 pod × 9 | 27 | 26 (station bridges = 30s) | **2180s** |
-| Apex | laps ×1, uniform 240/30, 1 pod × 8 | 8 | 7 × 30s | **2135s** |
+| Athletica | laps ×3, uniform 40/20, 3 pods × 3 | 27 | 26 × 20s | **1630s** |
+| Docklands | laps ×4, ladder 60/30·30/15·20/10·20/5, 3 pods × 3 | 36 | 35 (pod bridges = 5s) | **1735s** |
+| Medusa | sets ×3, ladder 60/15·60/20·60/30, 1 pod × 9 | 27 | 26 (station bridges = 30s) | **2205s** |
+| Apex | laps ×1, uniform 240/30, 1 pod × 8 | 8 | 7 × 30s | **2160s** |
 
 Tests assert the full segment sequence (type, duration, ordering of the work
 contexts), not just totals — the totals are the cross-check.

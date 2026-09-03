@@ -40,7 +40,7 @@ Per criterion (all observed green in chromium + webkit unless noted):
    and re-opened editor both reflect the changes).
 3. **Summary chip + validation** — `plan-editing.spec.ts:185`. The untouched
    duplicated Athletica draft's sticky `editor-summary` reads exactly
-   `27 works · 26:45`; clearing a station name disables Save and pins a non-empty
+   `27 works · 27:10`; clearing a station name disables Save and pins a non-empty
    `station-name-error` at the field (no page banner).
 4. **Launch (reflow) mode** — `flow-control.spec.ts:132` and `:195`. Reflow
    screen offers no `station-name-input` and no `add-station`; regroup into one

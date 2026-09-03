@@ -92,20 +92,20 @@ const restBeforeWork = (
 }
 
 describe('compile — legacy golden fixtures', () => {
-  it('Athletica: laps ×3, uniform 40″/20″, 3 pods × 3 — 1605s total', () => {
-    assertGolden(athletica, athleticaExpected, 1605)
+  it('Athletica: laps ×3, uniform 40″/20″, 3 pods × 3 — 1630s total', () => {
+    assertGolden(athletica, athleticaExpected, 1630)
   })
 
-  it('Docklands: laps ×4, descending ladder, 3 pods × 3 — 1710s total', () => {
-    assertGolden(docklands, docklandsExpected, 1710)
+  it('Docklands: laps ×4, descending ladder, 3 pods × 3 — 1735s total', () => {
+    assertGolden(docklands, docklandsExpected, 1735)
   })
 
-  it('Medusa: sets ×3, ascending ladder, 1 pod × 9 — 2180s total', () => {
-    assertGolden(medusa, medusaExpected, 2180)
+  it('Medusa: sets ×3, ascending ladder, 1 pod × 9 — 2205s total', () => {
+    assertGolden(medusa, medusaExpected, 2205)
   })
 
-  it('Apex: laps ×1, uniform 240″/30″, 1 pod × 8 — 2135s total', () => {
-    assertGolden(apex, apexExpected, 2135)
+  it('Apex: laps ×1, uniform 240″/30″, 1 pod × 8 — 2160s total', () => {
+    assertGolden(apex, apexExpected, 2160)
   })
 })
 

@@ -193,7 +193,7 @@ async function expectArcAndItsContentFillThePhone(page: Page): Promise<void> {
     // small arc cannot pass this.
     expect(sweep.width / box.width).toBeGreaterThan(0.9)
 
-    // The count reads `5` here — the Get ready segment — so this is the
+    // The count reads `30` here — the Get ready segment — so this is the
     // one- and two-character bucket, the size a Session shows for most of
     // its length. It is the whole point of the change, and only a browser
     // can say what it renders at.
@@ -333,7 +333,7 @@ test.describe('timer (chromium + webkit)', () => {
       'floor, stays inside the arc, and no glass surface overlaps it, in both the short and ' +
       'the five-character bucket.',
     async ({ page }, testInfo) => {
-      test.setTimeout(75_000)
+      test.setTimeout(180_000)
 
       const env = readE2eEnv()
       const projectName = projectNameFrom(testInfo)
@@ -373,7 +373,8 @@ test.describe('timer (chromium + webkit)', () => {
       await expectRunViewFitsViewport(page, { width: 844, height: 390 })
       await expectArcAndItsContentFillThePhone(page)
 
-      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 8000 })
+      // 40s clears the 30s ready segment.
+      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 40_000 })
       await expect(page.getByTestId('timer-context')).toHaveText('Round 1 of 2')
 
       // Rest is 0s, so work flows straight into the next round — phase stays
@@ -395,7 +396,7 @@ test.describe('timer (chromium + webkit)', () => {
 
       // Second run — same retained settings — exercises Pause/Resume/Reset mid-run.
       await page.getByTestId('start-button').click()
-      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 8000 })
+      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 40_000 })
 
       await page.getByTestId('pause-button').click()
       const frozenCount = await page.getByTestId('timer-count').textContent()
@@ -422,7 +423,7 @@ test.describe('timer (chromium + webkit)', () => {
       await page.getByTestId('rounds-input').fill('1')
       await page.setViewportSize({ width: 390, height: 844 })
       await page.getByTestId('start-button').click()
-      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 10_000 })
+      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 40_000 })
       await expect(page.getByTestId('timer-count')).toHaveText(/^\d\d:\d\d$/)
       // Smaller than the two-character bucket above, by design: 0.165 of the
       // same 350px arc is 57.75px, so 55 is the floor with rounding allowed.
@@ -438,7 +439,7 @@ test.describe('timer (chromium + webkit)', () => {
       'navigator.wakeLock instrumented, the lock is acquired while running and released on pause and ' +
       'on Done.',
     async ({ page }, testInfo) => {
-      test.setTimeout(45_000)
+      test.setTimeout(120_000)
 
       // Must be installed before the first navigation so the patches are
       // active by the time `/timer` mounts (and createOscillator/wakeLock
@@ -489,7 +490,7 @@ test.describe('timer (chromium + webkit)', () => {
         )
         .toBe(true)
 
-      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 8000 })
+      await expect(page.getByTestId('timer-phase')).toHaveText('Work', { timeout: 40_000 })
 
       await page.getByTestId('pause-button').click()
       await expect

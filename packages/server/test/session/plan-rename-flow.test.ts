@@ -129,8 +129,8 @@ describe('renaming a workout and its live sessions', () => {
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
 
       const svc = yield* LiveSessions
-      // Ready 5s, work 10s, rest 5s, work 10s — 30s runs the timer to done.
-      yield* TestClock.adjust('30 seconds')
+      // Ready 30s, work 10s, rest 5s, work 10s — 55s runs the timer to done.
+      yield* TestClock.adjust('55 seconds')
       expect((yield* svc.snapshot(started.id)).timer._tag).toBe('done')
 
       yield* library.RenameWorkout({ id: created.id, name: 'New' }, { headers })

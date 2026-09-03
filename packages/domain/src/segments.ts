@@ -5,7 +5,7 @@ import * as Schema from 'effect/Schema'
 import { FlowType, Station, type Workout } from './workout.js'
 
 /** Leading countdown before the first work segment, in seconds. */
-export const READY_SECONDS = 5
+export const READY_SECONDS = 30
 
 /** Everything a work or rest segment needs to say "which work is this". */
 export class WorkContext extends Schema.Class<WorkContext>('WorkContext')({

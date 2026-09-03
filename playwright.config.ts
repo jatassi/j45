@@ -1,7 +1,7 @@
-import { tmpdir } from "node:os"
-import path from "node:path"
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
-import { defineConfig, devices } from "@playwright/test"
+import { defineConfig, devices } from '@playwright/test'
 
 /**
  * `bun run test:e2e` — chromium and webkit against the real built client
@@ -12,19 +12,21 @@ import { defineConfig, devices } from "@playwright/test"
  * first-class project — it's the standing CI proxy for iOS Safari.
  */
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: './e2e',
   // Keeps generated artifacts (traces, screenshots on failure) out of the
   // repo tree — the root `.gitignore` isn't in this feature's footprint, so
   // this avoids ever needing an untracked `test-results/` directory.
-  outputDir: path.join(tmpdir(), "j45-playwright-results"),
-  timeout: 30_000,
+  outputDir: path.join(tmpdir(), 'j45-playwright-results'),
+  // A live run now opens with a 30s ready countdown, so a test that rides one
+  // through to work needs room well past that single segment.
+  timeout: 120_000,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
-  reporter: "list",
-  globalSetup: "./e2e/support/global-setup.ts",
-  globalTeardown: "./e2e/support/global-teardown.ts",
+  reporter: 'list',
+  globalSetup: './e2e/support/global-setup.ts',
+  globalTeardown: './e2e/support/global-teardown.ts',
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "webkit", use: { ...devices["Desktop Safari"] } }
-  ]
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
 })

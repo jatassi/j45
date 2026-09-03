@@ -85,7 +85,7 @@ async function openLibraryTab(page: Page): Promise<void> {
 test.describe('library (chromium + webkit)', () => {
   test(
     "after PIN login, '/library' lists the 12 seed workouts; opening Athletica shows 3 pods, 9 stations, " +
-      "and total duration 26:45; Duplicate creates 'Athletica (copy)'; renaming the copy persists " +
+      "and total duration 27:10; Duplicate creates 'Athletica (copy)'; renaming the copy persists " +
       'across a page reload; Delete removes it',
     async ({ page }, testInfo) => {
       const env = readE2eEnv()
@@ -129,14 +129,14 @@ test.describe('library (chromium + webkit)', () => {
         throw new Error('expected Athletica card to carry a workout-card-<id> testid')
       }
       const athleticaId = athleticaCardTestId.replace('workout-card-', '')
-      await expect(page.getByTestId(`workout-summary-${athleticaId}`)).toHaveText('9 works · 26:45')
+      await expect(page.getByTestId(`workout-summary-${athleticaId}`)).toHaveText('9 works · 27:10')
       await athleticaLink.click()
 
       await expect(page.getByTestId('workout-detail-screen')).toBeVisible()
       await expect(page.getByTestId('workout-title')).toHaveText('Athletica')
       await expect(page.getByTestId('pod')).toHaveCount(3)
       await expect(page.getByTestId('station')).toHaveCount(9)
-      await expect(page.getByTestId('workout-duration')).toHaveText('26:45')
+      await expect(page.getByTestId('workout-duration')).toHaveText('27:10')
 
       await page.getByTestId('duplicate-button').click()
 

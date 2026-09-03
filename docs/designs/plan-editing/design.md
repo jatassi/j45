@@ -95,7 +95,7 @@ and offers, at legacy-editor parity:
   expands the single pair per round, toggling on collapses to round 1's pair,
   exactly the legacy editor's behavior); per-round work/rest second inputs
   when non-uniform.
-- a live summary chip — exactly `N works · MM:SS` (e.g. `27 works · 26:45`;
+- a live summary chip — exactly `N works · MM:SS` (e.g. `27 works · 27:10`;
   no suffix) — computed by running the domain `compile` on the draft whenever
   it decodes; doubles as the validity indicator (a non-decoding draft shows
   the first schema error instead, and Save is disabled).
@@ -135,7 +135,7 @@ schema's own constraints are the law. All three deltas are deliberate.
   station name, reorder a station — save, detail reflects all three across a
   reload; the editor refuses an empty station name (Save disabled, error
   visible); the editor's summary chip for an untouched Athletica draft reads
-  `27 works · 26:45` (agrees with the domain goldens).
+  `27 works · 27:10` (agrees with the domain goldens).
 
 ## Out of scope (later features)
 

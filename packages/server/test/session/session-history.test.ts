@@ -162,9 +162,9 @@ describe('session-history recording', () => {
         yield* watchThenLeave(svc, id, bob)
 
         // Cross into segment 1: the session has now progressed.
-        yield* TestClock.adjust('5 seconds')
+        yield* TestClock.adjust('30 seconds')
 
-        // bob leaves at t=5s — his row is written now, before anyone else leaves,
+        // bob leaves at t=30s — his row is written now, before anyone else leaves,
         // so its participants are the roster at write time (both alice and bob).
         yield* svc.leaveSession(id, bob.userId)
         const bobRecords = yield* completionsRepo.listForUser(bob.userId)
@@ -187,9 +187,9 @@ describe('session-history recording', () => {
           expect(record.workoutName).toBe('Fixture')
           expect(record.workout).toEqual(fixtureWorkout)
           expect(record.host).toEqual(alice)
-          // Span: started at epoch 0, personal endedAt at the leave time (5s).
+          // Span: started at epoch 0, personal endedAt at the leave time (30s).
           expect(DateTime.toEpochMillis(record.startedAt)).toBe(0)
-          expect(DateTime.toEpochMillis(record.endedAt)).toBe(5000)
+          expect(DateTime.toEpochMillis(record.endedAt)).toBe(30_000)
           // Progress is the published timer position: segment 1 of 4 segments.
           expect(record.progress?.segmentsCompleted).toBe(1)
           expect(record.progress?.totalSegments).toBe(4)

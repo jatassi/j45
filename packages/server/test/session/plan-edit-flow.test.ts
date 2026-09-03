@@ -19,6 +19,7 @@ import {
   bobId,
   caraId,
   FlowLive,
+  holdWatch,
   latestWith,
   lobbyNow,
   makeWorkout,
@@ -69,11 +70,11 @@ describe('editing a workout that live sessions run', () => {
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      // t=7s: ready (0–5s) is over, the first work runs until 15s.
-      yield* TestClock.adjust('7 seconds')
+      // t=32s: ready (0–30s) is over, the first work runs until 40s.
+      yield* TestClock.adjust('32 seconds')
       const midWork = yield* snapshotOf(svc, started.id)
       expect(running(midWork)?.segmentIndex).toBe(1)
-      expect(running(midWork)?.endsAtMillis).toBe(15_000)
+      expect(running(midWork)?.endsAtMillis).toBe(40_000)
 
       // The host renames both stations and stretches the rest to 8s.
       yield* library.UpdateWorkout(
@@ -89,32 +90,33 @@ describe('editing a workout that live sessions run', () => {
       const during = yield* snapshotOf(svc, started.id)
       expect(stationNames(during)).toEqual(['A', 'B'])
       expect(running(during)?.segmentIndex).toBe(1)
-      expect(running(during)?.endsAtMillis).toBe(15_000)
+      expect(running(during)?.endsAtMillis).toBe(40_000)
 
-      // t=15s: the work ends. The new plan takes over at that boundary.
+      // t=40s: the work ends. The new plan takes over at that boundary.
       yield* TestClock.adjust('8 seconds')
       const after = yield* snapshotOf(svc, started.id)
       expect(stationNames(after)).toEqual(['A2', 'B2'])
       // The rest before work 1, at the new plan's own 8s duration, anchored
       // on the boundary instant — not chained off the old 5s deadline.
       expect(running(after)?.segmentIndex).toBe(2)
-      expect(running(after)?.endsAtMillis).toBe(23_000)
+      expect(running(after)?.endsAtMillis).toBe(48_000)
     }).pipe(Effect.provide(FlowLive)),
   )
 
   it.scoped('the participant keeps their work ordinal when the segment indices move', () =>
     Effect.gen(function* () {
       const { headers, library, sessions } = yield* asOwner
-      // ready 5s | A 10s | rest 5s | B 10s | rest 5s | C 10s — six segments.
+      // ready 30s | A 10s | rest 5s | B 10s | rest 5s | C 10s — six segments.
       const created = yield* library.CreateWorkout(
         { workout: makeWorkout(['A', 'B', 'C']) },
         { headers },
       )
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
+      yield* holdWatch(svc, started.id)
 
-      // t=32s: the rest before the third work (ordinal 2), which ends at 35s.
-      yield* TestClock.adjust('32 seconds')
+      // t=57s: the rest before the third work (ordinal 2), which ends at 60s.
+      yield* TestClock.adjust('57 seconds')
       expect(workInFocus(yield* snapshotOf(svc, started.id))?.workIndex).toBe(2)
 
       // The host drops every rest and doubles the work — the third station
@@ -137,7 +139,7 @@ describe('editing a workout that live sessions run', () => {
       expect(running(after)?.segmentIndex).toBe(3)
       // The countdown matches the segment actually in force: the new 20s
       // work, from the boundary — not the old plan's 10s.
-      expect(running(after)?.endsAtMillis).toBe(55_000)
+      expect(running(after)?.endsAtMillis).toBe(80_000)
     }).pipe(Effect.provide(FlowLive)),
   )
 
@@ -169,7 +171,7 @@ describe('editing a workout that live sessions run', () => {
         { id: created.id, workout: makeWorkout(['A2', 'B2']), updatedAt: created.updatedAt },
         { headers },
       )
-      yield* TestClock.adjust('4 seconds')
+      yield* TestClock.adjust('29 seconds')
       expect(yield* revision).toBe(0)
 
       yield* TestClock.adjust('2 seconds')
@@ -221,7 +223,7 @@ describe('editing a workout that live sessions run', () => {
         { id: created.id, workout: makeWorkout(['A2', 'B2']), updatedAt: created.updatedAt },
         { headers },
       )
-      yield* TestClock.adjust('10 seconds')
+      yield* TestClock.adjust('31 seconds')
 
       const svc = yield* LiveSessions
       const overlay = yield* snapshotOf(svc, overlaid.id)
@@ -255,7 +257,7 @@ describe('editing a workout that live sessions run', () => {
         { id: created.id, workout: makeWorkout(['A2', 'B2']), updatedAt: created.updatedAt },
         { headers },
       )
-      yield* TestClock.adjust('6 seconds')
+      yield* TestClock.adjust('31 seconds')
 
       // Both phones land on one plan at one revision — they never disagree.
       const bobState = yield* latestWith(forBob, (state) => state.planRevision === 1)
@@ -301,7 +303,7 @@ describe('editing a workout that live sessions run', () => {
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      yield* TestClock.adjust('7 seconds')
+      yield* TestClock.adjust('32 seconds')
       const before = yield* snapshotOf(svc, started.id)
 
       // The editor saves the whole workout, so a name typed there arrives as
@@ -343,7 +345,7 @@ describe('editing a workout that live sessions run', () => {
         { id: created.id, workout: makeWorkout(['A', 'B']), updatedAt: created.updatedAt },
         { headers },
       )
-      yield* TestClock.adjust('20 seconds')
+      yield* TestClock.adjust('31 seconds')
 
       // The revision counts changes, not saves.
       expect((yield* snapshotOf(svc, started.id)).planRevision).toBe(0)

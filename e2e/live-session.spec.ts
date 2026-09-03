@@ -90,12 +90,12 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
 
         await joinSessionFromLobby(pageB, env.baseUrl, sessionId)
 
-        // Land both players on the first work segment. Ready is only 5s and B's
-        // join burns variable wall-clock, so rather than snapshot A mid ready→work
-        // transition (or race a skip against the server's authoritative phase),
-        // ride A's natural ready→work auto-advance first — 15s comfortably clears
-        // the 5s ready window — then compare the two screens on a stable phase.
-        await expect(page.getByTestId('session-phase')).toHaveText('Work', { timeout: 15_000 })
+        // Land both players on the first work segment. B's join burns variable
+        // wall-clock, so rather than snapshot A mid ready→work transition (or race
+        // a skip against the server's authoritative phase), ride A's natural
+        // ready→work auto-advance first — 40s comfortably clears the 30s ready
+        // window — then compare the two screens on a stable phase.
+        await expect(page.getByTestId('session-phase')).toHaveText('Work', { timeout: 40_000 })
 
         // Both players now share the stable work segment.
         await assertBMatchesAPhase(page, pageB)
@@ -276,11 +276,11 @@ test.describe('live session (chromium only — two logged-in browser contexts)',
 
         await joinSessionFromLobby(pageB, env.baseUrl, sessionId)
 
-        // The ready segment is 5 seconds. Wait for its automatic advance
+        // The ready segment is 30 seconds. Wait for its automatic advance
         // instead of a race against it. Both users are then in the first work
         // interval, which Apex makes 4 minutes long. That is time enough for
         // the host to leave, edit and save inside it.
-        await expect(page.getByTestId('session-phase')).toHaveText('Work', { timeout: 15_000 })
+        await expect(page.getByTestId('session-phase')).toHaveText('Work', { timeout: 40_000 })
         await assertBMatchesAPhase(page, pageB)
         await expect(pageB.getByTestId('session-next-up')).toContainText(APEX_STATION_2)
 

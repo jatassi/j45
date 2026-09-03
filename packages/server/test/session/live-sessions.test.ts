@@ -33,10 +33,10 @@ import { lobbyNow } from './plan-flow-harness.js'
 
 // A deterministic fixture workout. Compiled it becomes four segments with
 // round, self-checkable deadlines (TestClock starts at epoch 0):
-//   seg0 ready  5_000ms  -> deadline  5_000
-//   seg1 work  10_000ms  -> deadline 15_000
-//   seg2 rest   5_000ms  -> deadline 20_000
-//   seg3 work  10_000ms  -> deadline 30_000 -> done
+//   seg0 ready 30_000ms  -> deadline 30_000
+//   seg1 work  10_000ms  -> deadline 40_000
+//   seg2 rest   5_000ms  -> deadline 45_000
+//   seg3 work  10_000ms  -> deadline 55_000 -> done
 const fixtureWorkout = new Workout({
   name: 'Fixture',
   focus: 'cardio',
@@ -115,8 +115,8 @@ describe('LiveSessions', () => {
       const timer = running(state)
       expect(timer.segmentIndex).toBe(0)
       expect(state.compiled.segments[0]._tag).toBe('ready')
-      // endsAtMillis is absolute server-epoch time (5s ready, clock at 0).
-      expect(timer.endsAtMillis).toBe(5000)
+      // endsAtMillis is absolute server-epoch time (30s ready, clock at 0).
+      expect(timer.endsAtMillis).toBe(30_000)
       expect(state.serverNow).toBe(0)
     }).pipe(Effect.provide(TestLive)),
   )
@@ -126,13 +126,13 @@ describe('LiveSessions', () => {
       const svc = yield* LiveSessions
       const { id } = yield* startFixture(svc)
 
-      yield* TestClock.adjust('5 seconds')
+      yield* TestClock.adjust('30 seconds')
       expect(running(yield* svc.snapshot(id)).segmentIndex).toBe(1)
-      expect(running(yield* svc.snapshot(id)).endsAtMillis).toBe(15_000)
+      expect(running(yield* svc.snapshot(id)).endsAtMillis).toBe(40_000)
 
       yield* TestClock.adjust('10 seconds')
       expect(running(yield* svc.snapshot(id)).segmentIndex).toBe(2)
-      expect(running(yield* svc.snapshot(id)).endsAtMillis).toBe(20_000)
+      expect(running(yield* svc.snapshot(id)).endsAtMillis).toBe(45_000)
 
       yield* TestClock.adjust('5 seconds')
       expect(running(yield* svc.snapshot(id)).segmentIndex).toBe(3)
@@ -147,12 +147,12 @@ describe('LiveSessions', () => {
       const svc = yield* LiveSessions
       const { id } = yield* startFixture(svc)
 
-      // 21s crosses the 5_000 / 15_000 / 20_000 deadlines in a single jump.
-      yield* TestClock.adjust('21 seconds')
+      // 46s crosses the 30_000 / 40_000 / 45_000 deadlines in a single jump.
+      yield* TestClock.adjust('46 seconds')
 
       const timer = running(yield* svc.snapshot(id))
       expect(timer.segmentIndex).toBe(3)
-      expect(timer.endsAtMillis).toBe(30_000)
+      expect(timer.endsAtMillis).toBe(55_000)
     }).pipe(Effect.provide(TestLive)),
   )
 
@@ -166,7 +166,7 @@ describe('LiveSessions', () => {
       const paused = yield* svc.snapshot(id)
       expect(paused.timer._tag).toBe('paused')
       if (paused.timer._tag === 'paused') {
-        expect(paused.timer.remainingMillis).toBe(3000)
+        expect(paused.timer.remainingMillis).toBe(28_000)
       }
 
       // While paused the ticker idles: 10s later nothing has advanced.
@@ -174,15 +174,15 @@ describe('LiveSessions', () => {
       const stillPaused = yield* svc.snapshot(id)
       expect(stillPaused.timer._tag).toBe('paused')
       if (stillPaused.timer._tag === 'paused') {
-        expect(stillPaused.timer.remainingMillis).toBe(3000)
+        expect(stillPaused.timer.remainingMillis).toBe(28_000)
       }
 
       // Resume at t=12_000 re-anchors the deadline to now + remaining.
       yield* svc.command(id, 'resume')
-      expect(running(yield* svc.snapshot(id)).endsAtMillis).toBe(15_000)
+      expect(running(yield* svc.snapshot(id)).endsAtMillis).toBe(40_000)
 
       // And the re-anchored ticker fires at the new deadline, not the old one.
-      yield* TestClock.adjust('3 seconds')
+      yield* TestClock.adjust('28 seconds')
       expect(running(yield* svc.snapshot(id)).segmentIndex).toBe(1)
     }).pipe(Effect.provide(TestLive)),
   )
@@ -193,17 +193,17 @@ describe('LiveSessions', () => {
       const { id } = yield* startFixture(svc)
 
       // skip from the ready segment enters seg1 at its full 10s (endsAt 10_000),
-      // not the chained 15_000 deadline.
+      // not the chained 40_000 deadline.
       yield* svc.command(id, 'skip')
       const skipped = running(yield* svc.snapshot(id))
       expect(skipped.segmentIndex).toBe(1)
       expect(skipped.endsAtMillis).toBe(10_000)
 
-      // prev re-enters seg0 at its full 5s duration.
+      // prev re-enters seg0 at its full 30s duration.
       yield* svc.command(id, 'prev')
       const back = running(yield* svc.snapshot(id))
       expect(back.segmentIndex).toBe(0)
-      expect(back.endsAtMillis).toBe(5000)
+      expect(back.endsAtMillis).toBe(30_000)
     }).pipe(Effect.provide(TestLive)),
   )
 
@@ -235,21 +235,21 @@ describe('LiveSessions', () => {
         if (snap0._tag === 'Some') {
           const timer = running(snap0.value)
           expect(timer.segmentIndex).toBe(0)
-          expect(timer.endsAtMillis).toBe(5000)
+          expect(timer.endsAtMillis).toBe(30_000)
           expect(snap0.value.serverNow).toBe(0)
           // Subscribing is joining: the first snapshot already lists alice.
           expect(participantIds(snap0.value)).toContain(alice.userId)
         }
 
         // A single boundary crossing publishes exactly one change.
-        yield* TestClock.adjust('5 seconds')
+        yield* TestClock.adjust('30 seconds')
         const snap1 = Chunk.last(yield* pull)
         expect(snap1._tag).toBe('Some')
         if (snap1._tag === 'Some') {
           const timer = running(snap1.value)
           expect(timer.segmentIndex).toBe(1)
-          expect(timer.endsAtMillis).toBe(15_000)
-          expect(snap1.value.serverNow).toBe(5000)
+          expect(timer.endsAtMillis).toBe(40_000)
+          expect(snap1.value.serverNow).toBe(30_000)
         }
 
         yield* Scope.close(scope, Exit.void)
@@ -262,7 +262,7 @@ describe('LiveSessions', () => {
       const { id } = yield* startFixture(svc)
 
       // Two transitions happen before anyone subscribes.
-      yield* TestClock.adjust('15 seconds')
+      yield* TestClock.adjust('42 seconds')
 
       const { scope, first } = yield* openWatch(svc, id, bob)
       const snap = Chunk.last(first)

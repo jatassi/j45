@@ -146,7 +146,7 @@ describe('history flows via ListHistory (TestClock)', () => {
 
         // Sequence matters: advance first so the ticker crosses into work, THEN
         // bob joins the roster and leaves mid-session, THEN the host leaves last.
-        yield* TestClock.adjust('5 seconds')
+        yield* TestClock.adjust('30 seconds')
         yield* watchThenLeave(svc, id, bob)
         yield* svc.leaveSession(id, bob.userId)
         expect((yield* svc.snapshot(id)).participants.map((p) => p.userId)).not.toContain(
@@ -171,7 +171,7 @@ describe('history flows via ListHistory (TestClock)', () => {
           expect(record.host).toEqual(alice)
           // Span from the test clock: started at epoch 0, personal end at 5s.
           expect(DateTime.toEpochMillis(record.startedAt)).toBe(0)
-          expect(DateTime.toEpochMillis(record.endedAt)).toBe(5000)
+          expect(DateTime.toEpochMillis(record.endedAt)).toBe(30_000)
           // Progress rides the wire: furthest segment entered is 1 of 4.
           expect(record.progress?.segmentsCompleted).toBe(1)
           expect(record.progress?.totalSegments).toBe(4)
