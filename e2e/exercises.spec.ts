@@ -10,14 +10,14 @@ import { readE2eEnv } from './support/state.js'
  * (see `registration-seeding.test.ts`). Same documentation style as
  * `library.spec.ts`'s hardcoded `12` for the workout seed set.
  */
-const SEEDED_EXERCISE_COUNT = 96
+const SEEDED_EXERCISE_COUNT = 120
 
 /**
  * Exercises tagged `calves` in that same seed catalog — a real proper subset
- * (7 of 96), so filtering on `filter-muscle-calves` is a meaningful narrowing
+ * (16 of 120), so filtering on `filter-muscle-calves` is a meaningful narrowing
  * check rather than a tautology.
  */
-const CALVES_SEEDED_COUNT = 7
+const CALVES_SEEDED_COUNT = 16
 
 /** Narrows Playwright's `project.name` to the two projects `global-setup.ts` mints invites for. */
 function projectNameFrom(testInfo: TestInfo): E2eProjectName {
@@ -87,7 +87,7 @@ async function pickSelectOption(page: Page, testId: string, optionLabel: string)
  */
 test.describe('exercises (chromium + webkit)', () => {
   test(
-    "after registration, '/library/exercises' via the Library tab + Exercises segment lists the 96 seed exercises; " +
+    "after registration, '/library/exercises' via the Library tab + Exercises segment lists the 120 seed exercises; " +
       'the calves muscle filter narrows the list; create → reload → edit tags → reload → ' +
       'delete all persist through the real stack; a forced command failure surfaces a toast',
     async ({ page }, testInfo) => {
@@ -139,7 +139,6 @@ test.describe('exercises (chromium + webkit)', () => {
       await page.getByTestId('exercise-form-name').fill(createdName)
       await page.getByTestId('exercise-form-detail').fill('e2e create flow')
       await pickSelectOption(page, 'exercise-form-modality', 'Strength')
-      await pickSelectOption(page, 'exercise-form-intensity', 'Moderate')
       // `muscleGroups` is non-empty — submit stays disabled until at least one chip.
       await page.getByTestId('exercise-form-muscle-quads').click()
       await page.getByTestId('exercise-form-equipment-med-ball').click()
@@ -156,9 +155,8 @@ test.describe('exercises (chromium + webkit)', () => {
       }
       const createdId = createdTestId.replace('exercise-row-', '')
       await expect(page.getByTestId(`exercise-name-${createdId}`)).toHaveText(createdName)
-      // Domain labels for modality, intensity, muscle groups, equipment.
+      // Domain labels for modality, muscle groups, equipment.
       await expect(createdRow).toContainText('Strength')
-      await expect(createdRow).toContainText('Moderate')
       await expect(createdRow).toContainText('Quads')
       await expect(createdRow).toContainText('Med ball')
 
