@@ -177,11 +177,18 @@ function SessionView({
   const ctx = currentWorkContext(state)
   const phase = sessionPhase(state)
   // The whole strip from one pure call: the compiled plan and the work in
-  // focus decide every bar, cell and dot. An applied plan change replaces the
-  // compiled plan, so the strip redraws with it.
+  // focus decide every mark. An applied plan change replaces the compiled
+  // plan, so the strip redraws with it.
+  //
+  // A session that is done holds no work in focus, and that reads the same as
+  // one that has not started. The finish therefore passes the ordinal one past
+  // the plan's last work, which is the strip's own name for done. Without it
+  // the strip would go all ahead at the finish and say the workout never ran.
+  const done = state.timer._tag === 'done'
+  const stripOrdinal = done ? state.compiled.workTotal : ctx?.workIndex
   const strip = useMemo(
-    () => progressStrip(state.compiled, ctx?.workIndex),
-    [state.compiled, ctx?.workIndex],
+    () => progressStrip(state.compiled, stripOrdinal),
+    [state.compiled, stripOrdinal],
   )
   // Tracks iOS Safari's toolbar live (see the hook): the container — and with
   // it the bottom-anchored dock and the flexing center stack — resizes with
@@ -212,7 +219,7 @@ function SessionView({
       {offline && <ReconnectingChip />}
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
         <CenterStack state={state} phase={phase} ctx={ctx} count={count} />
-        <ProgressStrip strip={strip} barsWidth={ARC_INNER_WIDTH} />
+        <ProgressStrip strip={strip} width={ARC_INNER_WIDTH} />
       </div>
       {/*
         The participants sit at the foot of the column, against the dock,

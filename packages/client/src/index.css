@@ -296,6 +296,14 @@
   }
 }
 
+/* Progress strip: a pod's width eases when the open pod moves on at a pod
+   boundary. The pods on either side of the move change width, and the ease
+   is what makes that read as a move and not as a jump. Only the width eases;
+   the fills keep their own, shorter colour crossing. */
+.player-strip-pod {
+  transition: width var(--duration-enter) var(--ease-player);
+}
+
 /* Immersive player: the arc draws itself closed when the workout ends. At
    `done` the depleting sweep is empty, so the centrepiece would otherwise
    be a bare track — the one rare, terminal moment on this screen where the
@@ -400,6 +408,11 @@
   .player-marquee-track {
     animation: none;
     will-change: auto;
+  }
+  /* The pod move cuts instead of easing: the strip still says the same
+     thing, and it says it without travel. */
+  .player-strip-pod {
+    transition: none;
   }
   /* Kept, not removed: this is touch acknowledgement, not decoration. */
   .player-press:active,

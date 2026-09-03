@@ -175,13 +175,17 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
 
       await expect(page.getByTestId('session-screen')).toBeVisible()
       expect(page.url()).toContain('/session/')
-      // The overlay's flow drives the strip's grouping, not the saved plan's.
-      // The launched plan is one pod of two stations over two laps, so `laps`
-      // gives one pod bar of two station cells above two round dots. Had the
-      // saved `sets` flow won, the strip would carry two one-cell bars.
-      await expect(page.locator('[data-testid^="session-strip-bar-"]')).toHaveCount(1)
-      await expect(page.locator('[data-testid^="session-strip-cell-"]')).toHaveCount(2)
-      await expect(page.locator('[data-testid^="session-strip-dot-"]')).toHaveCount(2)
+      // The strip draws the launched plan, not the saved one. The launched
+      // plan is one pod of two stations over two rounds, so the strip is one
+      // pod of four works — one dot per work.
+      //
+      // This no longer tells the two flows apart. The strip reads a plan from
+      // the leaf up, and a pod of two stations over two rounds gives two runs
+      // of two works under either flow. Only the run a work sits in changes,
+      // and a run is a gap, which carries no id. A shape that is not square
+      // in its stations and its rounds would tell them apart again.
+      await expect(page.locator('[data-testid^="session-strip-pod-"]')).toHaveCount(1)
+      await expect(page.locator('[data-testid^="session-strip-work-"]')).toHaveCount(4)
 
       // Leave the launched session. Do not navigate away from it. A session
       // that stays live keeps its row in every account's lobby until the
