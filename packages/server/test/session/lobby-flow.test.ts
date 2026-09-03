@@ -257,8 +257,8 @@ describe('the lobby feed of LiveSessions', () => {
       )
       expect(yield* publishedSoFar(frames)).toHaveLength(0)
 
-      // The ready segment ends at 5s, and the held plan goes into force.
-      yield* TestClock.adjust('5 seconds')
+      // The ready segment ends at 30s, and the held plan goes into force.
+      yield* TestClock.adjust('30 seconds')
 
       const renamed = yield* frameWhere(
         frames,
@@ -279,8 +279,8 @@ describe('the lobby feed of LiveSessions', () => {
       const frames = yield* openLobby(svc)
       yield* frameWhere(frames, (rows) => rowFor(rows, started.id)?.participantCount === 1)
 
-      // Ready 5s, work 10s, rest 5s, work 10s — this runs the timer to done.
-      yield* TestClock.adjust('30 seconds')
+      // Ready 30s, work 10s, rest 5s, work 10s — this runs the timer to done.
+      yield* TestClock.adjust('55 seconds')
       expect((yield* svc.snapshot(started.id)).timer._tag).toBe('done')
 
       expect(yield* publishedSoFar(frames)).toHaveLength(0)

@@ -76,7 +76,7 @@ const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
 /**
  * 2 pods (2 stations, 1 station — one station carries a `detail`), a
  * uniform 2-round flow (`40″/20″ × 2`): ready(5) + 6 works × 40 + 5 rests ×
- * 20 = 5 + 240 + 100 = 345s → "5:45".
+ * 20 = 30 + 240 + 100 = 370s → "6:10".
  */
 const athletica = new LibraryWorkout({
   id: Schema.decodeSync(WorkoutId)('workout-athletica'),
@@ -216,7 +216,7 @@ describe('WorkoutDetailScreen', () => {
     expect(screen.getByTestId('workout-focus').textContent).toBe('Cardio')
     expect(screen.getByTestId('workout-flow-summary').textContent).toBe('Laps · 40″/20″ × 2')
     expect(screen.getByTestId('workout-works-summary').textContent).toMatch(/6 works/)
-    expect(screen.getByTestId('workout-duration').textContent).toBe('5:45')
+    expect(screen.getByTestId('workout-duration').textContent).toBe('6:10')
     expect(screen.getByTestId('library-nav-link').getAttribute('href')).toBe('/library')
     expect(screen.getByTestId('start-session-button').textContent).toBe('Start')
     expect(screen.getByTestId('start-with-reflow-button')).toBeTruthy()

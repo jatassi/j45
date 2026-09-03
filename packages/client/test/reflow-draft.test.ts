@@ -41,7 +41,7 @@ const source = new Workout({
 const right = <A, E>(either: Either.Either<A, E>): A => Either.getOrThrow(either)
 
 describe('reflow-draft', () => {
-  it('opens carrying the source structure and timing (6 works · 2:55)', () => {
+  it('opens carrying the source structure and timing (6 works · 3:20)', () => {
     const result = right(computeReflow(source, initReflowDraft(source)))
     expect(result.workout.name).toBe('Src')
     expect(result.workout.focus).toBe('strength')
@@ -52,7 +52,7 @@ describe('reflow-draft', () => {
       ['Squat'],
     ])
     expect(result.compiled.workTotal).toBe(6)
-    expect(reflowSummary(result)).toBe('6 works · 2:55')
+    expect(reflowSummary(result)).toBe('6 works · 3:20')
   })
 
   it('yields one memoized result whose workout and compiled agree with applyReflow/compile', () => {
@@ -63,7 +63,7 @@ describe('reflow-draft', () => {
     expect(result.compiled).toStrictEqual(compile(result.workout))
   })
 
-  it('regroups into one pod, drops a station, and flips sets→laps (4 works · 1:55)', () => {
+  it('regroups into one pod, drops a station, and flips sets→laps (4 works · 2:20)', () => {
     let draft = initReflowDraft(source)
     draft = moveStationToPod(draft, { podIndex: 1, stationIndex: 0, targetPodIndex: 0 })
     draft = removePod(draft, 1)
@@ -74,14 +74,14 @@ describe('reflow-draft', () => {
     expect(result.workout.pods[0].stations.map((s) => s.name)).toEqual(['Push', 'Squat'])
     expect(result.workout.flow.type).toBe('laps')
     expect(result.compiled.workTotal).toBe(4)
-    expect(reflowSummary(result)).toBe('4 works · 1:55')
+    expect(reflowSummary(result)).toBe('4 works · 2:20')
   })
 
-  it('overriding a round replaces the carried timing (40/10 × 2 → 4:55)', () => {
+  it('overriding a round replaces the carried timing (40/10 × 2 → 5:20)', () => {
     let draft = initReflowDraft(source) // uniform, 2 rounds of 20/10
     draft = setRound(draft, { index: 0, patch: { workSeconds: '40' } })
     const result = right(computeReflow(source, draft))
-    expect(result.compiled.totalDurationMillis).toBe(295_000)
+    expect(result.compiled.totalDurationMillis).toBe(320_000)
   })
 
   it('an empty pod is an invalid draft — Left, never a crash', () => {

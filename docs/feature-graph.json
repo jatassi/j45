@@ -24,7 +24,7 @@
         "walking-skeleton"
       ],
       "acceptance": [
-        "Given the four vendored legacy fixtures (Athletica, Docklands, Medusa, Apex), when each is compiled, the segment sequence matches its golden expectation exactly — segment types, per-segment durations, and work ordering (pod-major for laps, station-major for sets), with one leading 5s ready segment, no rest after the final work, and total durations 1605s, 1710s, 2180s, and 2135s respectively — asserted by vitest tests that pass in `bun run test`.",
+        "Given the four vendored legacy fixtures (Athletica, Docklands, Medusa, Apex), when each is compiled, the segment sequence matches its golden expectation exactly — segment types, per-segment durations, and work ordering (pod-major for laps, station-major for sets), with one leading 30s ready segment, no rest after the final work, and total durations 1630s, 1735s, 2205s, and 2160s respectively — asserted by vitest tests that pass in `bun run test`.",
         "Given a flow whose rounds include ladder (non-uniform) rests, when compiled, every rest segment's duration equals the completed work's round rest — asserted explicitly for the lap→lap and pod→pod bridges on Docklands and the set→next-station bridge on Medusa.",
         "Given a flow containing a round with restSeconds 0, when compiled, no rest segment appears after that round's works (adjacent work segments).",
         "Every model type (Workout, Pod, Station, Flow, Round, Segment union, CompiledWorkout, TimerState union) round-trips through Schema encode/decode, and decoding rejects empty pods, empty stations, empty rounds, workSeconds <= 0, and restSeconds < 0.",
@@ -61,10 +61,10 @@
       ],
       "acceptance": [
         "Integration: given a fresh database, registering an account creates exactly 12 workouts in that account's library — named exactly Athletica, Romans, Miami Nights, Panthers, Docklands, Red Diamond, Crossfire, Hammer, Pipeline, Medusa, SoCal, Apex — in the same transaction as the user row (a failed registration creates neither); a second account gets its own 12 copies with distinct ids, and deleting a workout from one library leaves the other untouched.",
-        "Unit: each of the 12 frozen seed bodies decodes as a valid Workout, and compiling them yields (works, total seconds) of exactly Athletica (27,1605), Romans (24,2120), Miami Nights (24,1425), Panthers (27,1470), Docklands (36,1710), Red Diamond (36,2135), Crossfire (40,2235), Hammer (18,1110), Pipeline (36,2145), Medusa (27,2180), SoCal (36,2155), Apex (8,2135).",
+        "Unit: each of the 12 frozen seed bodies decodes as a valid Workout, and compiling them yields (works, total seconds) of exactly Athletica (27,1630), Romans (24,2145), Miami Nights (24,1450), Panthers (27,1495), Docklands (36,1735), Red Diamond (36,2160), Crossfire (40,2260), Hammer (18,1135), Pipeline (36,2170), Medusa (27,2205), SoCal (36,2180), Apex (8,2160).",
         "Integration: given a database migrated through 0002 with an existing user, when migration 0003 runs, that user's library contains the 12 seed workouts.",
         "Integration: ListWorkouts returns only the caller's workouts, and GetWorkout/DuplicateWorkout/RenameWorkout/DeleteWorkout against another user's workout id fail with WorkoutNotFound.",
-        "e2e (chromium + webkit): after PIN login, `/` lists the 12 seed workouts; opening `Athletica` shows 3 pods, 9 stations, and total duration 26:45; Duplicate creates `Athletica (copy)` in the list; renaming the copy persists across a page reload; Delete removes it.",
+        "e2e (chromium + webkit): after PIN login, `/` lists the 12 seed workouts; opening `Athletica` shows 3 pods, 9 stations, and total duration 27:10; Duplicate creates `Athletica (copy)` in the list; renaming the copy persists across a page reload; Delete removes it.",
         "e2e: a logged-out visit to `/workouts/<seed id>` shows the login screen, and completing PIN login renders that workout's detail without further navigation; `/account` renders the account screen via a nav link from the library home.",
         "e2e: completing registration via `/register?invite=<code>` lands the new user on the library home — never a blank page — and any authenticated visit to a path the route tree doesn't match redirects to `/`.",
         "The glass e2e suite passes unchanged (`/glass` still renders unauthenticated); the pre-existing auth e2e suites pass with edits limited to navigation for the routed home (AccountScreen assertions via `/account`, post-auth landing is the library) — no auth assertion weakened or removed; and `bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
@@ -101,7 +101,7 @@
         "Integration: CreateWorkout inserts a caller-owned row returned as a LibraryWorkout with fresh id and equal created/updated timestamps; UpdateWorkout replaces the whole body, bumps updated_at, preserves id and created_at; both against a foreign or absent id fail WorkoutNotFound; ListWorkouts reflects the edit.",
         "e2e (chromium + webkit): from the library home, New workout → editor: set name and focus, add a pod with two stations, set flow to sets with 3 uniform rounds of 30″ work / 10″ rest, Save → the detail screen shows the created workout and it appears in the library after a reload.",
         "e2e: editing a seed copy — switch flow laps→sets, rename a station, move a station down — then Save; the detail screen reflects all three changes after a page reload.",
-        "e2e: the editor's live summary chip for an unmodified Athletica draft reads exactly 27 works · 26:45; with a station name cleared, Save is disabled and a validation message is visible.",
+        "e2e: the editor's live summary chip for an unmodified Athletica draft reads exactly 27 works · 27:10; with a station name cleared, Save is disabled and a validation message is visible.",
         "Unit: the uniform work/rest toggle expands one pair to N rounds and collapses N rounds to round 1's pair; a draft with an empty pod, empty station name, workSeconds 0, or negative restSeconds fails Workout decode and the editor surfaces the failure.",
         "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
       ]
@@ -184,7 +184,7 @@
         "workout-domain"
       ],
       "acceptance": [
-        "Unit: the synthetic manual workout for work 40 / rest 20 / rounds 9 is schema-valid and compiles to one 5s ready segment, 9 work segments of 40s with 20s rests between consecutive rounds, no rest after the final work, total 525s; with rest 0 no rest segments appear at all.",
+        "Unit: the synthetic manual workout for work 40 / rest 20 / rounds 9 is schema-valid and compiles to one 30s ready segment, 9 work segments of 40s with 20s rests between consecutive rounds, no rest after the final work, total 550s; with rest 0 no rest segments appear at all.",
         "e2e (chromium + webkit): /timer is reachable via a nav link from the library home while logged in; with short inputs (5s work, 0 rest, 2 rounds) Start runs ready → work → work → Done with the round indicator advancing; Pause freezes the displayed count, Resume continues, Reset returns to the idle input state.",
         "e2e: with Web Audio instrumented via init script, the Start tap itself unlocks audio (the player shows data-audio=\"on\") and at least one beep fires on a segment transition; with navigator.wakeLock instrumented, the lock is acquired while running and released on pause and on Done.",
         "The player kit exists as packages/client/src/player/ modules (audio, wake-lock, use-countdown) with no imports from session code, and its audio/countdown units are covered by vitest tests that pass in `bun run test`.",
@@ -305,7 +305,7 @@
       "acceptance": [
         "e2e (chromium + webkit): /library lists the 12 seed workouts as cards with name, focus label badge, and works · MM:SS; tapping a card opens its detail.",
         "e2e: /library/exercises — filter chips narrow by muscle group with domain labels; creating an exercise via the bottom drawer shows it in the list and persists a reload; editing its tags persists; deleting via alert-dialog removes it; command failures surface as toasts.",
-        "e2e: workout detail — Start is the primary action and Start with reflow is present; rename via dialog persists a reload; Duplicate creates a copy; Delete behind an alert-dialog removes it and returns to /library; opening Athletica shows 3 pods, 9 stations, and 26:45.",
+        "e2e: workout detail — Start is the primary action and Start with reflow is present; rename via dialog persists a reload; Duplicate creates a copy; Delete behind an alert-dialog removes it and returns to /library; opening Athletica shows 3 pods, 9 stations, and 27:10.",
         "e2e: a logged-out visit to /workouts/<seed id> shows the login screen and completing PIN login lands on that detail without further navigation.",
         "The library, exercises, and detail screens contain no native <select> or bare <input> — form controls compose from ui/; the hand-rolled exercise-dialogs overlay is deleted.",
         "`bun run check`, `bun run test`, and `bun run test:e2e` all exit 0."
@@ -321,7 +321,7 @@
       "acceptance": [
         "e2e (chromium + webkit): New workout — name, focus via toggle-group, a pod with two stations, sets flow with 3 uniform rounds of 30″/10″, Save from the header → detail shows the workout and it persists a reload.",
         "e2e: editing a seed copy — flow laps→sets via toggle-group, station rename, and a cross-pod move via the drawer — persists all three through Save and a reload.",
-        "e2e: an unmodified Athletica draft's sticky summary chip reads exactly 27 works · 26:45; clearing a station name disables Save and shows a validation message at the field.",
+        "e2e: an unmodified Athletica draft's sticky summary chip reads exactly 27 works · 27:10; clearing a station name disables Save and shows a validation message at the field.",
         "e2e: launch mode offers no content edits (station names read-only, no add-station); regrouping into one pod and flipping sets→laps updates the chip; Start lands on /session/<id> running the reflowed structure with the stored workout unchanged after reload; Save to plan persists the same changes.",
         "e2e: backing out of a dirty draft raises an alert-dialog confirm; discarding returns without persisting.",
         "The editor and reflow screens contain no native <select>, <input>, or <checkbox> outside ui/ components.",

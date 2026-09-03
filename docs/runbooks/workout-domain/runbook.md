@@ -31,8 +31,8 @@ Expected observations, per criterion:
    full segment sequence (type, per-segment duration, work ordering,
    `workIndex`, station identity) for Athletica / Docklands / Medusa / Apex
    against hand-derived goldens in `test/fixtures/legacy-goldens.ts`; one
-   leading 5s ready segment, no rest after the final work; totals asserted at
-   1605s / 1710s / 2180s / 2135s.
+   leading 30s ready segment, no rest after the final work; totals asserted at
+   1630s / 1735s / 2205s / 2160s.
 2. **Ladder bridge rests** — explicit tests: Docklands lap1→lap2 bridge = 30s
    (lap 1's rest, not lap 2's 15s), Docklands pod1→pod2 bridge = 5s (lap 4's
    rest, not 30s), Medusa station1→station2 bridge = 30s (set 3's rest, not

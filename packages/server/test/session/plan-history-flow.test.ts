@@ -4,7 +4,15 @@ import * as Effect from 'effect/Effect'
 import * as TestClock from 'effect/TestClock'
 
 import { LiveSessions } from '../../src/session/live-sessions.js'
-import { asOwner, FlowLive, makeWorkout, owner, paused, snapshotOf } from './plan-flow-harness.js'
+import {
+  asOwner,
+  FlowLive,
+  holdWatch,
+  makeWorkout,
+  owner,
+  paused,
+  snapshotOf,
+} from './plan-flow-harness.js'
 
 /**
  * One rule, read where a user reads it: a completion records the last plan
@@ -14,8 +22,8 @@ import { asOwner, FlowLive, makeWorkout, owner, paused, snapshotOf } from './pla
  * Every assertion here comes off `ListHistory`. The row is the whole point of
  * the feature, so nothing reaches into the handle to reach it.
  *
- * `makeWorkout(['A', 'B', 'C'])` compiles to ready 5s | A 10s | rest 5s |
- * B 10s | rest 5s | C 10s — six segments over 45s, with work ordinals 0, 1
+ * `makeWorkout(['A', 'B', 'C'])` compiles to ready 30s | A 10s | rest 5s |
+ * B 10s | rest 5s | C 10s — six segments over 70s, with work ordinals 0, 1
  * and 2.
  */
 
@@ -44,7 +52,7 @@ describe('a completion of a session whose plan changed while the timer ran', () 
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      yield* TestClock.adjust('7 seconds')
+      yield* TestClock.adjust('32 seconds')
       yield* library.RenameWorkout({ id: created.id, name: 'Renamed' }, { headers })
       yield* svc.leaveSession(started.id, owner)
 
@@ -65,9 +73,9 @@ describe('a completion of a session whose plan changed while the timer ran', () 
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      // The edit lands at the 15s boundary: four stations instead of three,
+      // The edit lands at the 40s boundary: four stations instead of three,
       // so the plan in force from then on holds eight segments, not six.
-      yield* TestClock.adjust('7 seconds')
+      yield* TestClock.adjust('32 seconds')
       yield* library.UpdateWorkout(
         {
           id: created.id,
@@ -104,7 +112,7 @@ describe('a completion of a session edited only where no segment reads', () => {
       // Focus and note live on the stored plan and in no compiled segment,
       // so this edit compiles to exactly the plan already in force. Nothing
       // anybody runs changed — and the row still has to hold one plan.
-      yield* TestClock.adjust('7 seconds')
+      yield* TestClock.adjust('32 seconds')
       yield* library.UpdateWorkout(
         {
           id: created.id,
@@ -144,8 +152,8 @@ describe('a completion of a session that a deleted workout ended', () => {
       )
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
 
-      // An edit lands at the 15s boundary, and then the row goes altogether.
-      yield* TestClock.adjust('7 seconds')
+      // An edit lands at the 40s boundary, and then the row goes altogether.
+      yield* TestClock.adjust('32 seconds')
       yield* library.UpdateWorkout(
         {
           id: created.id,
@@ -178,8 +186,8 @@ describe('a completion of a session changed after the timer reached done', () =>
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      // ready 5s | A 10s | rest 5s | B 10s — the last rep ends at 30s.
-      yield* TestClock.adjust('31 seconds')
+      // ready 30s | A 10s | rest 5s | B 10s — the last rep ends at 55s.
+      yield* TestClock.adjust('56 seconds')
       yield* library.RenameWorkout({ id: created.id, name: 'Renamed After' }, { headers })
       yield* svc.leaveSession(started.id, owner)
 
@@ -202,12 +210,13 @@ describe('a completion measured against a plan shorter than the position it held
       )
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
+      yield* holdWatch(svc, started.id)
 
-      // t=40s: the last work, segment 5 of six. The host then takes the rests
+      // t=65s: the last work, segment 5 of six. The host then takes the rests
       // out, so the plan in force holds four segments and the last of them is
       // segment 3. A position carried across would name a segment that the
       // recorded plan does not have.
-      yield* TestClock.adjust('40 seconds')
+      yield* TestClock.adjust('65 seconds')
       yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
       expect(paused(yield* snapshotOf(svc, started.id))?.segmentIndex).toBe(5)
 
@@ -239,10 +248,10 @@ describe('a completion of a session that a shorter plan exhausted', () => {
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      // t=22s: the second work, ordinal 1, segment 3 of six. The host trims
+      // t=47s: the second work, ordinal 1, segment 3 of six. The host trims
       // the plan to one station, so ordinal 1 no longer exists and the
       // session finishes where it stands.
-      yield* TestClock.adjust('22 seconds')
+      yield* TestClock.adjust('47 seconds')
       yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
       yield* library.UpdateWorkout(
         { id: created.id, workout: makeWorkout(['A']), updatedAt: created.updatedAt },

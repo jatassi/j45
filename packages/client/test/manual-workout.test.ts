@@ -15,10 +15,10 @@ describe('buildManualWorkout', () => {
     expect(workout.pods[0].stations).toHaveLength(1)
   })
 
-  it('work=40 / rest=20 / rounds=9 compiles to ready + 9 work + 8 rest, total 525000ms', () => {
+  it('work=40 / rest=20 / rounds=9 compiles to ready + 9 work + 8 rest, total 550000ms', () => {
     const compiled = compile(buildManualWorkout(40, 20, 9))
 
-    expect(compiled.totalDurationMillis).toBe(525_000)
+    expect(compiled.totalDurationMillis).toBe(550_000)
     expect(compiled.workTotal).toBe(9)
 
     const tags = compiled.segments.map((segment) => segment._tag)
@@ -43,7 +43,7 @@ describe('buildManualWorkout', () => {
       'work',
     ])
 
-    expect(compiled.segments[0].durationMillis).toBe(5000)
+    expect(compiled.segments[0].durationMillis).toBe(30_000)
 
     const workSegments = compiled.segments.filter((segment) => segment._tag === 'work')
     expect(workSegments).toHaveLength(9)

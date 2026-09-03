@@ -42,7 +42,7 @@ new Workout({
 })
 ```
 
-`compile` then yields exactly: one `ready` (5s), then `rounds` work segments
+`compile` then yields exactly: one `ready` (30s), then `rounds` work segments
 with a rest between consecutive rounds and **no rest after the final work**
 (`restSeconds: 0` rounds get no rest segment at all). This is a deliberate,
 small parity *improvement*: the legacy manual timer ran the rest after the
@@ -98,7 +98,7 @@ UI-framework-thin: plain modules plus small hooks, unit-testable in vitest.
   *state* never advances here — display only.
 There is no formatter in the kit: the count reuses the existing shared
 `formatDuration` (`packages/client/src/lib/workouts.ts`) — unpadded `M:SS`
-by ceil, the codebase's established display convention (`0:05`, `26:45`);
+by ceil, the codebase's established display convention (`0:05`, `27:10`);
 do not reintroduce legacy's zero-padded `00:05`.
 
 What is deliberately **not** shared: the screen itself. The manual timer's

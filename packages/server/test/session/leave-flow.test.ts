@@ -134,7 +134,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
         expect(bothIds).toContain(bob.userId)
 
         // Advance so the ticker crosses into work — session is progressed.
-        yield* TestClock.adjust('5 seconds')
+        yield* TestClock.adjust('30 seconds')
         const stateAtLeave = yield* svc.snapshot(id)
         expect(stateAtLeave.timer._tag).toBe('running')
         if (stateAtLeave.timer._tag === 'running') {
@@ -144,14 +144,14 @@ describe('leave flows via LiveSessions (TestClock)', () => {
         yield* svc.leaveSession(id, bob.userId)
 
         // Exactly one completion for the leaver: personal endedAt and progress
-        // match the timer position at leave time (t=5s, segment 1 of 4).
+        // match the timer position at leave time (t=30s, segment 1 of 4).
         const bobRows = yield* completionsRepo.listForUser(bob.userId)
         expect(bobRows).toHaveLength(1)
         const bobRow = bobRows[0]
         if (bobRow === undefined) {
           throw new Error('expected bob’s leave completion')
         }
-        expect(DateTime.toEpochMillis(bobRow.endedAt)).toBe(5000)
+        expect(DateTime.toEpochMillis(bobRow.endedAt)).toBe(30_000)
         expect(bobRow.progress?.segmentsCompleted).toBe(1)
         expect(bobRow.progress?.totalSegments).toBe(4)
         // Still-watching host has no row yet.
@@ -220,7 +220,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
         })
 
         // Progress past ready.
-        yield* TestClock.adjust('5 seconds')
+        yield* TestClock.adjust('30 seconds')
         expect(yield* lobbyNow(svc)).toHaveLength(1)
 
         // Both explicitly leave — every roster member departs.
@@ -249,8 +249,8 @@ describe('leave flows via LiveSessions (TestClock)', () => {
           throw new Error('expected one completion each')
         }
         expect(aliceRow.id).not.toBe(bobRow.id)
-        expect(DateTime.toEpochMillis(aliceRow.endedAt)).toBe(5000)
-        expect(DateTime.toEpochMillis(bobRow.endedAt)).toBe(5000)
+        expect(DateTime.toEpochMillis(aliceRow.endedAt)).toBe(30_000)
+        expect(DateTime.toEpochMillis(bobRow.endedAt)).toBe(30_000)
         expect(aliceRow.progress?.segmentsCompleted).toBe(1)
         expect(bobRow.progress?.segmentsCompleted).toBe(1)
       }).pipe(Effect.provide(FlowLive)),
@@ -269,7 +269,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
         // Both join; progress; pause so only the abandonment clock runs.
         const aliceW = yield* openWatch(svc, id, alice)
         const bobW = yield* openWatch(svc, id, bob)
-        yield* TestClock.adjust('5 seconds')
+        yield* TestClock.adjust('30 seconds')
         yield* svc.command(id, 'pause')
 
         // Bob departs explicitly — one leave-time row, unrostered.
@@ -299,8 +299,8 @@ describe('leave flows via LiveSessions (TestClock)', () => {
         if (aliceRow === undefined) {
           throw new Error('expected alice’s GC completion')
         }
-        // Presence hit zero at t=5s (after pause/leave/releases); GC at +60s.
-        expect(DateTime.toEpochMillis(aliceRow.endedAt)).toBe(65_000)
+        // Presence hit zero at t=30s (after pause/leave/releases); GC at +60s.
+        expect(DateTime.toEpochMillis(aliceRow.endedAt)).toBe(90_000)
         // Final timer position at end: paused on segment 1 of 4.
         expect(aliceRow.progress?.segmentsCompleted).toBe(1)
         expect(aliceRow.progress?.totalSegments).toBe(4)
@@ -312,7 +312,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
         if (bobLeaveRow === undefined) {
           throw new Error('expected bob’s leave-time row')
         }
-        expect(DateTime.toEpochMillis(bobLeaveRow.endedAt)).toBe(5000)
+        expect(DateTime.toEpochMillis(bobLeaveRow.endedAt)).toBe(30_000)
       }).pipe(Effect.provide(FlowLive)),
   )
 
@@ -341,7 +341,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
         {
           const { id } = yield* startFixture(svc)
           // Progress first, then bob joins and leaves — first-stint row.
-          yield* TestClock.adjust('5 seconds')
+          yield* TestClock.adjust('30 seconds')
           yield* watchThenLeave(svc, id, bob)
           yield* svc.leaveSession(id, bob.userId)
           const afterFirstLeave = yield* completionsRepo.listForUser(bob.userId)
@@ -350,7 +350,7 @@ describe('leave flows via LiveSessions (TestClock)', () => {
           if (firstLeaveRow === undefined) {
             throw new Error('expected bob’s first-stint row')
           }
-          expect(DateTime.toEpochMillis(firstLeaveRow.endedAt)).toBe(5000)
+          expect(DateTime.toEpochMillis(firstLeaveRow.endedAt)).toBe(30_000)
           expect(firstLeaveRow.progress?.segmentsCompleted).toBe(1)
           // Unrostered: not in published participants.
           expect(participantIds(yield* svc.snapshot(id))).not.toContain(bob.userId)
@@ -378,10 +378,10 @@ describe('leave flows via LiveSessions (TestClock)', () => {
           if (secondStint === undefined || firstStint === undefined) {
             throw new Error('expected two stint rows')
           }
-          expect(DateTime.toEpochMillis(firstStint.endedAt)).toBe(5000)
+          expect(DateTime.toEpochMillis(firstStint.endedAt)).toBe(30_000)
           expect(firstStint.progress?.segmentsCompleted).toBe(1)
-          // Presence dropped at rejoin release (still ~t=5s); GC +60s.
-          expect(DateTime.toEpochMillis(secondStint.endedAt)).toBe(65_000)
+          // Presence dropped at rejoin release (still ~t=30s); GC +60s.
+          expect(DateTime.toEpochMillis(secondStint.endedAt)).toBe(90_000)
           expect(secondStint.progress?.segmentsCompleted).toBe(1)
           expect(secondStint.id).not.toBe(firstStint.id)
 

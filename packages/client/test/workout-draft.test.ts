@@ -43,7 +43,7 @@ const validDraft = (overrides: Partial<DraftWorkout> = {}): DraftWorkout => ({
 
 /**
  * Full Athletica-shaped draft: 3 pods × 3 stations, uniform 40″/20″ × 3 laps.
- * Domain golden: 27 works, 1605s → "27 works · 26:45".
+ * Domain golden: 27 works, 1630s → "27 works · 27:10".
  */
 const athleticaDraft: DraftWorkout = {
   name: 'Athletica',
@@ -304,7 +304,7 @@ describe('summarizeDraft', () => {
     const seconds = totalSeconds % 60
     const expected = `${compiled.workTotal} works · ${minutes}:${seconds.toString().padStart(2, '0')}`
     expect(summary).toBe(expected)
-    expect(summary).toBe('27 works · 26:45')
+    expect(summary).toBe('27 works · 27:10')
   })
 
   it('returns null for a non-decoding draft without throwing', () => {

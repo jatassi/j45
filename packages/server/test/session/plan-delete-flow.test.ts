@@ -174,9 +174,9 @@ describe('deleting a workout that live sessions run', () => {
       const nextSnapshot = Effect.flatten(Queue.take(queue))
       yield* nextSnapshot
 
-      // ready 5s | A 10s | rest 5s | B 10s — the last rep ends at 30s, and
+      // ready 30s | A 10s | rest 5s | B 10s — the last rep ends at 55s, and
       // Bob is sitting on the finished screen.
-      yield* TestClock.adjust('31 seconds')
+      yield* TestClock.adjust('56 seconds')
       yield* latestWith(queue, (state) => state.timer._tag === 'done')
 
       yield* library.DeleteWorkout({ id: created.id }, { headers })
@@ -200,8 +200,8 @@ describe('deleting a workout that live sessions run', () => {
       // Bob joins, so the session has two people to record, not one.
       yield* Stream.toQueueOfElements(svc.watch(started.id, bob))
 
-      // Ready is 5s, so 10s puts the timer in the first work interval.
-      yield* TestClock.adjust('10 seconds')
+      // Ready is 30s, so 35s puts the timer in the first work interval.
+      yield* TestClock.adjust('35 seconds')
       yield* library.DeleteWorkout({ id: created.id }, { headers })
 
       // Everybody who was ever in the session keeps a row of their own.

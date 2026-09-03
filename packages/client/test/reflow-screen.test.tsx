@@ -61,7 +61,7 @@ function makeFakeRuntime(handlers: Handlers) {
 
 const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
 
-/** Athletica: 3 pods × 3 stations, uniform laps 40″/20″ × 3 — domain golden 27 works · 26:45. */
+/** Athletica: 3 pods × 3 stations, uniform laps 40″/20″ × 3 — domain golden 27 works · 27:10. */
 const athleticaWorkout = new Workout({
   name: 'Athletica',
   focus: 'cardio',
@@ -299,12 +299,12 @@ describe('ReflowWorkoutScreen', () => {
     )
 
     await screen.findByTestId('reflow-editor-screen')
-    expect(screen.getByTestId('reflow-summary').textContent).toBe('27 works · 26:45')
+    expect(screen.getByTestId('reflow-summary').textContent).toBe('27 works · 27:10')
 
     // Edit work seconds → chip recomputes (uniform 30″/20″ × 3).
     fireEvent.change(screen.getByTestId('reflow-uniform-work'), { target: { value: '30' } })
     await waitFor(() => {
-      expect(screen.getByTestId('reflow-summary').textContent).not.toBe('27 works · 26:45')
+      expect(screen.getByTestId('reflow-summary').textContent).not.toBe('27 works · 27:10')
     })
     const afterEdit = screen.getByTestId('reflow-summary').textContent
     expect(afterEdit).toMatch(/^\d+ works · \d+:\d{2}$/)

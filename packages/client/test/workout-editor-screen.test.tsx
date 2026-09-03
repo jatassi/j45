@@ -51,7 +51,7 @@ function makeFakeRuntime(handlers: Handlers) {
 
 const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
 
-/** Athletica: 3 pods × 3 stations, uniform laps 40″/20″ × 3 — domain golden 27 works · 26:45. */
+/** Athletica: 3 pods × 3 stations, uniform laps 40″/20″ × 3 — domain golden 27 works · 27:10. */
 const athleticaWorkout = new Workout({
   name: 'Athletica',
   focus: 'cardio',
@@ -197,11 +197,11 @@ describe('WorkoutEditorScreen', () => {
     )
   })
 
-  it('sticky chip reads exactly "27 works · 26:45" for the untouched Athletica draft; clearing a station name shows a per-field error at that station and disables Save with no page-level banner', async () => {
+  it('sticky chip reads exactly "27 works · 27:10" for the untouched Athletica draft; clearing a station name shows a per-field error at that station and disables Save with no page-level banner', async () => {
     renderApp({ GetWorkout: () => Effect.succeed(athletica) }, `/workouts/${athletica.id}/edit`)
 
     await screen.findByTestId('workout-editor-screen')
-    expect(screen.getByTestId('editor-summary').textContent).toBe('27 works · 26:45')
+    expect(screen.getByTestId('editor-summary').textContent).toBe('27 works · 27:10')
     expect(screen.getByTestId<HTMLButtonElement>('editor-save').disabled).toBe(false)
 
     fireEvent.change(screen.getAllByTestId('station-name-input')[0], { target: { value: '' } })
@@ -398,7 +398,7 @@ describe('WorkoutEditorScreen', () => {
     expect(screen.getByTestId<HTMLInputElement>('editor-round-count').value).toBe('3')
     expect(screen.getByTestId<HTMLInputElement>('editor-uniform-work').value).toBe('40')
     expect(screen.getByTestId<HTMLInputElement>('editor-uniform-rest').value).toBe('20')
-    expect(screen.getByTestId('editor-summary').textContent).toBe('27 works · 26:45')
+    expect(screen.getByTestId('editor-summary').textContent).toBe('27 works · 27:10')
 
     cleanup()
 

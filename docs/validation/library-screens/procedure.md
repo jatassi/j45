@@ -41,7 +41,7 @@ Per-criterion observable behavior (all exercised by the e2e specs above):
    (dominant, filled) plus `start-with-reflow-button`; the reflow launch flow
    is exercised; rename via `rename-dialog` persists a reload; `Duplicate`
    creates "Athletica (copy)"; delete behind `delete-dialog` returns to
-   `/library`; Athletica shows 3 pods, 9 stations, 26:45.
+   `/library`; Athletica shows 3 pods, 9 stations, 27:10.
 4. `library.spec.ts` — a logged-out visit to `/workouts/<seed id>` shows
    `login-screen`; completing PIN login renders that workout's detail with no
    further navigation.

@@ -47,7 +47,7 @@ function makeFakeRuntime(
 
 const seededAt = DateTime.unsafeMake('2026-01-01T00:00:00.000Z')
 
-/** 1 pod, 2 stations, laps × 1 round of 30″ work / 0″ rest: ready(5) + 30 + 30 = 65s → "1:05". */
+/** 1 pod, 2 stations, laps × 1 round of 30″ work / 0″ rest: ready(30) + 30 + 30 = 90s → "1:30". */
 const athletica = new LibraryWorkout({
   id: Schema.decodeSync(WorkoutId)('workout-athletica'),
   workout: new Workout({
@@ -65,7 +65,7 @@ const athletica = new LibraryWorkout({
   updatedAt: seededAt,
 })
 
-/** 1 pod, 3 stations, laps × 1 round of 45″ work / 15″ rest: ready(5) + 45+15+45+15+45 = 170s → "2:50". */
+/** 1 pod, 3 stations, laps × 1 round of 45″ work / 15″ rest: ready(30) + 45+15+45+15+45 = 195s → "3:15". */
 const ironCircuit = new LibraryWorkout({
   id: Schema.decodeSync(WorkoutId)('workout-iron-circuit'),
   workout: new Workout({
@@ -132,12 +132,12 @@ describe('LibraryScreen', () => {
     expect(screen.getByTestId(`workout-name-${athletica.id}`).textContent).toBe('Athletica')
     // FocusBadge must show the human label, never the raw literal.
     expect(screen.getByTestId(`workout-focus-${athletica.id}`).textContent).toBe('Cardio')
-    expect(screen.getByTestId(`workout-summary-${athletica.id}`).textContent).toBe('2 works · 1:05')
+    expect(screen.getByTestId(`workout-summary-${athletica.id}`).textContent).toBe('2 works · 1:30')
 
     expect(screen.getByTestId(`workout-name-${ironCircuit.id}`).textContent).toBe('Iron Circuit')
     expect(screen.getByTestId(`workout-focus-${ironCircuit.id}`).textContent).toBe('Strength')
     expect(screen.getByTestId(`workout-summary-${ironCircuit.id}`).textContent).toBe(
-      '3 works · 2:50',
+      '3 works · 3:15',
     )
 
     // Old split testids are gone.

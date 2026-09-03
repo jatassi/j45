@@ -93,7 +93,7 @@ describe('GenerateScreen', () => {
 
     const preview = await screen.findByTestId('generate-preview')
     expect(screen.getByTestId('generate-codename').textContent).toBe('Iron Falcon')
-    expect(screen.getByTestId('generate-summary').textContent).toBe('27 works · 26:45')
+    expect(screen.getByTestId('generate-summary').textContent).toBe('27 works · 27:10')
     const firstSeed = preview.dataset.seed
     expect(firstSeed).not.toBeUndefined()
     expect(Number(firstSeed)).toBe(seeds[0])
@@ -158,7 +158,7 @@ describe('GenerateScreen', () => {
     fireEvent.click(screen.getByTestId('generate-edit'))
     await screen.findByTestId('workout-editor-screen')
     expect(screen.getByTestId<HTMLInputElement>('editor-name').value).toBe('Iron Falcon')
-    expect(screen.getByTestId('editor-summary').textContent).toBe('27 works · 26:45')
+    expect(screen.getByTestId('editor-summary').textContent).toBe('27 works · 27:10')
     // Slot was consumed on mount (one-shot).
     expect(takeInitialDraft()).toBeUndefined()
   })

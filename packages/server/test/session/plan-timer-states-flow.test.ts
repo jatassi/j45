@@ -7,6 +7,7 @@ import { LiveSessions } from '../../src/session/live-sessions.js'
 import {
   asOwner,
   FlowLive,
+  holdWatch,
   makeWorkout,
   owner,
   paused,
@@ -21,8 +22,8 @@ import {
  * Observed only where a user can see it — the session snapshot each
  * participant holds, and the history rows the session leaves behind.
  *
- * `makeWorkout(['A', 'B', 'C'])` compiles to ready 5s | A 10s | rest 5s |
- * B 10s | rest 5s | C 10s — six segments over 45s, with work ordinals 0, 1
+ * `makeWorkout(['A', 'B', 'C'])` compiles to ready 30s | A 10s | rest 5s |
+ * B 10s | rest 5s | C 10s — six segments over 70s, with work ordinals 0, 1
  * and 2.
  */
 
@@ -37,9 +38,9 @@ describe('a plan change while the session is paused', () => {
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      // t=7s: the first work (5–15s) is running. The host pauses it with 8s
+      // t=32s: the first work (30–40s) is running. The host pauses it with 8s
       // left, so nothing is counting down and no boundary is coming.
-      yield* TestClock.adjust('7 seconds')
+      yield* TestClock.adjust('32 seconds')
       yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
       expect(paused(yield* snapshotOf(svc, started.id))?.remainingMillis).toBe(8000)
 
@@ -77,7 +78,7 @@ describe('a plan change while the session is paused', () => {
 
       // The edit arrives while the first work is running, so it is held for
       // the next boundary — which the pause then takes away.
-      yield* TestClock.adjust('7 seconds')
+      yield* TestClock.adjust('32 seconds')
       yield* library.UpdateWorkout(
         {
           id: created.id,
@@ -110,8 +111,8 @@ describe('a plan change while the session is paused', () => {
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      // t=7s: 8s left of the first work. The participant pauses there.
-      yield* TestClock.adjust('7 seconds')
+      // t=32s: 8s left of the first work. The participant pauses there.
+      yield* TestClock.adjust('32 seconds')
       yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
       expect(paused(yield* snapshotOf(svc, started.id))?.remainingMillis).toBe(8000)
 
@@ -132,7 +133,7 @@ describe('a plan change while the session is paused', () => {
 
       // And the resume honours it: 8s from the resume instant.
       yield* sessions.SendSessionCommand({ id: started.id, command: 'resume' }, { headers })
-      expect(running(yield* snapshotOf(svc, started.id))?.endsAtMillis).toBe(15_000)
+      expect(running(yield* snapshotOf(svc, started.id))?.endsAtMillis).toBe(40_000)
     }).pipe(Effect.provide(FlowLive)),
   )
 
@@ -146,7 +147,7 @@ describe('a plan change while the session is paused', () => {
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      yield* TestClock.adjust('7 seconds')
+      yield* TestClock.adjust('32 seconds')
       yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
 
       // This edit retimes the round, so the segment the participant holds is
@@ -177,7 +178,7 @@ describe('a plan change while the session is paused', () => {
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
 
-      yield* TestClock.adjust('7 seconds')
+      yield* TestClock.adjust('32 seconds')
       yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
       yield* library.UpdateWorkout(
         {
@@ -190,9 +191,9 @@ describe('a plan change while the session is paused', () => {
       yield* sessions.SendSessionCommand({ id: started.id, command: 'resume' }, { headers })
 
       // 20s from the resume instant — the new work's own duration.
-      expect(running(yield* snapshotOf(svc, started.id))?.endsAtMillis).toBe(27_000)
+      expect(running(yield* snapshotOf(svc, started.id))?.endsAtMillis).toBe(52_000)
 
-      // And the timer honours it: still working at 26s, resting at 27s.
+      // And the timer honours it: still working at 51s, resting at 52s.
       yield* TestClock.adjust('19 seconds')
       expect(running(yield* snapshotOf(svc, started.id))?.segmentIndex).toBe(1)
       yield* TestClock.adjust('1 second')
@@ -211,16 +212,17 @@ describe('a plan change that no longer reaches the session position', () => {
       )
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
+      yield* holdWatch(svc, started.id)
 
-      // t=32s: the rest before the third work (ordinal 2), which the host
+      // t=57s: the rest before the third work (ordinal 2), which the host
       // then trims away — the new plan stops at ordinal 1.
-      yield* TestClock.adjust('32 seconds')
+      yield* TestClock.adjust('57 seconds')
       yield* library.UpdateWorkout(
         { id: created.id, workout: makeWorkout(['A', 'B']), updatedAt: created.updatedAt },
         { headers },
       )
 
-      // t=35s: the boundary the held plan waited for. There is no work at
+      // t=60s: the boundary the held plan waited for. There is no work at
       // ordinal 2 to enter, so the session finishes here.
       yield* TestClock.adjust('3 seconds')
       const after = yield* snapshotOf(svc, started.id)
@@ -247,10 +249,12 @@ describe('a plan change that no longer reaches the session position', () => {
       const cut = yield* sessions.StartSession({ workoutId: trimmed.id }, { headers })
       const ran = yield* sessions.StartSession({ workoutId: control.id }, { headers })
       const svc = yield* LiveSessions
+      yield* holdWatch(svc, cut.id)
+      yield* holdWatch(svc, ran.id)
 
-      // One session is trimmed short of its position at 35s; the other is
-      // left alone and reaches its own last rep at 45s.
-      yield* TestClock.adjust('32 seconds')
+      // One session is trimmed short of its position at 60s; the other is
+      // left alone and reaches its own last rep at 70s.
+      yield* TestClock.adjust('57 seconds')
       yield* library.UpdateWorkout(
         { id: trimmed.id, workout: makeWorkout(['A', 'B']), updatedAt: trimmed.updatedAt },
         { headers },
@@ -292,8 +296,9 @@ describe('a plan change that no longer reaches the session position', () => {
       )
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
+      yield* holdWatch(svc, started.id)
 
-      yield* TestClock.adjust('40 seconds')
+      yield* TestClock.adjust('65 seconds')
       yield* sessions.SendSessionCommand({ id: started.id, command: 'pause' }, { headers })
       expect(paused(yield* snapshotOf(svc, started.id))?.segmentIndex).toBe(5)
 
@@ -320,9 +325,10 @@ describe('a plan change after the timer is done', () => {
       )
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
+      yield* holdWatch(svc, started.id)
 
-      // ready 5s | A 10s | rest 5s | B 10s — the last rep ends at 30s.
-      yield* TestClock.adjust('31 seconds')
+      // ready 30s | A 10s | rest 5s | B 10s — the last rep ends at 55s.
+      yield* TestClock.adjust('56 seconds')
       const finished = yield* snapshotOf(svc, started.id)
       expect(finished.timer._tag).toBe('done')
 
@@ -360,8 +366,9 @@ describe('a plan change after the timer is done', () => {
       )
       const started = yield* sessions.StartSession({ workoutId: created.id }, { headers })
       const svc = yield* LiveSessions
+      yield* holdWatch(svc, started.id)
 
-      yield* TestClock.adjust('31 seconds')
+      yield* TestClock.adjust('56 seconds')
       yield* library.UpdateWorkout(
         { id: created.id, workout: makeWorkout(['A2', 'B2', 'C2']), updatedAt: created.updatedAt },
         { headers },

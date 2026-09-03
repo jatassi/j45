@@ -148,7 +148,7 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
 
       await page.getByTestId('start-with-reflow-button').click()
       await expect(page.getByTestId('reflow-editor-screen')).toBeVisible()
-      await expect(page.getByTestId('reflow-summary')).toHaveText('6 works · 2:55')
+      await expect(page.getByTestId('reflow-summary')).toHaveText('6 works · 3:20')
 
       // Launch mode is read-only content: no station-name inputs, no add-station.
       await expect(page.getByTestId('station-name-input')).toHaveCount(0)
@@ -168,7 +168,7 @@ test.describe('flow-control launch mode (chromium + webkit)', () => {
       )
       await page.getByTestId('reflow-flow-laps').click()
 
-      await expect(page.getByTestId('reflow-summary')).toHaveText('4 works · 1:55')
+      await expect(page.getByTestId('reflow-summary')).toHaveText('4 works · 2:20')
 
       await expect(page.getByTestId('reflow-start')).toBeEnabled()
       await page.getByTestId('reflow-start').click()

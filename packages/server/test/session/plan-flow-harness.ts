@@ -5,6 +5,7 @@ import {
   Flow,
   HistoryRpcs,
   LibraryRpcs,
+  Participant,
   Pod,
   Round,
   SessionRpcs,
@@ -80,6 +81,8 @@ export const uid = (id: string) => Schema.decodeSync(UserId)(id)
 
 /** The workout owner every flow test signs in as, and two guests to join. */
 export const owner = uid('owner')
+/** The owner as a session participant — who `holdWatch` watches as. */
+export const ownerParticipant = new Participant({ userId: owner, displayName: 'Owner' })
 export const bobId = uid('bob')
 export const caraId = uid('cara')
 
@@ -165,6 +168,17 @@ export const paused = (state: SessionState) =>
 
 /** The snapshot of one session, by id. */
 export const snapshotOf = (svc: LiveSessions, id: SessionId) => svc.snapshot(id)
+
+/**
+ * Holds one watcher on the session for the rest of the test scope.
+ *
+ * A session nobody watches is collected after the 60s abandon window. The
+ * leading `READY_SECONDS` countdown puts a whole workout past that window, so
+ * a test that walks one from start to end must watch it — which is what a
+ * participant does anyway.
+ */
+export const holdWatch = (svc: LiveSessions, id: SessionId, participant = ownerParticipant) =>
+  Effect.forkScoped(Stream.runDrain(svc.watch(id, participant)).pipe(Effect.ignore))
 
 /**
  * The lobby as it stands, read off the feed itself.
