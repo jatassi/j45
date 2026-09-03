@@ -255,7 +255,9 @@ export const effectiveDraft = (state: EditorState): DraftWorkout => {
     pods: state.pods.map((p) => ({
       name: p.name,
       stations: p.stations.map((s) =>
-        s.detail === undefined ? { name: s.name } : { name: s.name, detail: s.detail },
+        s.detail === undefined || s.detail.trim() === ''
+          ? { name: s.name }
+          : { name: s.name, detail: s.detail },
       ),
     })),
     flow: state.uniform ? expandUniform(flow, Number.parseInt(state.roundCountText, 10)) : flow,

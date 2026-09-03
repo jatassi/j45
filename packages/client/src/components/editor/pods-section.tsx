@@ -92,6 +92,17 @@ function StationRow({ setState, at, station, nameError, onActions }: StationRowP
         />
         <StationRowButtons setState={setState} at={at} onActions={onActions} />
       </div>
+      <Input
+        data-testid="station-detail-input"
+        aria-label="Station note"
+        placeholder="Note (optional)"
+        value={station.detail ?? ''}
+        onChange={(event) =>
+          setState((s) =>
+            Editor.setStationField(s, { ...at, patch: { detail: event.target.value } }),
+          )
+        }
+      />
       <FieldError data-testid="station-name-error">{nameError}</FieldError>
     </Field>
   )
