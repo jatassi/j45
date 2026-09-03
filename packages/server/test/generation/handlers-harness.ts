@@ -114,7 +114,6 @@ const makeExercise = (
     modality: overrides.modality ?? 'cardio',
     muscleGroups: overrides.muscleGroups === undefined ? ['core'] : [...overrides.muscleGroups],
     equipment: [...(overrides.equipment ?? [])],
-    intensity: 'moderate',
   })
 
 /** Enough bodyweight cardio names to fill any ~15 min template (4 or 6 stations). */

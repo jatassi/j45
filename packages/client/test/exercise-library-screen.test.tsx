@@ -54,7 +54,6 @@ const rower = new LibraryExercise({
     modality: 'cardio',
     muscleGroups: ['core'],
     equipment: ['rower'],
-    intensity: 'high',
   }),
   createdAt: seededAt,
   updatedAt: seededAt,
@@ -67,7 +66,6 @@ const frontSquat = new LibraryExercise({
     modality: 'strength',
     muscleGroups: ['quads', 'glutes'],
     equipment: ['barbell'],
-    intensity: 'moderate',
   }),
   createdAt: seededAt,
   updatedAt: seededAt,
@@ -137,9 +135,7 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Rower')
     expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Core')
     expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('Cardio')
-    expect(screen.getByTestId(`exercise-row-${rower.id}`).textContent).toContain('High')
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Strength')
-    expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Moderate')
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Quads')
     expect(screen.getByTestId(`exercise-row-${frontSquat.id}`).textContent).toContain('Barbell')
   })
@@ -225,7 +221,6 @@ describe('ExerciseLibraryScreen', () => {
         modality: 'strength',
         muscleGroups: ['chest'],
         equipment: [],
-        intensity: 'moderate',
       }),
       createdAt: seededAt,
       updatedAt: seededAt,
@@ -311,7 +306,7 @@ describe('ExerciseLibraryScreen', () => {
     expect(screen.getByTestId('exercise-name-ex-new').textContent).toBe('Wall ball')
   })
 
-  it('carries the modality and intensity its selects picked into CreateExercise', async () => {
+  it('carries the modality its select picked into CreateExercise', async () => {
     let created: Exercise | undefined
 
     renderScreen({
@@ -340,11 +335,9 @@ describe('ExerciseLibraryScreen', () => {
     })
     fireEvent.click(screen.getByTestId('exercise-form-muscle-quads'))
 
-    // Both picks differ from the draft the drawer opens with (strength,
-    // moderate), so the exercise below carries them only if the selects
-    // wrote them.
+    // The pick differs from the draft the drawer opens with (strength), so
+    // the exercise below carries it only if the select wrote it.
     await selectOption('exercise-form-modality', 'Cardio')
-    await selectOption('exercise-form-intensity', 'High')
 
     fireEvent.click(screen.getByTestId('exercise-form-submit'))
 
@@ -352,7 +345,6 @@ describe('ExerciseLibraryScreen', () => {
       expect(created).toBeDefined()
     })
     expect(created?.modality).toBe('cardio')
-    expect(created?.intensity).toBe('high')
   })
 
   it('edits tags via the drawer', async () => {

@@ -8,16 +8,6 @@ export type Modality = typeof Modality.Type
 
 export const modalityLabel: Record<Modality, string> = { cardio: 'Cardio', strength: 'Strength' }
 
-/** Relative effort demand of an exercise. */
-export const Intensity = Schema.Literal('low', 'moderate', 'high')
-export type Intensity = typeof Intensity.Type
-
-export const intensityLabel: Record<Intensity, string> = {
-  low: 'Low',
-  moderate: 'Moderate',
-  high: 'High',
-}
-
 /** Primary muscle targets an exercise loads. */
 export const MuscleGroup = Schema.Literal(
   'glutes',
@@ -95,6 +85,9 @@ export const equipmentLabel: Record<Equipment, string> = {
  * `detail` carries a substitution or setup note as its own field so
  * presentation markup stays the client's job. Empty `equipment` means
  * bodyweight.
+ *
+ * Every field here is one the generator reads or copies. An earlier
+ * `intensity` field was read by nothing and was removed (ADR-0004).
  */
 export class Exercise extends Schema.Class<Exercise>('Exercise')({
   name: Schema.NonEmptyTrimmedString,
@@ -102,7 +95,6 @@ export class Exercise extends Schema.Class<Exercise>('Exercise')({
   modality: Modality,
   muscleGroups: Schema.NonEmptyArray(MuscleGroup),
   equipment: Schema.Array(Equipment),
-  intensity: Intensity,
 }) {}
 
 /**

@@ -33,7 +33,6 @@ const makeExercise = (name: string) =>
     modality: 'strength',
     muscleGroups: ['chest'],
     equipment: ['dumbbell'],
-    intensity: 'moderate',
   })
 
 const insertOwner = (id: UserId) =>

@@ -1,0 +1,724 @@
+[
+  {
+    "name": "Rower",
+    "modality": "cardio",
+    "muscleGroups": ["back"],
+    "equipment": ["rower"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell squat + alternating shoulder press",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes", "shoulders"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Burpee",
+    "detail": "step back = no-jump",
+    "modality": "cardio",
+    "muscleGroups": ["core"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Bike",
+    "detail": "or treadmill; seated, standing, or high-resistance climb",
+    "modality": "cardio",
+    "muscleGroups": ["quads"],
+    "equipment": ["bike"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Kettlebell swing",
+    "modality": "strength",
+    "muscleGroups": ["glutes", "hamstrings", "back"],
+    "equipment": ["kettlebell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Mountain climbers",
+    "detail": "fast, hips low",
+    "modality": "cardio",
+    "muscleGroups": ["core", "shoulders"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell single-arm snatch",
+    "detail": "alternate arms",
+    "modality": "strength",
+    "muscleGroups": ["shoulders"],
+    "equipment": ["dumbbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Box explosive step-ups",
+    "detail": "or bench",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["box"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Slam-ball over-shoulder throw",
+    "detail": "or dumbbell; sub: dumbbell thruster",
+    "modality": "strength",
+    "muscleGroups": ["shoulders", "back"],
+    "equipment": ["slam-ball"],
+    "intensity": "high"
+  },
+  {
+    "name": "Barbell front squat",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes", "core"],
+    "equipment": ["barbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Barbell bent-over row",
+    "detail": "overhand grip",
+    "modality": "strength",
+    "muscleGroups": ["back", "biceps"],
+    "equipment": ["barbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell flat bench press",
+    "modality": "strength",
+    "muscleGroups": ["chest", "triceps", "shoulders"],
+    "equipment": ["dumbbell", "bench"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Pull-ups",
+    "detail": "band-assist as needed",
+    "modality": "strength",
+    "muscleGroups": ["back", "biceps"],
+    "equipment": ["pull-up-bar"],
+    "intensity": "high"
+  },
+  {
+    "name": "Barbell RDL",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings", "glutes", "back"],
+    "equipment": ["barbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell standing shoulder press",
+    "detail": "single-arm alternating variation",
+    "modality": "strength",
+    "muscleGroups": ["shoulders", "triceps"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell walking lunges",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Barbell biceps curl",
+    "modality": "strength",
+    "muscleGroups": ["biceps"],
+    "equipment": ["barbell"],
+    "intensity": "low"
+  },
+  {
+    "name": "Barbell squat + upright row",
+    "modality": "strength",
+    "muscleGroups": ["quads", "shoulders", "glutes"],
+    "equipment": ["barbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Bench jump-on + push-up",
+    "detail": "or step-on",
+    "modality": "cardio",
+    "muscleGroups": ["quads", "chest"],
+    "equipment": ["bench"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Cable biceps curl + wide row",
+    "detail": "or band; sub: dumbbell curl + bent-over row",
+    "modality": "strength",
+    "muscleGroups": ["biceps", "back"],
+    "equipment": ["cable"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Kettlebell alternating reverse lunges",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["kettlebell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell single-leg RDL",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell Arnold press",
+    "modality": "strength",
+    "muscleGroups": ["shoulders"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Push-up pulse",
+    "modality": "strength",
+    "muscleGroups": ["chest", "triceps", "shoulders"],
+    "equipment": [],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Squat pulse",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": [],
+    "intensity": "low"
+  },
+  {
+    "name": "Ice skaters",
+    "detail": "lateral bounds",
+    "modality": "cardio",
+    "muscleGroups": ["quads", "glutes", "calves"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Side burpee",
+    "modality": "cardio",
+    "muscleGroups": ["core"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell heel-elevated goblet squat",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Barbell RDL + overhand-grip row",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings", "glutes", "back"],
+    "equipment": ["barbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Kettlebell sumo deadlift",
+    "modality": "strength",
+    "muscleGroups": ["glutes", "hamstrings", "quads"],
+    "equipment": ["kettlebell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell Bulgarian split squat",
+    "detail": "bench; 3 each leg",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["dumbbell", "bench"],
+    "intensity": "high"
+  },
+  {
+    "name": "Barbell back-rack sumo squat",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["barbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell single-leg staggered RDL",
+    "detail": "5 each side",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell box step-ups",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["dumbbell", "box"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Barbell calf raises",
+    "detail": "or dumbbell",
+    "modality": "strength",
+    "muscleGroups": ["calves"],
+    "equipment": ["barbell"],
+    "intensity": "low"
+  },
+  {
+    "name": "Hanging knee raises",
+    "detail": "sub: lying leg raises",
+    "modality": "strength",
+    "muscleGroups": ["core"],
+    "equipment": ["pull-up-bar"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Box jump",
+    "detail": "or bench; or step-up",
+    "modality": "cardio",
+    "muscleGroups": ["quads", "glutes", "calves"],
+    "equipment": ["box"],
+    "intensity": "high"
+  },
+  {
+    "name": "Yogi push-up",
+    "detail": "down-dog to push-up",
+    "modality": "strength",
+    "muscleGroups": ["chest", "shoulders", "core"],
+    "equipment": [],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Med ball shuffle + rotation",
+    "modality": "cardio",
+    "muscleGroups": ["core"],
+    "equipment": ["med-ball"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell punches",
+    "detail": "4 high + 4 straight",
+    "modality": "cardio",
+    "muscleGroups": ["shoulders", "core"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Plate snatch",
+    "detail": "or dumbbell",
+    "modality": "strength",
+    "muscleGroups": ["shoulders"],
+    "equipment": ["plate"],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell renegade row",
+    "modality": "strength",
+    "muscleGroups": ["back", "core", "biceps"],
+    "equipment": ["dumbbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell RDL",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Barbell standing shoulder press",
+    "modality": "strength",
+    "muscleGroups": ["shoulders", "triceps"],
+    "equipment": ["barbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Kettlebell double front squat",
+    "detail": "or dumbbell",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes", "core"],
+    "equipment": ["kettlebell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell incline bench press",
+    "detail": "2s pause",
+    "modality": "strength",
+    "muscleGroups": ["chest", "shoulders", "triceps"],
+    "equipment": ["dumbbell", "bench"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Barbell back-loaded reverse lunges",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["barbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell biceps curl",
+    "detail": "one-and-a-half reps",
+    "modality": "strength",
+    "muscleGroups": ["biceps"],
+    "equipment": ["dumbbell"],
+    "intensity": "low"
+  },
+  {
+    "name": "Dumbbell triceps kickbacks",
+    "modality": "strength",
+    "muscleGroups": ["triceps"],
+    "equipment": ["dumbbell"],
+    "intensity": "low"
+  },
+  {
+    "name": "Hamstring curls",
+    "detail": "sliders/towel; sub: ball or partner curls",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings"],
+    "equipment": ["sliders"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Band hammer curl",
+    "detail": "or cable; sub: dumbbell",
+    "modality": "strength",
+    "muscleGroups": ["biceps"],
+    "equipment": ["band"],
+    "intensity": "low"
+  },
+  {
+    "name": "Bench push-ups",
+    "detail": "or step",
+    "modality": "strength",
+    "muscleGroups": ["chest", "triceps"],
+    "equipment": ["bench"],
+    "intensity": "low"
+  },
+  {
+    "name": "Sprawl + forward jump + back-pedal",
+    "modality": "cardio",
+    "muscleGroups": ["core"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell double rack squat + press",
+    "modality": "strength",
+    "muscleGroups": ["quads", "shoulders", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Kettlebell single-arm swing",
+    "detail": "with rotation, alternating",
+    "modality": "strength",
+    "muscleGroups": ["glutes", "hamstrings", "back", "core"],
+    "equipment": ["kettlebell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Plate lying triceps extension",
+    "detail": "or dumbbell",
+    "modality": "strength",
+    "muscleGroups": ["triceps"],
+    "equipment": ["plate"],
+    "intensity": "low"
+  },
+  {
+    "name": "Kettlebell lateral step-up",
+    "detail": "box/bench",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["kettlebell", "box"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Plate lateral lunges",
+    "detail": "or dumbbell",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["plate"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell sumo deadlift",
+    "modality": "strength",
+    "muscleGroups": ["glutes", "hamstrings", "quads"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Single-leg RDL",
+    "detail": "alternating",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings", "glutes"],
+    "equipment": [],
+    "intensity": "low"
+  },
+  {
+    "name": "Dumbbell floor press",
+    "detail": "upper, to balance the day",
+    "modality": "strength",
+    "muscleGroups": ["chest", "triceps"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Jump rope",
+    "detail": "or dumbbell fast alternating front raises",
+    "modality": "cardio",
+    "muscleGroups": ["calves"],
+    "equipment": ["jump-rope"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Plyo split-stance jumping lunge",
+    "modality": "cardio",
+    "muscleGroups": ["quads", "glutes", "calves"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Barbell thruster",
+    "detail": "squat to press",
+    "modality": "strength",
+    "muscleGroups": ["quads", "shoulders"],
+    "equipment": ["barbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Reverse burpee",
+    "detail": "roll back, rock up",
+    "modality": "cardio",
+    "muscleGroups": ["core"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Bench incline push-up + clap",
+    "modality": "strength",
+    "muscleGroups": ["chest", "triceps", "shoulders"],
+    "equipment": ["bench"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell double ski-stance hang clean",
+    "modality": "strength",
+    "muscleGroups": ["shoulders"],
+    "equipment": ["dumbbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell landmine rotation",
+    "detail": "or plate; sub: standing wood-chop",
+    "modality": "strength",
+    "muscleGroups": ["core", "shoulders"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Shuttle shuffle",
+    "detail": "grab a marker each end",
+    "modality": "cardio",
+    "muscleGroups": ["quads"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Kettlebell goblet sumo squat",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["kettlebell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell incline close-grip press",
+    "modality": "strength",
+    "muscleGroups": ["chest", "triceps"],
+    "equipment": ["dumbbell", "bench"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Barbell pendlay row",
+    "modality": "strength",
+    "muscleGroups": ["back", "biceps"],
+    "equipment": ["barbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Hip bridge",
+    "detail": "or hamstring walk-outs",
+    "modality": "strength",
+    "muscleGroups": ["glutes", "hamstrings"],
+    "equipment": [],
+    "intensity": "low"
+  },
+  {
+    "name": "Kettlebell single-arm bent row + high pull",
+    "detail": "explosive high pull",
+    "modality": "strength",
+    "muscleGroups": ["back", "shoulders", "biceps"],
+    "equipment": ["kettlebell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell hammer curl + shoulder press",
+    "detail": "alternating",
+    "modality": "strength",
+    "muscleGroups": ["biceps", "shoulders"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell flat chest fly",
+    "modality": "strength",
+    "muscleGroups": ["chest"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Box crossover",
+    "detail": "or step; dynamic",
+    "modality": "cardio",
+    "muscleGroups": ["quads", "glutes", "calves"],
+    "equipment": ["box"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Kettlebell alternating floor row",
+    "detail": "neutral grip",
+    "modality": "strength",
+    "muscleGroups": ["back", "biceps"],
+    "equipment": ["kettlebell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Lateral hops",
+    "detail": "over a line / cones",
+    "modality": "cardio",
+    "muscleGroups": ["quads", "calves"],
+    "equipment": [],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell front squat + pulse",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Shuttle run",
+    "detail": "3 lengths",
+    "modality": "cardio",
+    "muscleGroups": ["quads"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Slam ball RDL",
+    "detail": "or dumbbell",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings", "glutes"],
+    "equipment": ["slam-ball"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Bench hop + push-up",
+    "detail": "or step; 5 hops + 2 push-ups",
+    "modality": "cardio",
+    "muscleGroups": ["quads", "chest"],
+    "equipment": ["bench"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell pendulum lunge",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Dumbbell sprawl + lateral jump",
+    "modality": "cardio",
+    "muscleGroups": ["core"],
+    "equipment": ["dumbbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell single-arm side lunge",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Sandbag clean + forward lunge",
+    "detail": "or dumbbell",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes"],
+    "equipment": ["sandbag"],
+    "intensity": "high"
+  },
+  {
+    "name": "Sandbag bear-hug squat",
+    "detail": "or dumbbell; pause",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes", "core"],
+    "equipment": ["sandbag"],
+    "intensity": "high"
+  },
+  {
+    "name": "Barbell hang clean",
+    "modality": "strength",
+    "muscleGroups": ["shoulders", "back"],
+    "equipment": ["barbell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell speed sumo squat + curl",
+    "modality": "strength",
+    "muscleGroups": ["quads", "glutes", "biceps"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Push-up + spider lunge + row",
+    "modality": "strength",
+    "muscleGroups": ["chest", "core"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Kettlebell deficit deadlift",
+    "modality": "strength",
+    "muscleGroups": ["hamstrings", "glutes", "back"],
+    "equipment": ["kettlebell"],
+    "intensity": "high"
+  },
+  {
+    "name": "Slam ball throw-up squat + catch",
+    "modality": "strength",
+    "muscleGroups": ["quads"],
+    "equipment": ["slam-ball"],
+    "intensity": "high"
+  },
+  {
+    "name": "Dumbbell bear-hug carry",
+    "detail": "20m",
+    "modality": "strength",
+    "muscleGroups": ["core"],
+    "equipment": ["dumbbell"],
+    "intensity": "moderate"
+  },
+  {
+    "name": "Hand-release burpee",
+    "modality": "cardio",
+    "muscleGroups": ["chest"],
+    "equipment": [],
+    "intensity": "high"
+  },
+  {
+    "name": "Step incline push-up to T-reach",
+    "detail": "step",
+    "modality": "strength",
+    "muscleGroups": ["chest", "core", "shoulders"],
+    "equipment": ["bench"],
+    "intensity": "moderate"
+  }
+]

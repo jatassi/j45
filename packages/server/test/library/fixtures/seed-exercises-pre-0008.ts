@@ -24,9 +24,7 @@ export type PreMigrationExercise = {
  * commit that made the edit, so it is the exact input the migration meets on
  * an existing user's server.
  *
- * Two tests read it. `migration-0008.test.ts` seeds a user with it and proves
- * the migrated rows match the shipped seed. `seed-exercises.test.ts` compares
- * it against the shipped seed to prove that every surviving muscle group
- * keeps its strength exercises.
+ * `migration-0008.test.ts` reads it. The catalog it describes was replaced by
+ * migration `0009` (ADR-0004), so the shipped seed no longer resembles it.
  */
 export const preMigrationSeed = preMigrationSeedJson as readonly PreMigrationExercise[]

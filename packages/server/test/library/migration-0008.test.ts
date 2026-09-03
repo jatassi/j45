@@ -19,8 +19,15 @@ import Migration0007 from '../../migrations/0007_completion_source_workout.js'
 import Migration0008 from '../../migrations/0008_drop_full_body_from_exercises.js'
 import { UserRepo } from '../../src/auth/user-repo.js'
 import { ExercisesRepo } from '../../src/library/exercises-repo.js'
-import { seedExercises } from '../../src/library/seed-exercises.js'
+import shippedAfter0008Json from '../../src/library/seed-exercises-before-0009.json'
 import { preMigrationSeed, type PreMigrationExercise } from './fixtures/seed-exercises-pre-0008.js'
+
+/**
+ * The seed catalog as 0008 left it. Migration 0009 (ADR-0004) replaced that
+ * catalog, so the live `seedExercises` no longer describes 0008's output; the
+ * frozen pre-0009 copy does.
+ */
+const shippedAfter0008 = shippedAfter0008Json as readonly PreMigrationExercise[]
 
 /**
  * The risk of the `full-body` removal is here. `ExercisesRepo`'s `decodeRow`
@@ -297,7 +304,6 @@ describe('migration 0008_drop_full_body_from_exercises', () => {
       expect(thruster?.exercise.detail).toBe('squat to overhead press')
       expect(thruster?.exercise.modality).toBe('strength')
       expect(thruster?.exercise.equipment).toStrictEqual(['barbell'])
-      expect(thruster?.exercise.intensity).toBe('high')
     }).pipe(Effect.provide(TestServicesLive)),
   )
 
@@ -389,13 +395,13 @@ describe('migration 0008_drop_full_body_from_exercises', () => {
 
         const exercisesRepo = yield* ExercisesRepo
         const migrated = yield* exercisesRepo.listForOwner(OWNER_A)
-        expect(migrated).toHaveLength(seedExercises.length)
+        expect(migrated).toHaveLength(shippedAfter0008.length)
 
         const migratedGroups = new Map(
           migrated.map((entry) => [entry.exercise.name, [...entry.exercise.muscleGroups]]),
         )
         const shippedGroups = new Map(
-          seedExercises.map((seed) => [seed.name, [...seed.muscleGroups]]),
+          shippedAfter0008.map((seed) => [seed.name, [...seed.muscleGroups]]),
         )
 
         // `Arr.sort`, because `Array#toSorted` needs `lib: es2023`.

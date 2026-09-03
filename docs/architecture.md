@@ -145,7 +145,7 @@ not contradict them.
   and generation rules are pure functions in `domain`, unit-tested exhaustively.
   Server features orchestrate them; they do not reimplement them.
 - **Vocabulary labels live in the domain.** Every `Schema.Literal` vocabulary
-  (`Modality`, `Intensity`, `MuscleGroup`, `Equipment`, `Focus`, `FlowType`)
+  (`Modality`, `MuscleGroup`, `Equipment`, `Focus`, `FlowType`)
   carries an exhaustive `Record<Literal, string>` label map co-located with
   the union in `@j45/domain`; a literal without a label is a compile error.
   The client never renders a vocabulary literal raw and there is no generic

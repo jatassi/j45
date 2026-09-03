@@ -4,7 +4,6 @@ import { Result, useAtom, useAtomRefresh, useAtomValue } from '@effect-atom/atom
 import {
   Equipment,
   equipmentLabel,
-  intensityLabel,
   Modality,
   modalityLabel,
   MuscleGroup,
@@ -104,7 +103,6 @@ function RowTags({ exercise }: { readonly exercise: Exercise }) {
   return (
     <div className="flex flex-wrap gap-1">
       <Badge variant={exercise.modality}>{modalityLabel[exercise.modality]}</Badge>
-      <Badge variant="secondary">{intensityLabel[exercise.intensity]}</Badge>
       {exercise.muscleGroups.map((g) => (
         <Badge key={g} variant="outline">
           {muscleGroupLabel[g]}
