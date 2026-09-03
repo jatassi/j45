@@ -11,7 +11,7 @@ bun run check    # typecheck — tsc across all packages
 bun run build    # build the client (tsc -b + vite)
 bun run lint     # oxlint --type-aware
 bun run format   # prettier (also sorts imports)
-bun run test     # vitest
+bun run test     # vitest - run full suite sparingly
 ```
 
 ## Toolchain
