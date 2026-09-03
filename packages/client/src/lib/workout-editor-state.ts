@@ -245,20 +245,23 @@ export const setRound = (
   rounds: updateAt(state.rounds, args.index, (r) => ({ ...r, ...args.patch })),
 })
 
+/** A note the user left blank is absent, not an empty string. Whitespace they typed is theirs to keep. */
+const blankToUndefined = (text: string | undefined): string | undefined =>
+  text === undefined || text.trim() === '' ? undefined : text
+
 /** Editor state as `DraftWorkout` (ids stripped, uniform ladder re-expanded) for decode/summary/save. */
 export const effectiveDraft = (state: EditorState): DraftWorkout => {
   const flow = toDraftFlow(state)
   return {
     name: state.name,
     focus: state.focus,
-    note: state.note.trim() === '' ? undefined : state.note,
+    note: blankToUndefined(state.note),
     pods: state.pods.map((p) => ({
       name: p.name,
-      stations: p.stations.map((s) =>
-        s.detail === undefined || s.detail.trim() === ''
-          ? { name: s.name }
-          : { name: s.name, detail: s.detail },
-      ),
+      stations: p.stations.map((s) => {
+        const detail = blankToUndefined(s.detail)
+        return detail === undefined ? { name: s.name } : { name: s.name, detail }
+      }),
     })),
     flow: state.uniform ? expandUniform(flow, Number.parseInt(state.roundCountText, 10)) : flow,
   }

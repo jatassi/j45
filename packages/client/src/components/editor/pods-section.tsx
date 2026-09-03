@@ -74,24 +74,32 @@ function StationRowButtons({
   )
 }
 
+/**
+ * Name (with the move/actions buttons) and its note. The note sits outside the
+ * name's `Field` so the name's error stays next to the name, and so an invalid
+ * name does not tint the note as well.
+ */
 function StationRow({ setState, at, station, nameError, onActions }: StationRowProps) {
   return (
-    <Field data-invalid={nameError !== undefined}>
-      <div className="flex items-center gap-1">
-        <Input
-          data-testid="station-name-input"
-          className="flex-1"
-          placeholder="Station"
-          aria-invalid={nameError !== undefined}
-          value={station.name}
-          onChange={(event) =>
-            setState((s) =>
-              Editor.setStationField(s, { ...at, patch: { name: event.target.value } }),
-            )
-          }
-        />
-        <StationRowButtons setState={setState} at={at} onActions={onActions} />
-      </div>
+    <div className="flex flex-col gap-2">
+      <Field data-invalid={nameError !== undefined}>
+        <div className="flex items-center gap-1">
+          <Input
+            data-testid="station-name-input"
+            className="flex-1"
+            placeholder="Station"
+            aria-invalid={nameError !== undefined}
+            value={station.name}
+            onChange={(event) =>
+              setState((s) =>
+                Editor.setStationField(s, { ...at, patch: { name: event.target.value } }),
+              )
+            }
+          />
+          <StationRowButtons setState={setState} at={at} onActions={onActions} />
+        </div>
+        <FieldError data-testid="station-name-error">{nameError}</FieldError>
+      </Field>
       <Input
         data-testid="station-detail-input"
         aria-label="Station note"
@@ -103,8 +111,7 @@ function StationRow({ setState, at, station, nameError, onActions }: StationRowP
           )
         }
       />
-      <FieldError data-testid="station-name-error">{nameError}</FieldError>
-    </Field>
+    </div>
   )
 }
 
