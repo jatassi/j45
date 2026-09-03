@@ -2,6 +2,7 @@ import { Atom } from '@effect-atom/atom-react'
 import { SessionNotFound } from '@j45/domain'
 import type {
   CompiledWorkout,
+  FlowType,
   Segment,
   SessionEnd,
   SessionId,
@@ -336,177 +337,259 @@ export const cellState = (workIndex: number, currentWorkIndex: number | undefine
 }
 
 /**
- * The room the progress strip has, the smallest cell a participant can see in
- * it, and the gaps the renderer draws inside it. The cell collapse takes the
- * gaps out of the width first, shares what is left among the bars, and
- * compares the cell that follows against the minimum.
+ * The room the **Progress strip** has, the sizes of the marks it draws in it,
+ * and the gaps between them. One object, shared by the derivation and the
+ * renderer, so a floor the derivation divides against is the very number the
+ * screen draws with.
  *
- * The gaps belong here because the strip never gives all of its width to
- * cells. `progress-strip.tsx` draws a gap between two bars, a wider one
- * before a bar that opens a pod's run, and a gap between two cells of one
- * bar. A budget that ignored them would report a bar as keeping cells that
- * render under the floor, and the floor is the whole point of the rule. The
- * error grows with the number of bars, so it is worst on exactly the
- * hand-authored workout the rule exists to protect: `Pod.stations` and
- * `Flow.rounds` have no upper bound.
+ * The strip spends width on gaps before it spends any on dots: a gap between
+ * two pods, a gap between two runs of one pod, and a gap between two dots of
+ * one run. A budget that ignored them would report a dot as clearing the
+ * floor that the screen draws under it, and the floor is the whole point.
  *
- * It is a parameter, not a measurement. The derivation must stay pure, so it
+ * It is a parameter, not a measurement. The derivation stays pure, so it
  * cannot read the element's real width, and a rule that waited on the dom
  * would push its own branch behind the screen where no test can reach it.
- * Passing the budget in keeps the branch provable: a test names a narrow
- * budget and asserts the plain bar that follows.
  */
 export type StripBudget = {
+  /** The strip's width: the inner span of the **Progress arc**. */
   readonly stripWidthPx: number
-  readonly minCellWidthPx: number
-  /** The gap between two bars. */
-  readonly barGapPx: number
-  /** What a bar that opens a pod's run adds on top of that gap. */
-  readonly podRunGapPx: number
-  /** The gap between two cells of one bar. */
-  readonly cellGapPx: number
+  /** The largest a dot ever gets, in either layout. */
+  readonly dotCapPx: number
+  /** The smallest dot the open layout accepts before it falls to focus. */
+  readonly openFloorPx: number
+  /** The smallest dot the focus layout accepts before the pod draws cells. */
+  readonly focusFloorPx: number
+  /** The gap between two dots of one run. */
+  readonly dotGapPx: number
+  /** The gap between two runs of one pod. */
+  readonly runGapPx: number
+  /** The gap between two pods. */
+  readonly podGapPx: number
+  /** A closed pod's pill, fixed: the pill counts pods, not works. */
+  readonly pillWidthPx: number
+  /** The hairline track under an open pod's dots. */
+  readonly trackPx: number
+  /** Between the dots and the track, so the strip states its own height. */
+  readonly trackGapPx: number
 }
 
 /**
- * The default budget: the strip's width on the narrowest supported phone
- * (320px), a cell of 4px, which is about the smallest mark that reads from
- * arm's length, and the three gaps the live strip draws.
- *
- * The width is the bars' own, not the screen's. The bars are drawn to the
- * inner span of the **Progress arc** — `min(92vw, 420px)` less one stroke on
- * each side — so on a 320px phone they measure about 264px. The screen's
- * padding no longer decides it: the arc is narrower than the padded column
- * there, so the arc is the binding one.
- *
- * The gaps are the renderer's own measurements, and `progress-strip.tsx`
- * reads them from here instead of naming them again. One source keeps the two
- * in step: a gap that changes moves the collapse with it, and no comment has
- * to be obeyed for the floor to stay true.
+ * The default budget. The width is the strip's own, not the screen's: the
+ * strip is drawn to the inner span of the **Progress arc** — `min(92vw,
+ * 420px)` less one stroke on each side — so on a 320px phone it measures
+ * about 264px.
  */
 export const STRIP_BUDGET: StripBudget = {
   stripWidthPx: 264,
-  minCellWidthPx: 4,
-  barGapPx: 6,
-  podRunGapPx: 8,
-  cellGapPx: 1,
+  dotCapPx: 8,
+  openFloorPx: 6,
+  focusFloorPx: 4,
+  dotGapPx: 2,
+  runGapPx: 6,
+  podGapPx: 10,
+  pillWidthPx: 20,
+  trackPx: 2,
+  trackGapPx: 4,
 }
 
 /**
- * One bar of the progress strip. A bar is a group of works — never a
- * **Segment**, which is one timed unit.
+ * How one pod draws itself.
  *
- * `cells` holds one cell per station in the group, or nothing at all when the
- * bar gave its cells up to the budget. A bar with no cells renders plain: it
- * still says done, now or ahead, and it says nothing about the station.
- *
- * `startsPodRun` marks a bar that opens a new pod's run, so the renderer can
- * give it a wider leading gap.
+ * `dots` shows every work of the pod as a dot on a hairline track. `cells`
+ * is the last honest rendering before plain: the pod's runs collapse to one
+ * cell each on a single bar, because its dots would fall under the focus
+ * floor. `pill` is a closed pod: the bar with its dots given up, carrying the
+ * pod's own state and nothing about the works inside it.
  */
-export type ProgressBar = {
+export type StripPodMode = 'dots' | 'cells' | 'pill'
+
+/**
+ * One pod of the strip.
+ *
+ * `runs` always holds the pod's works grouped into runs, whatever the mode: a
+ * run is a lap on `laps` and a station on `sets`. A renderer that draws cells
+ * or a pill reads their states through `runState`, so it states no rule of
+ * its own.
+ */
+export type StripPod = {
   readonly key: string
   readonly state: CellState
-  readonly cells: readonly CellState[]
-  readonly startsPodRun: boolean
-}
-
-/** The whole strip: the bars, and one dot per round of the flow. */
-export type ProgressStrip = {
-  readonly bars: readonly ProgressBar[]
-  readonly dots: readonly CellState[]
-}
-
-/** A bar under construction: which works it holds, and which stations. */
-type StripGroup = {
-  readonly key: string
-  readonly podIndex: number
-  /** The `stationInPod` ordinals of the group, in the order they run. */
-  readonly stations: readonly number[]
-  readonly firstWorkIndex: number
-  readonly lastWorkIndex: number
+  readonly mode: StripPodMode
+  /** One entry per run, each holding one state per work, in run order. */
+  readonly runs: readonly (readonly CellState[])[]
 }
 
 /**
- * The key that collects works into one bar. A `laps` bar is a pod, and a
- * `sets` bar is one station of one pod.
+ * The whole strip: the layout chosen for this plan, the size its dots are
+ * drawn at, and one entry per pod.
  *
- * The flow comes from the compiled plan, never from the order of the works.
- * A pod of one station runs the same order under both flows, and so does a
- * flow of one round, so an inference would pick a grouping at random.
+ * The layout is stated, never inferred by the renderer. It is chosen once per
+ * compiled plan and holds for the whole session, so nothing under the strip
+ * shifts as the session moves.
  */
-const groupKey = (work: WorkContext, byPod: boolean): string =>
-  byPod ? `pod-${work.podIndex}` : `pod-${work.podIndex}-station-${work.stationInPod}`
+export type ProgressStrip = {
+  readonly layout: 'open' | 'focus'
+  readonly dotSizePx: number
+  readonly pods: readonly StripPod[]
+}
 
 /**
- * The bars' contents, in run order. Works arrive in run order and every
- * group's works are contiguous, so the insertion order of the map is the
- * order the bars are drawn in.
+ * One run's own reading, for the renderer that draws it as a cell: now if it
+ * holds the current work, done if every work in it is done, ahead otherwise.
+ *
+ * It lives here with the rest of the strip's rules, so the renderer states no
+ * rule of its own.
  */
-const stripGroups = (works: readonly WorkContext[], byPod: boolean): readonly StripGroup[] => {
-  const byKey = new Map<string, WorkContext[]>()
+export const runState = (run: readonly CellState[]): CellState => {
+  if (run.includes('active')) return 'active'
+  return run.length > 0 && run.every((state) => state === 'done') ? 'done' : 'upcoming'
+}
+
+/** One pod's works, already grouped into the runs the strip draws. */
+type PodRuns = {
+  readonly podIndex: number
+  readonly runs: readonly (readonly WorkContext[])[]
+}
+
+/**
+ * The plan's works, grouped pod by pod and run by run.
+ *
+ * The flow is the compiler's stated one, never read back from the order of
+ * the works. A pod of one station, and a flow of one round, both give the
+ * same order under either flow, so an inference would pick a grouping at
+ * random and report nothing wrong.
+ *
+ * On `laps` a run is one round of the pod, and it holds the pod's stations.
+ * On `sets` a run is one station of the pod, and it holds that station's
+ * rounds. Either way the leaf is the work, which is the dot.
+ */
+const groupWorks = (works: readonly WorkContext[], flowType: FlowType): readonly PodRuns[] => {
+  const runKey = (work: WorkContext) => (flowType === 'laps' ? work.round : work.stationInPod)
+  const inRun = (work: WorkContext) => (flowType === 'laps' ? work.stationInPod : work.round)
+  const byPod = new Map<number, WorkContext[]>()
   for (const work of works) {
-    const key = groupKey(work, byPod)
-    const existing = byKey.get(key)
-    if (existing === undefined) byKey.set(key, [work])
-    else existing.push(work)
+    const held = byPod.get(work.podIndex)
+    if (held === undefined) byPod.set(work.podIndex, [work])
+    else held.push(work)
   }
-  return [...byKey.entries()].map(([key, groupWorks]) => {
-    // A group holds at least the work that created it, so both ends exist.
-    const first = groupWorks[0]
-    const last = groupWorks.at(-1) ?? first
+  const podIndexes = [...byPod.keys()].toSorted((left, right) => left - right)
+  return podIndexes.map((podIndex) => {
+    const byRun = new Map<number, WorkContext[]>()
+    for (const work of byPod.get(podIndex) ?? []) {
+      const key = runKey(work)
+      const held = byRun.get(key)
+      if (held === undefined) byRun.set(key, [work])
+      else held.push(work)
+    }
+    const runKeys = [...byRun.keys()].toSorted((left, right) => left - right)
     return {
-      key,
-      podIndex: first.podIndex,
-      stations: [...new Set(groupWorks.map((work) => work.stationInPod))],
-      firstWorkIndex: first.workIndex,
-      lastWorkIndex: last.workIndex,
+      podIndex,
+      runs: runKeys.map((key) =>
+        (byRun.get(key) ?? []).toSorted((left, right) => inRun(left) - inRun(right)),
+      ),
     }
   })
 }
 
 /**
- * The state of a span of works — a whole bar's own reading.
- *
- * A span reads as the point in it nearest the work in focus: clamp the
- * current ordinal into the span, then ask `cellState` about that point.
- * Inside the span the clamp is the current work itself, which is now. Before
- * the span the clamp is the span's first work, which is ahead. After it the
- * clamp is the span's last work, which is done. With no work in focus
- * `cellState` reads ahead, which is the reading a session that is getting
- * ready wants.
- *
- * This is exact for both flows. Every round of a pod finishes before the next
- * pod starts on `laps`, and every round of a station finishes before the next
- * station starts on `sets`, so a bar's works are one unbroken span.
+ * The gaps between the dots inside every run of one pod, from the run
+ * lengths alone. A run of works and a run of states have the same shape here,
+ * so the derivation and the renderer share the one sum.
  */
-const spanState = (group: StripGroup, ordinal: number | undefined): CellState =>
-  cellState(Math.min(Math.max(ordinal ?? 0, group.firstWorkIndex), group.lastWorkIndex), ordinal)
+const runDotGapsPx = (runs: readonly { readonly length: number }[], budget: StripBudget): number =>
+  runs.reduce((sum, run) => sum + budget.dotGapPx * Math.max(run.length - 1, 0), 0)
+
+/** The gaps between the dots inside every run of one pod. */
+const dotGapsPx = (pod: PodRuns, budget: StripBudget): number => runDotGapsPx(pod.runs, budget)
 
 /**
- * One bar's cells: one per station in the group.
+ * How wide a pod of dots is drawn: its own dots, the gaps between them, and
+ * the gaps between its runs.
  *
- * The bar that is now reads its cells against the current round — the cells
- * before the running station are done, the running station is now, and the
- * rest are ahead. They are never read cumulatively across the rounds: that
- * would turn every cell done in round 2, and the bar would say nothing for
- * the rest of the run. Every other bar gives all of its cells the bar's own
- * state.
+ * The renderer states this width in pixels rather than taking a `flex` share,
+ * for two reasons. Pods with different station counts must read as different
+ * widths, and a width the browser can interpolate is what lets the open pod's
+ * move at a pod boundary ease instead of jump.
  *
- * A `sets` bar is a group of one station, so it holds exactly one cell. No
- * branch makes that so — the rule does.
+ * It lives here, with the budget it spends and beside the sums the layout
+ * choice divides against, so the width the screen draws cannot drift from the
+ * width the derivation assumed.
  */
-const barCells = (
-  group: StripGroup,
-  state: CellState,
-  stationInPod: number | undefined,
-): CellState[] => {
-  if (state !== 'active' || stationInPod === undefined) return group.stations.map(() => state)
-  const running = group.stations.indexOf(stationInPod)
-  return group.stations.map((_, cell) => cellState(cell, running === -1 ? undefined : running))
+export const podDotsWidthPx = (
+  pod: StripPod,
+  dotSizePx: number,
+  budget: StripBudget = STRIP_BUDGET,
+): number => {
+  const dots = pod.runs.reduce((sum, run) => sum + run.length, 0)
+  return (
+    dots * dotSizePx +
+    runDotGapsPx(pod.runs, budget) +
+    budget.runGapPx * Math.max(pod.runs.length - 1, 0)
+  )
+}
+
+/** How many works one pod holds. */
+const podWorkCount = (pod: PodRuns): number => pod.runs.reduce((sum, run) => sum + run.length, 0)
+
+/**
+ * The dot the open layout would draw: the strip less every gap it spends,
+ * shared by every work of the plan. The strip spends width on gaps before it
+ * spends any on dots, so a rule blind to them would report a dot as clearing
+ * the floor that the screen then draws under it.
+ */
+const openDotPx = (pods: readonly PodRuns[], works: number, budget: StripBudget): number => {
+  const gapsPx =
+    budget.podGapPx * Math.max(pods.length - 1, 0) +
+    pods.reduce(
+      (sum, pod) =>
+        sum + budget.runGapPx * Math.max(pod.runs.length - 1, 0) + dotGapsPx(pod, budget),
+      0,
+    )
+  return (budget.stripWidthPx - gapsPx) / works
 }
 
 /**
- * The progress strip for one compiled plan and one work ordinal: the bars,
- * their cells, and the round dots, each holding done, now or ahead.
+ * The dot the focus layout would draw for the pod that is open. Every other
+ * pod is a pill of a fixed width, so the open pod keeps whatever the pills
+ * and their gaps leave.
+ */
+const focusDotPx = (pods: readonly PodRuns[], open: PodRuns, budget: StripBudget): number => {
+  const availPx =
+    budget.stripWidthPx -
+    Math.max(pods.length - 1, 0) * (budget.pillWidthPx + budget.podGapPx) -
+    budget.runGapPx * Math.max(open.runs.length - 1, 0) -
+    dotGapsPx(open, budget)
+  const works = podWorkCount(open)
+  return works > 0 ? availPx / works : 0
+}
+
+/** A size the screen can draw: never past the cap, never under nothing. */
+const drawableDotPx = (dotPx: number, budget: StripBudget): number =>
+  Number.isFinite(dotPx) ? Math.max(0, Math.min(dotPx, budget.dotCapPx)) : 0
+
+/**
+ * Which pod the focus layout opens: the one that holds the current work.
+ * With no work in focus it is the first pod, and with the ordinal past the
+ * plan it is the last one — a strip that stops on the plan's end reads the
+ * same as the plan's end.
+ */
+const openPodIndex = (
+  pods: readonly PodRuns[],
+  works: readonly WorkContext[],
+  currentWorkIndex: number | undefined,
+): number => {
+  if (currentWorkIndex === undefined || currentWorkIndex < 0) return 0
+  if (currentWorkIndex >= works.length) return pods.length - 1
+  const podIndex = works[currentWorkIndex].podIndex
+  return Math.max(
+    0,
+    pods.findIndex((pod) => pod.podIndex === podIndex),
+  )
+}
+
+/**
+ * The progress strip for one compiled plan and one work ordinal.
  *
  * This is the only place the strip's rules live. It is pure, so every branch
  * is provable without a screen, and the renderer draws what it is given and
@@ -514,8 +597,12 @@ const barCells = (
  *
  * `currentWorkIndex` is `undefined` while the session gets ready, and at any
  * other time with no work in focus. Everything then reads ahead, so the strip
- * never claims a station that nobody started. An ordinal outside the plan
- * reads the same way.
+ * never claims a station that nobody started.
+ *
+ * An ordinal at or past the plan's end is the session that is done. Every
+ * mark then reads done, and the focus layout opens the last pod. The two
+ * ends of a session must not draw the same picture: a strip that read ahead
+ * at the finish would say the workout never ran.
  */
 export const progressStrip = (
   compiled: CompiledWorkout,
@@ -523,57 +610,54 @@ export const progressStrip = (
   budget: StripBudget = STRIP_BUDGET,
 ): ProgressStrip => {
   const works = sessionWorks(compiled.segments)
-  const focus = currentWorkIndex === undefined ? undefined : works[currentWorkIndex]
-  const byPod = compiled.flowType === 'laps'
-  const groups = stripGroups(works, byPod)
+  const pods = groupWorks(works, compiled.flowType)
+  if (pods.length === 0 || works.length === 0) {
+    return { layout: 'open', dotSizePx: 0, pods: [] }
+  }
 
-  // A pod boundary is worth a wider gap only where a bar is not already a
-  // pod. On `laps` the bar boundary is the pod boundary, so nothing is
-  // marked; on a one-pod `sets` workout no bar changes pod.
+  // An ordinal at or past the plan's end is the finish, and it reads every
+  // mark done. `cellState` already does that for any ordinal above a work's
+  // own, so the ordinal is kept rather than dropped.
   //
-  // The widths need this before the bars are built, not with them: the wider
-  // gap is width no cell ever gets, so the share cannot be known until every
-  // boundary is.
-  const podRunStarts = groups.map(
-    (group, index) => !byPod && index > 0 && group.podIndex !== groups[index - 1].podIndex,
-  )
+  // Anything else that names no work of this plan reads as no focus at all,
+  // so nothing on the strip claims a station that nobody started. A stale
+  // index survives an applied plan change, and it must not paint one.
+  const focusIndex =
+    currentWorkIndex !== undefined && currentWorkIndex >= 0 ? currentWorkIndex : undefined
 
-  // The width one bar is really drawn at. The renderer spends part of the
-  // strip on the gap between each pair of bars and on the wider gap before
-  // each pod run, and the bars share only what is left of it.
-  //
-  // A share falls to zero or below once the bars are numerous enough to spend
-  // the whole strip on gaps. Every bar then renders plain, which is the only
-  // honest reading of that shape.
-  const gapsPx =
-    budget.barGapPx * Math.max(groups.length - 1, 0) +
-    budget.podRunGapPx * podRunStarts.filter(Boolean).length
-  const sharePx = (budget.stripWidthPx - gapsPx) / groups.length
+  // The layout reads the plan and the budget only, never the current work, so
+  // it holds for the whole session and nothing shifts under the participant.
+  const openPx = openDotPx(pods, works.length, budget)
+  const open = openPx >= budget.openFloorPx
+  const opened = pods[openPodIndex(pods, works, currentWorkIndex)]
+  const focusPx = focusDotPx(pods, opened, budget)
+  const openedMode: StripPodMode = focusPx >= budget.focusFloorPx ? 'dots' : 'cells'
+  // Open draws every pod. Focus draws the open pod, and gives every other pod
+  // up to a pill.
+  const modeOf = (pod: PodRuns): StripPodMode => {
+    if (open) return 'dots'
+    return pod.podIndex === opened.podIndex ? openedMode : 'pill'
+  }
 
-  const bars = groups.map((group, index): ProgressBar => {
-    const state = spanState(group, focus?.workIndex)
-    // One bar's width, less the gaps between its own cells, divided among its
-    // stations. A pod authored with more stations than its share can divide
-    // gives up its cells and renders plain: the strip then says less, and it
-    // still says nothing false.
-    const cellsPx = sharePx - budget.cellGapPx * (group.stations.length - 1)
-    const plain = cellsPx / group.stations.length < budget.minCellWidthPx
-    return {
-      key: group.key,
-      state,
-      cells: plain ? [] : barCells(group, state, focus?.stationInPod),
-      startsPodRun: podRunStarts[index],
-    }
-  })
-
-  const roundTotal = works.reduce((total, work) => Math.max(total, work.round), 0)
-  const dots = Array.from({ length: roundTotal }, (_, round) =>
-    // The dots say which round of the bar that is now. On `laps` the round
-    // restarts at each pod, so the dots restart with it.
-    cellState(round, focus === undefined ? undefined : focus.round - 1),
-  )
-
-  return { bars, dots }
+  return {
+    layout: open ? 'open' : 'focus',
+    dotSizePx: drawableDotPx(open ? openPx : focusPx, budget),
+    pods: pods.map((pod) => {
+      const runs = pod.runs.map((run) => run.map((work) => cellState(work.workIndex, focusIndex)))
+      // A pod's works are one unbroken span under either flow, so the pod
+      // reads as the span does: clamp the focus into the span, and the reading
+      // of the clamp is the reading of the pod.
+      const ordinals = pod.runs.flat().map((work) => work.workIndex)
+      const first = Math.min(...ordinals)
+      const last = Math.max(...ordinals)
+      return {
+        key: `pod-${pod.podIndex}`,
+        state: cellState(Math.max(first, Math.min(last, focusIndex ?? first)), focusIndex),
+        mode: modeOf(pod),
+        runs,
+      }
+    }),
+  }
 }
 
 /**

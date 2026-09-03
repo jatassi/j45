@@ -19,6 +19,13 @@ unrecorded wherever they fit.
 - **Segment** — one timed unit of a running session (`ready`, `work`, or
   `rest`), produced by compiling a workout's pods+flow into a flat ordered list.
   The session engine advances segment-by-segment.
+- **Work** — one **Station** for one **Round**: the smallest unit a **Session**
+  runs, and the unit `workTotal` counts. A work is what a `work` **Segment**
+  times; the rest that follows it belongs to the same work and is not one of
+  its own.
+- **Run** — the group between a **Pod** and its works: a lap when the **Flow**
+  is `laps`, and a Station when it is `sets`. A run is a grouping, never a
+  timed unit, and the **Progress strip** shows one by the space around it.
 - **Exercise** — a tagged entry in a user's exercise catalog (modality,
   muscle groups, equipment). Distinct from a **Station**, which
   stays free text inside a workout: the catalog is a vocabulary the
@@ -163,18 +170,26 @@ unrecorded wherever they fit.
   arc's chord, so about half of their height is inside the arc and half falls
   below it, where nothing encloses them. The arc is therefore not a frame
   around the digits, and it is not sized to hold them.
-- **Progress strip** — how far a live Session has got, shown as one bar per
-  group and one dot per **Round**. The group is the **Pod** when the **Flow**
-  is `laps`, and the **Station** when it is `sets`, because a `sets` workout is
-  often one Pod, where a Pod bar says nothing. A bar carries one cell per
-  Station in its group: a Pod bar therefore shows which Station is running, and
-  a Station bar holds one cell and stays plain. A bar is never called a
-  **Segment**. A Segment is one timed unit; a bar is a group of them. Every
-  bar, cell and dot holds one of three states — done, now, ahead — and nothing
-  fills part-way, so the strip never reports a position it did not reach. The
-  dots wrap and the bars do not, so the strip keeps one height for one workout.
-  A pod authored with more stations than a bar can divide gives up its cells
-  and renders plain: the strip then says less, and it still says nothing false.
+- **Progress strip** — how far a live Session has got, drawn under the
+  **Progress arc** as one dot per **Work**, one bar per **Pod**, and one gap
+  per **Run**. The dot is the leaf and the only mark that moves: the work that
+  is now pulses. A run is told by the space around it and carries no ink of
+  its own. A bar is the Pod: a hairline track under an open Pod's dots, and a
+  fixed-width pill when the Pod is closed. A pill counts Pods, never works —
+  the arc and the digits count time. A bar is never called a **Segment**: a
+  Segment is one timed unit, a Pod is a group of them.
+  The strip has two layouts, chosen once per compiled plan and held for the
+  whole Session: `open`, where every Pod shows its dots, and `focus`, where
+  the Pod in focus keeps its dots and the rest close to pills. Inside a
+  layout a Pod falls down a ladder as its dots run out of room: dots, then
+  one cell per run on a single bar, then a plain pill. The strip then says
+  less, and it still says nothing false.
+  Every mark holds one of three states — done, now, ahead — and nothing fills
+  part-way, so the strip never reports a position it did not reach. Nothing
+  wraps: the strip is one row, and it keeps one height for one Session,
+  whatever the layout, the mode or the dot size. A strip whose dots reached
+  their cap is narrower than the arc and sits centred under it. The strip
+  takes no taps: seeking needs a session command of its own.
 - **Glass chrome** — persistent UI furniture rendered in the liquid-glass
   material: the bottom tab bar, sticky headers, overlays, and control docks.
   Content cards stay opaque — chrome is one half of glass's decided role.
