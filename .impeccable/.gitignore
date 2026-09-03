@@ -1,0 +1,5 @@
+# The design hook's per-run cache and any one-person override. Only
+# `config.json` is shared: it holds the ignores the whole repo agrees on.
+hook.cache.json
+config.local.json
+pending.json

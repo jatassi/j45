@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "layout-transition",
+        "value": "*",
+        "files": [
+          "packages/client/src/index.css"
+        ],
+        "createdAt": "2026-09-03T03:08:09.037Z",
+        "reason": "spec jatassi/j45#67 requires the open-Pod width ease (.player-strip-pod): flex siblings genuinely resize at a Pod boundary, transform cannot reflow them, and FLIP would put layout reads in the renderer against stories 28-29. Runs on 2-6 elements once per Pod boundary and cuts under prefers-reduced-motion."
+      }
+    ]
+  }
+}
